@@ -1,105 +1,106 @@
 # SmartTimetable Pro — System Architecture
 
-## 1. Purpose
+**Project:** SmartTimetable Pro
+**Institution:** Queen of Apostles Seminary Senior School
+**Phase:** Phase 2 — System Architecture and Design
+**Document:** System Architecture Specification
+**Version:** 1.0
+**Status:** Baseline Architecture
+**Date:** 2026-08-13
 
-This document defines the high-level architecture of the SmartTimetable Pro
-system.
+---
 
-The architecture will provide the foundation for the development of the
-backend, frontend, database, scheduling engine, API and security components.
+# 1. Introduction
 
-## 2. Architectural Approach
+## 1.1 Purpose
 
-SmartTimetable Pro will use a modular layered architecture.
+This document defines the system architecture for SmartTimetable Pro, an intelligent automated school timetable generation and management system being developed for Queen of Apostles Seminary Senior School.
 
-The major system layers are:
+The architecture establishes the major software components, application boundaries, data responsibilities, scheduling architecture, communication mechanisms, security boundaries, and deployment considerations that will guide subsequent development phases.
+
+The architecture is designed to support the project's hybrid incremental development methodology. Components may therefore be refined, extended, or refactored as new requirements are discovered during implementation and testing.
+
+---
+
+# 2. Architectural Objectives
+
+The architecture is designed to achieve the following objectives:
+
+1. Provide a maintainable school timetable management platform.
+2. Automate timetable generation using constraint programming and optimization.
+3. Ensure mandatory timetable constraints cannot be violated.
+4. Support manual timetable creation and modification.
+5. Validate manually modified timetables.
+6. Provide meaningful explanations when a timetable cannot be generated.
+7. Maintain timetable versions and historical changes.
+8. Separate timetable management from timetable optimization.
+9. Provide secure role-based access.
+10. Support future expansion of the system.
+11. Maintain a clear separation between presentation, business logic, scheduling, and data storage.
+12. Support both local development and eventual production deployment.
+
+---
+
+# 3. Architectural Style
+
+SmartTimetable Pro will use a modular layered architecture combined with service-oriented components.
+
+The major architectural layers are:
 
 1. Presentation Layer
-2. API/Application Layer
-3. Business Logic Layer
-4. Scheduling Engine
-5. Data Access Layer
-6. Database Layer
+2. API Layer
+3. Application/Business Logic Layer
+4. Scheduling Layer
+5. Data Layer
+6. Security Layer
 
-## 3. High-Level Architecture
+The architecture is intentionally modular so that individual components can be developed and tested independently.
 
-The system will follow this general structure:
+---
 
-User
-  |
-  v
-Frontend / User Interface
-  |
-  v
-REST API
-  |
-  v
-Django Application
-  |
-  +----------------------+
-  |                      |
-  v                      v
-Business Logic       Scheduling Engine
-                         |
-                         v
-                    Google OR-Tools
-                         |
-                         v
-                    Scheduling Result
-  |
-  v
-Data Access Layer
-  |
-  v
-PostgreSQL Database
+# 4. High-Level System Architecture
 
-## 4. Major Components
+The high-level architecture is:
 
-### 4.1 Frontend
-
-Provides interfaces for administrators, timetable managers, teachers and
-other authorized users.
-
-### 4.2 Backend
-
-The Django backend provides:
-
-- Authentication
-- Authorization
-- Business logic
-- Data management
-- API services
-- Timetable management
-- Validation
-- Integration with the scheduling engine
-
-### 4.3 Database
-
-PostgreSQL will provide persistent storage for system data.
-
-### 4.4 Scheduling Engine
-
-Google OR-Tools will be used to model and solve the timetable scheduling
-problem.
-
-### 4.5 API
-
-The backend will expose controlled APIs through which the frontend
-communicates with the application.
-
-### 4.6 Security
-
-Authentication, authorization, access control, validation, secure
-configuration and audit mechanisms will be incorporated into the system.
-
-## 5. Architectural Principle
-
-The system must remain modular so that individual components can be modified
-or replaced without unnecessarily rewriting unrelated components.
-
-## 6. Development Principle
-
-The architecture will evolve incrementally as the system requirements,
-constraints and implementation experience develop.
-
-All significant architectural changes must be documented.
+```text
+                         USERS
+                           |
+                           v
+                +----------------------+
+                |    PRESENTATION      |
+                |    FRONTEND / UI     |
+                +----------+-----------+
+                           |
+                           v
+                +----------------------+
+                |       API LAYER      |
+                | Django REST Framework|
+                +----------+-----------+
+                           |
+                           v
+                +----------------------+
+                |   DJANGO APPLICATION |
+                |      CORE LAYER      |
+                +----------+-----------+
+                           |
+          +----------------+----------------+
+          |                |                |
+          v                v                v
+   +-------------+  +-------------+  +-------------+
+   | PostgreSQL  |  | Scheduling  |  |  Services   |
+   |  Database   |  |   Engine    |  |   Layer     |
+   +-------------+  | Google      |  +-------------+
+                    | OR-Tools    |
+                    +------+------+
+                           |
+                           v
+                    +-------------+
+                    | Validation  |
+                    |   Engine    |
+                    +-------------+
+                           |
+                           v
+                    +-------------+
+                    |  Timetable  |
+                    |   Output    |
+                    +-------------+
