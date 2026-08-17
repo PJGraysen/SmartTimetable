@@ -464,3 +464,227 @@ class TimetableEntry(TimeStampedModel):
             f"{self.period} - "
             f"{self.teaching_group}"
         )
+class SchedulingRunStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    RUNNING = "RUNNING", "Running"
+    COMPLETED = "COMPLETED", "Completed"
+    FAILED = "FAILED", "Failed"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class SolverStatus(models.TextChoices):
+    NOT_RUN = "NOT_RUN", "Not Run"
+    FEASIBLE = "FEASIBLE", "Feasible"
+    OPTIMAL = "OPTIMAL", "Optimal"
+    INFEASIBLE = "INFEASIBLE", "Infeasible"
+    UNKNOWN = "UNKNOWN", "Unknown"
+    ERROR = "ERROR", "Error"
+
+
+class ValidationSeverity(models.TextChoices):
+    ERROR = "ERROR", "Error"
+    WARNING = "WARNING", "Warning"
+    INFO = "INFO", "Information"
+
+
+class ValidationCategory(models.TextChoices):
+    TEACHER_CLASH = "TEACHER_CLASH", "Teacher Clash"
+    GROUP_CLASH = "GROUP_CLASH", "Teaching Group Clash"
+    ROOM_CLASH = "ROOM_CLASH", "Room Clash"
+    TEACHER_UNAVAILABLE = "TEACHER_UNAVAILABLE", "Teacher Unavailable"
+    ROOM_UNAVAILABLE = "ROOM_UNAVAILABLE", "Room Unavailable"
+    FREE_AFTERNOON_VIOLATION = (
+        "FREE_AFTERNOON_VIOLATION",
+        "Free Afternoon Violation",
+    )
+    MISSING_TEACHER_ASSIGNMENT = (
+        "MISSING_TEACHER_ASSIGNMENT",
+        "Missing Teacher Assignment",
+    )
+    INVALID_LESSON_REQUIREMENT = (
+        "INVALID_LESSON_REQUIREMENT",
+        "Invalid Lesson Requirement",
+    )
+    INVALID_PERIOD = "INVALID_PERIOD", "Invalid Period"
+    INVALID_TIMETABLE_ENTRY = (
+        "INVALID_TIMETABLE_ENTRY",
+        "Invalid Timetable Entry",
+    )
+    UNSCHEDULED_LESSON = "UNSCHEDULED_LESSON", "Unscheduled Lesson"
+    CONSTRAINT_VIOLATION = "CONSTRAINT_VIOLATION", "Constraint Violation"
+    CONFIGURATION_ERROR = "CONFIGURATION_ERROR", "Configuration Error"
+    OTHER = "OTHER", "Other"
+
+
+class SchedulingRun(TimeStampedModel):
+    """
+    Represents one attempt to generate or validate a timetable.
+
+    A scheduling run records the execution lifecycle and solver outcome
+    without storing solver implementation details in the timetable models.
+    """
+
+    term = models.ForeignKey(
+        "core.Term",
+        on_delete=models.PROTECT,
+        related_name="scheduling_runs",
+    )
+    timetable_version = models.ForeignKey(
+        TimetableVersion,
+        on_delete=models.PROTECT,
+        related_name="scheduling_runs",
+        null=True,
+        blank=True,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=SchedulingRunStatus.choices,
+        default=SchedulingRunStatus.PENDING,
+    )
+    solver_status = models.CharField(
+        max_length=20,
+        choices=SolverStatus.choices,
+        default=SolverStatus.NOT_RUN,
+    )
+
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    objective_value = models.DecimalField(
+        max_digits=20,
+        decimal_places=6,
+        null=True,
+        blank=True,
+    )
+
+    error_message = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    statistics = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    class Meta:
+        db_table = "scheduling_run"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["term", "status"],
+                name="ix_scheduling_run_term_status",
+            ),
+            models.Index(
+                fields=["timetable_version"],
+                name="ix_scheduling_run_version",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.term} - {self.status}"
+
+
+class ValidationResult(TimeStampedModel):
+    """
+    Represents one validation finding associated with a scheduling run.
+
+    Validation results may refer to the specific teacher, teaching group,
+    period, room, or timetable entry involved in the finding.
+    """
+
+    scheduling_run = models.ForeignKey(
+        SchedulingRun,
+        on_delete=models.CASCADE,
+        related_name="validation_results",
+    )
+
+    severity = models.CharField(
+        max_length=10,
+        choices=ValidationSeverity.choices,
+    )
+
+    category = models.CharField(
+        max_length=40,
+        choices=ValidationCategory.choices,
+    )
+
+    message = models.TextField()
+
+    details = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    teacher = models.ForeignKey(
+        Teacher,
+        on_delete=models.PROTECT,
+        related_name="validation_results",
+        null=True,
+        blank=True,
+    )
+
+    teaching_group = models.ForeignKey(
+        TeachingGroup,
+        on_delete=models.PROTECT,
+        related_name="validation_results",
+        null=True,
+        blank=True,
+    )
+
+    period = models.ForeignKey(
+        Period,
+        on_delete=models.PROTECT,
+        related_name="validation_results",
+        null=True,
+        blank=True,
+    )
+
+    day = models.CharField(
+        max_length=3,
+        choices=DayOfWeek.choices,
+        null=True,
+        blank=True,
+    )
+
+    room = models.ForeignKey(
+        "Room",
+        on_delete=models.PROTECT,
+        related_name="validation_results",
+        null=True,
+        blank=True,
+    )
+
+    timetable_entry = models.ForeignKey(
+        TimetableEntry,
+        on_delete=models.PROTECT,
+        related_name="validation_results",
+        null=True,
+        blank=True,
+    )
+
+    is_resolved = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "validation_result"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["scheduling_run", "severity"],
+                name="ix_validation_run_severity",
+            ),
+            models.Index(
+                fields=["scheduling_run", "category"],
+                name="ix_validation_run_category",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.severity} - {self.category}"
