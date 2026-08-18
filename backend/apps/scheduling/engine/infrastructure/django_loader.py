@@ -260,7 +260,7 @@ def load_scheduling_problem(term) -> "SchedulingProblem":
 
     teacher_assignments_queryset = TeacherAssignment.objects.filter(
         is_active=True,
-        lesson_requirement_term=term,
+        lesson_requirement__term=term,
     ).order_by("teacher", "lesson_requirement")
 
     teacher_availability_queryset = TeacherAvailability.objects.filter(
@@ -310,3 +310,8 @@ def load_scheduling_problem(term) -> "SchedulingProblem":
         room_availability=room_availability,
         slots=slots,
     )
+class DjangoSchedulingLoader:
+    """Infrastructure adapter for loading scheduling problems from Django."""
+
+    def load_problem(self, *, term) -> SchedulingProblem:
+        return load_scheduling_problem(term)        

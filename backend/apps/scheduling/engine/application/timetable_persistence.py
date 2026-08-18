@@ -58,7 +58,9 @@ class TimetablePersistenceService:
         """
 
         self._validate_solver_result(solver_result)
+
         self._validate_scheduling_run(scheduling_run)
+
         self._validate_version_details(
             version_name=version_name,
             version_number=version_number,
@@ -68,6 +70,10 @@ class TimetablePersistenceService:
 
         self._validate_assignments(assignments)
 
+        # --------------------------------------------------------------
+        # Create the timetable version.
+        # --------------------------------------------------------------
+
         timetable_version = TimetableVersion.objects.create(
             term=scheduling_run.term,
             name=version_name.strip(),
@@ -75,6 +81,10 @@ class TimetablePersistenceService:
             is_published=False,
             is_active=True,
         )
+
+        # --------------------------------------------------------------
+        # Convert solver assignments into timetable entries.
+        # --------------------------------------------------------------
 
         entries = self._build_entries(
             timetable_version=timetable_version,
@@ -84,8 +94,14 @@ class TimetablePersistenceService:
         if entries:
             TimetableEntry.objects.bulk_create(entries)
 
+        # --------------------------------------------------------------
+        # Complete the scheduling run and explicitly associate it with
+        # the timetable version that was just created.
+        # --------------------------------------------------------------
+
         self._complete_scheduling_run(
             scheduling_run=scheduling_run,
+            timetable_version=timetable_version,
             solver_result=solver_result,
             entries_created=len(entries),
         )
@@ -194,9 +210,12 @@ class TimetablePersistenceService:
         }
 
         from apps.academics.models import LessonRequirement, TeachingGroup
-        from apps.core.models import Term
         from apps.scheduling.models import Period
         from apps.users.models import Teacher
+
+        # --------------------------------------------------------------
+        # Validate lesson requirements.
+        # --------------------------------------------------------------
 
         existing_requirement_ids = set(
             LessonRequirement.objects.filter(
@@ -215,6 +234,10 @@ class TimetablePersistenceService:
                 f"{sorted(str(value) for value in missing_requirements)}"
             )
 
+        # --------------------------------------------------------------
+        # Validate teachers.
+        # --------------------------------------------------------------
+
         existing_teacher_ids = set(
             Teacher.objects.filter(
                 id__in=teacher_ids,
@@ -228,6 +251,10 @@ class TimetablePersistenceService:
                 "Solver assignment references unknown teacher(s): "
                 f"{sorted(str(value) for value in missing_teachers)}"
             )
+
+        # --------------------------------------------------------------
+        # Validate teaching groups.
+        # --------------------------------------------------------------
 
         existing_group_ids = set(
             TeachingGroup.objects.filter(
@@ -244,6 +271,10 @@ class TimetablePersistenceService:
                 f"{sorted(str(value) for value in missing_groups)}"
             )
 
+        # --------------------------------------------------------------
+        # Validate periods.
+        # --------------------------------------------------------------
+
         existing_period_ids = set(
             Period.objects.filter(
                 id__in=period_ids,
@@ -257,6 +288,10 @@ class TimetablePersistenceService:
                 "Solver assignment references unknown period(s): "
                 f"{sorted(str(value) for value in missing_periods)}"
             )
+
+        # --------------------------------------------------------------
+        # Validate lesson-requirement relationships.
+        # --------------------------------------------------------------
 
         requirements = {
             requirement.id: requirement
@@ -314,10 +349,16 @@ class TimetablePersistenceService:
     def _complete_scheduling_run(
         *,
         scheduling_run: SchedulingRun,
+        timetable_version: TimetableVersion,
         solver_result: SolverResult,
         entries_created: int,
     ) -> None:
-        """Mark the scheduling run as successfully completed."""
+        """
+        Mark the scheduling run as successfully completed.
+
+        The scheduling run is explicitly linked to the timetable version
+        produced by this execution.
+        """
 
         objective_value: Decimal | None = None
 
@@ -326,13 +367,22 @@ class TimetablePersistenceService:
                 str(solver_result.statistics.objective_value)
             )
 
+        # --------------------------------------------------------------
+        # Update scheduling-run lifecycle information.
+        # --------------------------------------------------------------
+
         scheduling_run.status = SchedulingRunStatus.COMPLETED
+
+        scheduling_run.timetable_version = timetable_version
+
         scheduling_run.solver_status = (
             TimetablePersistenceService._solver_status(
                 solver_result.status
             )
         )
+
         scheduling_run.completed_at = timezone.now()
+
         scheduling_run.objective_value = objective_value
 
         scheduling_run.statistics = {
@@ -346,8 +396,17 @@ class TimetablePersistenceService:
 
         scheduling_run.error_message = ""
 
+        # --------------------------------------------------------------
+        # IMPORTANT:
+        # timetable_version MUST be included in update_fields.
+        #
+        # Without this, Django will not write the newly assigned
+        # TimetableVersion foreign key to scheduling_run.
+        # --------------------------------------------------------------
+
         scheduling_run.save(
             update_fields=[
+                "timetable_version",
                 "status",
                 "solver_status",
                 "completed_at",
@@ -357,6 +416,10 @@ class TimetablePersistenceService:
                 "updated_at",
             ]
         )
+
+    # ------------------------------------------------------------------
+    # Solver-status conversion
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _solver_status(
