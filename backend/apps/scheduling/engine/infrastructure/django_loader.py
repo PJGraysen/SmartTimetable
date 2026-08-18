@@ -13,6 +13,7 @@ from apps.scheduling.engine.domain.entities import (
     TeacherEntity,
     TeacherFreeAfternoonEntity,
     TeachingGroupEntity,
+    TimetableSlot,
 )
 from apps.scheduling.engine.domain.enums import (
     DayOfWeek,
@@ -28,6 +29,7 @@ from apps.scheduling.models import (
 )
 from apps.academics.models import LessonRequirement, TeachingGroup
 from apps.users.models import Teacher
+from apps.scheduling.engine.domain.problem import SchedulingProblem
 
 
 def load_periods(
@@ -186,3 +188,125 @@ def load_room_availability(
         )
         for availability in queryset
     ]
+def load_slots(
+    periods: Iterable[Period],
+) -> list[TimetableSlot]:
+    """
+    Generate concrete Monday-Friday timetable slots from active periods.
+
+    Every active period becomes one slot for each school day.
+    Non-teaching periods are retained because they are part of the
+    timetable structure, while the solver itself decides which slots
+    are eligible for lesson assignment.
+    """
+
+    slots: list[TimetableSlot] = []
+
+    days = (
+        DayOfWeek.MONDAY,
+        DayOfWeek.TUESDAY,
+        DayOfWeek.WEDNESDAY,
+        DayOfWeek.THURSDAY,
+        DayOfWeek.FRIDAY,
+    )
+
+    for period in periods:
+        if not period.is_active:
+            continue
+
+        for day in days:
+            slots.append(
+                TimetableSlot(
+                    day=day,
+                    period_id=period.id,
+                    period_number=period.number,
+                    part_of_day=PartOfDay(period.part_of_day),
+                )
+            )
+
+    return slots
+
+def load_scheduling_problem(term) -> "SchedulingProblem":
+    """
+    Load all scheduling inputs for a specific academic term and convert
+    them into an immutable SchedulingProblem.
+
+    Django remains confined to this infrastructure layer. The returned
+    domain object contains no Django model instances.
+    """
+
+    from apps.scheduling.engine.domain.problem import SchedulingProblem
+
+    periods_queryset = Period.objects.filter(
+        is_active=True,
+    ).order_by("number")
+
+    teachers_queryset = Teacher.objects.filter(
+        is_active=True,
+    ).order_by("employee_code")
+
+    teaching_groups_queryset = TeachingGroup.objects.filter(
+        is_active=True,
+    )
+
+    rooms_queryset = Room.objects.filter(
+        is_active=True,
+    )
+
+    lesson_requirements_queryset = LessonRequirement.objects.filter(
+        term=term,
+        is_active=True,
+    ).order_by("teaching_group", "subject")
+
+    teacher_assignments_queryset = TeacherAssignment.objects.filter(
+        is_active=True,
+        lesson_requirement_term=term,
+    ).order_by("teacher", "lesson_requirement")
+
+    teacher_availability_queryset = TeacherAvailability.objects.filter(
+        term=term,
+        is_active=True,
+    ).order_by("teacher", "day", "period__number")
+
+    teacher_free_afternoons_queryset = TeacherFreeAfternoon.objects.filter(
+        term=term,
+        is_active=True,
+    ).order_by("teacher", "day")
+
+    room_availability_queryset = RoomAvailability.objects.filter(
+        term=term,
+        is_active=True,
+    ).order_by("room", "day", "period__number")
+
+    periods = load_periods(periods_queryset)
+
+    teachers = load_teachers(teachers_queryset)
+
+    teaching_groups = load_teaching_groups(teaching_groups_queryset)
+
+    rooms = load_rooms(rooms_queryset)
+
+    lesson_requirements = load_lesson_requirements(lesson_requirements_queryset)
+
+    teacher_assignments = load_teacher_assignments(teacher_assignments_queryset)
+
+    teacher_availability = load_teacher_availability(teacher_availability_queryset)
+
+    teacher_free_afternoons = load_teacher_free_afternoons(teacher_free_afternoons_queryset)
+
+    room_availability = load_room_availability(room_availability_queryset)
+
+    slots = load_slots(periods_queryset)
+
+    return SchedulingProblem.from_iterables(
+        periods=periods,
+        teachers=teachers,
+        teaching_groups=teaching_groups,
+        rooms=rooms,
+        lesson_requirements=lesson_requirements,
+        teacher_assignments=teacher_assignments,
+        teacher_availability=teacher_availability,
+        teacher_free_afternoons=teacher_free_afternoons,
+        room_availability=room_availability,
+        slots=slots,
+    )
