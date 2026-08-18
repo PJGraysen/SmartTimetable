@@ -59,7 +59,7 @@ def load_teachers(
         TeacherEntity(
             id=teacher.id,
             name=str(teacher),
-            code=getattr(teacher, "code", str(teacher.id)),
+            code=teacher.employee_code,
             is_active=teacher.is_active,
         )
         for teacher in queryset
@@ -109,7 +109,7 @@ def load_lesson_requirements(
             id=requirement.id,
             teaching_group_id=requirement.teaching_group_id,
             subject_id=requirement.subject_id,
-            periods_per_week=requirement.periods_per_week,
+            periods_per_week=requirement.lessons_per_week,
             is_active=requirement.is_active,
         )
         for requirement in queryset
