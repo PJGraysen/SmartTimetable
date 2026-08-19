@@ -27,7 +27,7 @@ class SchedulingRunSerializer(serializers.ModelSerializer):
     """
 
     term_name = serializers.CharField(
-        source="term.__str__",
+        source="term.name",
         read_only=True,
     )
 
@@ -182,7 +182,7 @@ class TimetableVersionResultSerializer(serializers.ModelSerializer):
     """
 
     term_name = serializers.CharField(
-        source="term.__str__",
+        source="term.name",
         read_only=True,
     )
 

@@ -3,6 +3,12 @@ from __future__ import annotations
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 
+from drf_spectacular.utils import (
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,6 +30,29 @@ from .serializers import (
 )
 
 
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="scheduling_runs_list",
+        summary="List scheduling runs",
+        description=(
+            "Return all scheduling runs with their current "
+            "execution and solver status."
+        ),
+        responses=SchedulingRunSerializer(many=True),
+    ),
+    post=extend_schema(
+        operation_id="scheduling_runs_create",
+        summary="Create a scheduling run",
+        description=(
+            "Create a new pending scheduling run for an "
+            "academic term."
+        ),
+        request=SchedulingRunCreateSerializer,
+        responses={
+            201: SchedulingRunSerializer,
+        },
+    ),
+)
 class SchedulingRunListCreateView(APIView):
     """
     List and create scheduling runs.
@@ -55,11 +84,24 @@ class SchedulingRunListCreateView(APIView):
         scheduling_run = serializer.save()
 
         return Response(
-            SchedulingRunSerializer(scheduling_run).data,
+            SchedulingRunSerializer(
+                scheduling_run,
+            ).data,
             status=status.HTTP_201_CREATED,
         )
 
 
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="scheduling_runs_retrieve",
+        summary="Retrieve a scheduling run",
+        description=(
+            "Return the current state and execution information "
+            "for a single scheduling run."
+        ),
+        responses=SchedulingRunSerializer,
+    ),
+)
 class SchedulingRunDetailView(APIView):
     """
     Retrieve a single scheduling run.
@@ -81,6 +123,30 @@ class SchedulingRunDetailView(APIView):
         return Response(serializer.data)
 
 
+@extend_schema_view(
+    post=extend_schema(
+        operation_id="scheduling_runs_execute",
+        summary="Execute a scheduling run",
+        description=(
+            "Execute timetable generation for a pending or "
+            "running scheduling run."
+        ),
+        request=SchedulingRunExecuteSerializer,
+        responses={
+            200: SchedulingRunResultSerializer,
+            409: OpenApiResponse(
+                description=(
+                    "The scheduling run cannot be executed "
+                    "in its current state or the scheduling "
+                    "request is invalid."
+                ),
+            ),
+            500: OpenApiResponse(
+                description="Scheduling execution failed.",
+            ),
+        },
+    ),
+)
 class SchedulingRunExecuteView(APIView):
     """
     Execute timetable generation for a scheduling run.
@@ -145,6 +211,19 @@ class SchedulingRunExecuteView(APIView):
         )
 
 
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="scheduling_runs_results",
+        summary="Retrieve scheduling run results",
+        description=(
+            "Return the complete current result of a scheduling run.\n\n"
+            "When a timetable has been successfully generated, "
+            "the response includes the timetable version and all "
+            "generated timetable entries."
+        ),
+        responses=SchedulingRunResultSerializer,
+    ),
+)
 class SchedulingRunResultView(APIView):
     """
     Return the complete current result of a scheduling run.

@@ -49,6 +49,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    # THird-party applications
+    'rest_framework',
+    'drf_spectacular',
+
     # SmartTimetable applications
     'apps.core',
     'apps.academics',
@@ -56,6 +60,23 @@ INSTALLED_APPS = [
     'apps.users',
     'apps.audit',
 ]
+
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": (
+        "drf_spectacular.openapi.AutoSchema"
+    ),
+}
+
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "SmartTimetable Pro API",
+    "DESCRIPTION": (
+        "API for the SmartTimetable Pro intelligent "
+        "school timetable management and scheduling system."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
