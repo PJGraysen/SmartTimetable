@@ -40,4 +40,9 @@ urlpatterns = [
         "api/scheduling/",
         include("apps.scheduling.api.urls"),
     ),
+            # Academics API
+    path(
+        "api/academics/",
+        include("apps.academics.api.urls"),
+    ),
 ]

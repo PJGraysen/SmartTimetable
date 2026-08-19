@@ -1,0 +1,320 @@
+﻿from __future__ import annotations
+
+import pytest
+
+from apps.scheduling.engine.application.validation_persistence import (
+    ValidationPersistenceError,
+    clear_validation_results,
+    persist_validation_findings,
+    persist_validation_summary,
+)
+from apps.scheduling.models import (
+    SchedulingRun,
+    ValidationResult,
+    ValidationSeverity,
+)
+
+from tests.scheduling.engine.validation.factories import (
+    make_assignment,
+    make_group,
+    make_period,
+    make_problem,
+    make_requirement,
+    make_teacher,
+)
+
+
+pytestmark = pytest.mark.django_db
+
+
+def make_scheduling_run():
+    """
+    Create a minimal persisted SchedulingRun using the shared
+    validation-domain test factories.
+    """
+    teacher = make_teacher()
+    group = make_group()
+    period = make_period()
+
+    requirement = make_requirement(
+        group_id=group.id,
+        periods_per_week=1,
+    )
+
+    assignment = make_assignment(
+        requirement=requirement,
+        teacher=teacher,
+        group=group,
+        period=period,
+    )
+
+    problem = make_problem(
+        periods=(period,),
+        teachers=(teacher,),
+        groups=(group,),
+        rooms=(),
+        requirements=(requirement,),
+    )
+
+    # Keep the helper useful to callers that want to inspect the
+    # generated domain objects.
+    problem.assignment = assignment
+
+    return SchedulingRun.objects.create(
+        term=problem.term,
+        status="COMPLETED",
+        solver_status="FEASIBLE",
+    )
+
+
+def test_persist_validation_findings_creates_database_records():
+    scheduling_run = make_scheduling_run()
+
+    finding = type(
+        "Finding",
+        (),
+        {
+            "severity": ValidationSeverity.ERROR,
+            "category": "TEACHER_CLASH",
+            "message": "Teacher has two lessons in the same period.",
+            "context": {
+                "source": "test",
+            },
+        },
+    )()
+
+    results = persist_validation_findings(
+        scheduling_run,
+        [finding],
+    )
+
+    assert len(results) == 1
+
+    stored = ValidationResult.objects.get(
+        scheduling_run=scheduling_run,
+    )
+
+    assert stored.severity == ValidationSeverity.ERROR
+    assert stored.category == "TEACHER_CLASH"
+    assert stored.message == (
+        "Teacher has two lessons in the same period."
+    )
+    assert stored.details == {
+        "source": "test",
+    }
+    assert stored.is_resolved is False
+
+
+def test_persist_validation_findings_handles_empty_findings():
+    scheduling_run = make_scheduling_run()
+
+    results = persist_validation_findings(
+        scheduling_run,
+        [],
+    )
+
+    assert results == []
+
+    assert not ValidationResult.objects.filter(
+        scheduling_run=scheduling_run,
+    ).exists()
+
+
+def test_persist_validation_findings_replaces_existing_results():
+    scheduling_run = make_scheduling_run()
+
+    first = type(
+        "Finding",
+        (),
+        {
+            "severity": ValidationSeverity.ERROR,
+            "category": "TEACHER_CLASH",
+            "message": "First finding.",
+            "context": {},
+        },
+    )()
+
+    second = type(
+        "Finding",
+        (),
+        {
+            "severity": ValidationSeverity.WARNING,
+            "category": "ROOM_UNAVAILABLE",
+            "message": "Second finding.",
+            "context": {},
+        },
+    )()
+
+    persist_validation_findings(
+        scheduling_run,
+        [first],
+    )
+
+    assert ValidationResult.objects.filter(
+        scheduling_run=scheduling_run,
+    ).count() == 1
+
+    persist_validation_findings(
+        scheduling_run,
+        [second],
+    )
+
+    results = list(
+        ValidationResult.objects.filter(
+            scheduling_run=scheduling_run,
+        )
+    )
+
+    assert len(results) == 1
+    assert results[0].category == "ROOM_UNAVAILABLE"
+    assert results[0].message == "Second finding."
+
+
+def test_persist_validation_findings_accepts_generators():
+    scheduling_run = make_scheduling_run()
+
+    def finding_generator():
+        for category in (
+            "TEACHER_CLASH",
+            "GROUP_CLASH",
+            "ROOM_CLASH",
+        ):
+            yield type(
+                "Finding",
+                (),
+                {
+                    "severity": ValidationSeverity.ERROR,
+                    "category": category,
+                    "message": f"{category} detected.",
+                    "context": {},
+                },
+            )()
+
+    results = persist_validation_findings(
+        scheduling_run,
+        finding_generator(),
+    )
+
+    assert len(results) == 3
+
+    assert ValidationResult.objects.filter(
+        scheduling_run=scheduling_run,
+    ).count() == 3
+
+
+def test_persist_validation_summary_uses_summary_findings():
+    scheduling_run = make_scheduling_run()
+
+    finding = type(
+        "Finding",
+        (),
+        {
+            "severity": ValidationSeverity.ERROR,
+            "category": "DUPLICATE_ENTRY",
+            "message": "Duplicate timetable entry.",
+            "context": {
+                "duplicate": True,
+            },
+        },
+    )()
+
+    summary = type(
+        "Summary",
+        (),
+        {
+            "findings": [finding],
+        },
+    )()
+
+    results = persist_validation_summary(
+        scheduling_run,
+        summary,
+    )
+
+    assert len(results) == 1
+
+    stored = ValidationResult.objects.get(
+        scheduling_run=scheduling_run,
+    )
+
+    assert stored.category == "DUPLICATE_ENTRY"
+    assert stored.details == {
+        "duplicate": True,
+    }
+
+
+def test_persist_validation_summary_rejects_none():
+    scheduling_run = make_scheduling_run()
+
+    with pytest.raises(ValidationPersistenceError):
+        persist_validation_summary(
+            scheduling_run,
+            None,
+        )
+
+
+def test_clear_validation_results_removes_all_results():
+    scheduling_run = make_scheduling_run()
+
+    findings = [
+        type(
+            "Finding",
+            (),
+            {
+                "severity": ValidationSeverity.ERROR,
+                "category": "TEACHER_CLASH",
+                "message": "Teacher clash.",
+                "context": {},
+            },
+        )(),
+        type(
+            "Finding",
+            (),
+            {
+                "severity": ValidationSeverity.ERROR,
+                "category": "GROUP_CLASH",
+                "message": "Group clash.",
+                "context": {},
+            },
+        )(),
+    ]
+
+    persist_validation_findings(
+        scheduling_run,
+        findings,
+    )
+
+    assert ValidationResult.objects.filter(
+        scheduling_run=scheduling_run,
+    ).count() == 2
+
+    deleted = clear_validation_results(
+        scheduling_run,
+    )
+
+    assert deleted == 2
+
+    assert not ValidationResult.objects.filter(
+        scheduling_run=scheduling_run,
+    ).exists()
+
+
+def test_persistence_rejects_unsaved_scheduling_run():
+    scheduling_run = SchedulingRun()
+
+    finding = type(
+        "Finding",
+        (),
+        {
+            "severity": ValidationSeverity.ERROR,
+            "category": "OTHER",
+            "message": "Test finding.",
+            "context": {},
+        },
+    )()
+
+    with pytest.raises(ValidationPersistenceError):
+        persist_validation_findings(
+            scheduling_run,
+            [finding],
+        )

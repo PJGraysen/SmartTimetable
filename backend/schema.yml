@@ -1,0 +1,1642 @@
+openapi: 3.0.3
+info:
+  title: SmartTimetable Pro API
+  version: 1.0.0
+  description: API for the SmartTimetable Pro intelligent school timetable management
+    and scheduling system.
+paths:
+  /api/academics/grades/:
+    get:
+      operationId: academics_grades_list
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Grade'
+          description: ''
+    post:
+      operationId: academics_grades_create
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Grade'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Grade'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Grade'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+          description: ''
+  /api/academics/grades/{id}/:
+    get:
+      operationId: academics_grades_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this grade.
+        required: true
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+          description: ''
+    put:
+      operationId: academics_grades_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this grade.
+        required: true
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Grade'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Grade'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Grade'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+          description: ''
+    patch:
+      operationId: academics_grades_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this grade.
+        required: true
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGrade'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGrade'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGrade'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+          description: ''
+    delete:
+      operationId: academics_grades_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this grade.
+        required: true
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/academics/lesson-requirements/:
+    get:
+      operationId: academics_lesson_requirements_list
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LessonRequirement'
+          description: ''
+    post:
+      operationId: academics_lesson_requirements_create
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LessonRequirement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LessonRequirement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LessonRequirement'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LessonRequirement'
+          description: ''
+  /api/academics/lesson-requirements/{id}/:
+    get:
+      operationId: academics_lesson_requirements_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this lesson requirement.
+        required: true
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LessonRequirement'
+          description: ''
+    put:
+      operationId: academics_lesson_requirements_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this lesson requirement.
+        required: true
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LessonRequirement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LessonRequirement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LessonRequirement'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LessonRequirement'
+          description: ''
+    patch:
+      operationId: academics_lesson_requirements_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this lesson requirement.
+        required: true
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonRequirement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonRequirement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLessonRequirement'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LessonRequirement'
+          description: ''
+    delete:
+      operationId: academics_lesson_requirements_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this lesson requirement.
+        required: true
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/academics/streams/:
+    get:
+      operationId: academics_streams_list
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Stream'
+          description: ''
+    post:
+      operationId: academics_streams_create
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Stream'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Stream'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Stream'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stream'
+          description: ''
+  /api/academics/streams/{id}/:
+    get:
+      operationId: academics_streams_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this stream.
+        required: true
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stream'
+          description: ''
+    put:
+      operationId: academics_streams_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this stream.
+        required: true
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Stream'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Stream'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Stream'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stream'
+          description: ''
+    patch:
+      operationId: academics_streams_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this stream.
+        required: true
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedStream'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedStream'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedStream'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stream'
+          description: ''
+    delete:
+      operationId: academics_streams_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this stream.
+        required: true
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/academics/subjects/:
+    get:
+      operationId: academics_subjects_list
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subject'
+          description: ''
+    post:
+      operationId: academics_subjects_create
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Subject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Subject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Subject'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subject'
+          description: ''
+  /api/academics/subjects/{id}/:
+    get:
+      operationId: academics_subjects_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subject.
+        required: true
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subject'
+          description: ''
+    put:
+      operationId: academics_subjects_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subject.
+        required: true
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Subject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Subject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Subject'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subject'
+          description: ''
+    patch:
+      operationId: academics_subjects_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subject.
+        required: true
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSubject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSubject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSubject'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subject'
+          description: ''
+    delete:
+      operationId: academics_subjects_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subject.
+        required: true
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/academics/teaching-groups/:
+    get:
+      operationId: academics_teaching_groups_list
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeachingGroup'
+          description: ''
+    post:
+      operationId: academics_teaching_groups_create
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeachingGroup'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TeachingGroup'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TeachingGroup'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeachingGroup'
+          description: ''
+  /api/academics/teaching-groups/{id}/:
+    get:
+      operationId: academics_teaching_groups_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this teaching group.
+        required: true
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeachingGroup'
+          description: ''
+    put:
+      operationId: academics_teaching_groups_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this teaching group.
+        required: true
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeachingGroup'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TeachingGroup'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TeachingGroup'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeachingGroup'
+          description: ''
+    patch:
+      operationId: academics_teaching_groups_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this teaching group.
+        required: true
+      tags:
+      - academics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTeachingGroup'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTeachingGroup'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTeachingGroup'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeachingGroup'
+          description: ''
+    delete:
+      operationId: academics_teaching_groups_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this teaching group.
+        required: true
+      tags:
+      - academics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/scheduling/runs/:
+    get:
+      operationId: scheduling_runs_list
+      description: Return all scheduling runs with their current execution and solver
+        status.
+      summary: List scheduling runs
+      tags:
+      - scheduling
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SchedulingRun'
+          description: ''
+    post:
+      operationId: scheduling_runs_create
+      description: Create a new pending scheduling run for an academic term.
+      summary: Create a scheduling run
+      tags:
+      - scheduling
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchedulingRunCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SchedulingRunCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SchedulingRunCreate'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulingRun'
+          description: ''
+  /api/scheduling/runs/{id}/:
+    get:
+      operationId: scheduling_runs_retrieve
+      description: Return the current state and execution information for a single
+        scheduling run.
+      summary: Retrieve a scheduling run
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - scheduling
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulingRun'
+          description: ''
+  /api/scheduling/runs/{id}/execute/:
+    post:
+      operationId: scheduling_runs_execute
+      description: Execute timetable generation for a pending or running scheduling
+        run.
+      summary: Execute a scheduling run
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - scheduling
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchedulingRunExecute'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SchedulingRunExecute'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SchedulingRunExecute'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulingRunResult'
+          description: ''
+        '409':
+          description: The scheduling run cannot be executed in its current state
+            or the scheduling request is invalid.
+        '500':
+          description: Scheduling execution failed.
+  /api/scheduling/runs/{id}/results/:
+    get:
+      operationId: scheduling_runs_results
+      description: |-
+        Return the complete current result of a scheduling run.
+
+        When a timetable has been successfully generated, the response includes the timetable version and all generated timetable entries.
+      summary: Retrieve scheduling run results
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - scheduling
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulingRunResult'
+          description: ''
+components:
+  schemas:
+    DayEnum:
+      enum:
+      - MON
+      - TUE
+      - WED
+      - THU
+      - FRI
+      type: string
+      description: |-
+        * `MON` - Monday
+        * `TUE` - Tuesday
+        * `WED` - Wednesday
+        * `THU` - Thursday
+        * `FRI` - Friday
+    Grade:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_year:
+          type: string
+          format: uuid
+        academic_year_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 50
+        code:
+          type: string
+          maxLength: 20
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - academic_year
+      - academic_year_name
+      - code
+      - created_at
+      - id
+      - name
+      - updated_at
+    LessonRequirement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        term:
+          type: string
+          format: uuid
+        term_name:
+          type: string
+          readOnly: true
+        teaching_group:
+          type: string
+          format: uuid
+        teaching_group_name:
+          type: string
+          readOnly: true
+        subject:
+          type: string
+          format: uuid
+        subject_name:
+          type: string
+          readOnly: true
+        lessons_per_week:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - lessons_per_week
+      - subject
+      - subject_name
+      - teaching_group
+      - teaching_group_name
+      - term
+      - term_name
+      - updated_at
+    PatchedGrade:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        academic_year:
+          type: string
+          format: uuid
+        academic_year_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 50
+        code:
+          type: string
+          maxLength: 20
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedLessonRequirement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        term:
+          type: string
+          format: uuid
+        term_name:
+          type: string
+          readOnly: true
+        teaching_group:
+          type: string
+          format: uuid
+        teaching_group_name:
+          type: string
+          readOnly: true
+        subject:
+          type: string
+          format: uuid
+        subject_name:
+          type: string
+          readOnly: true
+        lessons_per_week:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedStream:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        grade:
+          type: string
+          format: uuid
+        grade_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 50
+        code:
+          type: string
+          maxLength: 20
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedSubject:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          maxLength: 30
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedTeachingGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        stream:
+          type: string
+          format: uuid
+        stream_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          maxLength: 50
+        learner_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    SchedulingRun:
+      type: object
+      description: |-
+        Standard scheduling-run serializer.
+
+        Used for listing and retrieving scheduling runs.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        term:
+          type: string
+          format: uuid
+        term_name:
+          type: string
+          readOnly: true
+        timetable_version:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        solver_status:
+          allOf:
+          - $ref: '#/components/schemas/SolverStatusEnum'
+          readOnly: true
+        solver_status_display:
+          type: string
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        objective_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,14}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        error_message:
+          type: string
+          readOnly: true
+        statistics:
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - completed_at
+      - created_at
+      - error_message
+      - id
+      - objective_value
+      - solver_status
+      - solver_status_display
+      - started_at
+      - statistics
+      - status
+      - status_display
+      - term
+      - term_name
+      - timetable_version
+      - updated_at
+    SchedulingRunCreate:
+      type: object
+      description: Serializer used to create a new scheduling run.
+      properties:
+        term:
+          type: string
+          format: uuid
+      required:
+      - term
+    SchedulingRunExecute:
+      type: object
+      description: Serializer for timetable-generation execution parameters.
+      properties:
+        version_name:
+          type: string
+          default: Generated Timetable
+          maxLength: 255
+        version_number:
+          type: integer
+          minimum: 1
+          default: 1
+    SchedulingRunResult:
+      type: object
+      description: |-
+        Detailed result serializer for a scheduling run.
+
+        Unlike the standard SchedulingRunSerializer, this serializer
+        expands the generated timetable version and its timetable entries.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        term:
+          type: string
+          format: uuid
+          readOnly: true
+        timetable_version:
+          allOf:
+          - $ref: '#/components/schemas/TimetableVersionResult'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusEnum'
+          readOnly: true
+        solver_status:
+          allOf:
+          - $ref: '#/components/schemas/SolverStatusEnum'
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        objective_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,14}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        error_message:
+          type: string
+          readOnly: true
+        statistics:
+          readOnly: true
+      required:
+      - completed_at
+      - error_message
+      - id
+      - objective_value
+      - solver_status
+      - started_at
+      - statistics
+      - status
+      - term
+      - timetable_version
+    SolverStatusEnum:
+      enum:
+      - NOT_RUN
+      - FEASIBLE
+      - OPTIMAL
+      - INFEASIBLE
+      - UNKNOWN
+      - ERROR
+      type: string
+      description: |-
+        * `NOT_RUN` - Not Run
+        * `FEASIBLE` - Feasible
+        * `OPTIMAL` - Optimal
+        * `INFEASIBLE` - Infeasible
+        * `UNKNOWN` - Unknown
+        * `ERROR` - Error
+    StatusEnum:
+      enum:
+      - PENDING
+      - RUNNING
+      - COMPLETED
+      - FAILED
+      - CANCELLED
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `RUNNING` - Running
+        * `COMPLETED` - Completed
+        * `FAILED` - Failed
+        * `CANCELLED` - Cancelled
+    Stream:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        grade:
+          type: string
+          format: uuid
+        grade_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 50
+        code:
+          type: string
+          maxLength: 20
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - grade
+      - grade_name
+      - id
+      - name
+      - updated_at
+    Subject:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          maxLength: 30
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - name
+      - updated_at
+    TeachingGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        stream:
+          type: string
+          format: uuid
+        stream_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          maxLength: 50
+        learner_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - name
+      - stream
+      - stream_name
+      - updated_at
+    TimetableEntryResult:
+      type: object
+      description: |-
+        Detailed representation of one generated timetable entry.
+
+        The API exposes both the foreign-key IDs and useful human-readable
+        information for the frontend and other API consumers.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        day:
+          allOf:
+          - $ref: '#/components/schemas/DayEnum'
+          readOnly: true
+        day_display:
+          type: string
+          readOnly: true
+        period:
+          type: string
+          format: uuid
+          readOnly: true
+        period_number:
+          type: integer
+          readOnly: true
+        period_name:
+          type: string
+          readOnly: true
+        period_start_time:
+          type: string
+          format: time
+          readOnly: true
+        period_end_time:
+          type: string
+          format: time
+          readOnly: true
+        teaching_group:
+          type: string
+          format: uuid
+          readOnly: true
+        teaching_group_name:
+          type: string
+          readOnly: true
+        teacher:
+          type: string
+          format: uuid
+          readOnly: true
+        teacher_name:
+          type: string
+          readOnly: true
+        lesson_requirement:
+          type: string
+          format: uuid
+          readOnly: true
+        lesson_requirement_name:
+          type: string
+          readOnly: true
+        room:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        room_name:
+          type: string
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - day
+      - day_display
+      - id
+      - lesson_requirement
+      - lesson_requirement_name
+      - period
+      - period_end_time
+      - period_name
+      - period_number
+      - period_start_time
+      - room
+      - room_name
+      - teacher
+      - teacher_name
+      - teaching_group
+      - teaching_group_name
+      - updated_at
+    TimetableVersionResult:
+      type: object
+      description: Detailed representation of a generated timetable version.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        term:
+          type: string
+          format: uuid
+          readOnly: true
+        term_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        version_number:
+          type: integer
+          readOnly: true
+        is_published:
+          type: boolean
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+        entries_count:
+          type: integer
+          readOnly: true
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimetableEntryResult'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - entries
+      - entries_count
+      - id
+      - is_active
+      - is_published
+      - name
+      - term
+      - term_name
+      - updated_at
+      - version_number
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
