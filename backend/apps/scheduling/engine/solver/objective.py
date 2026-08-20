@@ -398,6 +398,158 @@ class BalancedTeacherWorkloadObjective:
         return objective_terms
 
 
+@dataclass(slots=True)
+class TeacherConsecutivePeriodObjective:
+    """
+    Soft optimization objective that penalizes a teacher being scheduled
+    in consecutive teaching periods on the same day.
+
+    A penalty variable is created for every pair of candidate assignments
+    belonging to the same teacher, same day and consecutive timetable
+    periods.
+
+    The penalty variable is one exactly when both assignments are selected.
+
+    This is deliberately a soft objective. It never makes a timetable
+    infeasible merely because consecutive teaching periods are unavoidable.
+    """
+
+    weight: int = 1
+
+    def __post_init__(self) -> None:
+        if self.weight <= 0:
+            raise ValueError(
+                "Teacher consecutive-period objective weight must be "
+                "greater than zero."
+            )
+
+    def apply(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> None:
+        penalty_terms = self._consecutive_period_terms(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        if not penalty_terms:
+            return
+
+        model.minimize(
+            self.weight * sum(penalty_terms)
+        )
+
+    def _consecutive_period_terms(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> list[cp_model.IntVar]:
+        """
+        Create penalty variables for consecutive teacher assignments.
+
+        Period adjacency is determined from the domain PeriodEntity.number,
+        rather than from the order in which AssignmentVariable instances
+        happen to appear.
+        """
+
+        period_by_id = problem.period_by_id
+
+        variables_by_teacher_day_period: dict[
+            tuple[UUID, str, UUID],
+            list[cp_model.IntVar],
+        ] = {}
+
+        for assignment in variables:
+            period = period_by_id.get(assignment.period_id)
+
+            if period is None:
+                continue
+
+            if not period.is_active or not period.is_teaching_period:
+                continue
+
+            key = (
+                assignment.teacher_id,
+                assignment.day,
+                assignment.period_id,
+            )
+
+            variables_by_teacher_day_period.setdefault(
+                key,
+                [],
+            ).append(assignment.variable)
+
+        indexed_variables: dict[
+            tuple[UUID, str],
+            dict[int, list[cp_model.IntVar]],
+        ] = {}
+
+        for (
+            teacher_id,
+            day,
+            period_id,
+        ), period_variables in variables_by_teacher_day_period.items():
+            period = period_by_id[period_id]
+
+            indexed_variables.setdefault(
+                (teacher_id, day),
+                {},
+            ).setdefault(
+                period.number,
+                [],
+            ).extend(period_variables)
+
+        penalty_terms: list[cp_model.IntVar] = []
+
+        for (
+            teacher_id,
+            day,
+        ), periods in indexed_variables.items():
+            period_numbers = sorted(periods)
+
+            for index in range(len(period_numbers) - 1):
+                first_number = period_numbers[index]
+                second_number = period_numbers[index + 1]
+
+                if second_number != first_number + 1:
+                    continue
+
+                first_variables = periods[first_number]
+                second_variables = periods[second_number]
+
+                for first_variable in first_variables:
+                    for second_variable in second_variables:
+                        penalty = model.new_bool_var(
+                            (
+                                "teacher_consecutive_"
+                                f"{teacher_id}_{day}_"
+                                f"{first_number}_{second_number}_"
+                                f"{len(penalty_terms)}"
+                            )
+                        )
+
+                        model.add(
+                            penalty <= first_variable
+                        )
+                        model.add(
+                            penalty <= second_variable
+                        )
+                        model.add(
+                            penalty
+                            >= first_variable + second_variable - 1
+                        )
+
+                        penalty_terms.append(penalty)
+
+        return penalty_terms
+
+
 def apply_solver_objectives(
     *,
     model: cp_model.CpModel,
