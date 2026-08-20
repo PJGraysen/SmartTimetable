@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 
@@ -6,7 +6,9 @@ from apps.scheduling.engine.domain.problem import SchedulingProblem
 from apps.scheduling.engine.solver.model import SolverModelBuilder
 from apps.scheduling.engine.solver.objective import (
     BalancedTeacherWorkloadObjective,
+    CompositeSolverObjective,
     SolverObjective,
+    TeacherConsecutivePeriodObjective,
 )
 from apps.scheduling.engine.solver.result import SolverResult
 from apps.scheduling.engine.solver.solver import CPSATSolver
@@ -16,9 +18,6 @@ from apps.scheduling.engine.solver.solver import CPSATSolver
 class SchedulingService:
     """
     Application-level orchestration service for timetable generation.
-
-    Coordinates the domain problem, CP-SAT model builder, objective,
-    and solver.
     """
 
     model_builder: SolverModelBuilder
@@ -49,14 +48,19 @@ def create_default_scheduler(
     """
     Create the standard scheduling service configuration.
 
-    The default scheduler now uses teacher workload balancing as a
-    soft optimization objective.
+    The default scheduler combines the established workload/distribution
+    objective with the teacher consecutive-period objective.
     """
 
     selected_objective = (
         objective
         if objective is not None
-        else BalancedTeacherWorkloadObjective()
+        else CompositeSolverObjective(
+            objectives=(
+                BalancedTeacherWorkloadObjective(),
+                TeacherConsecutivePeriodObjective(),
+            ),
+        )
     )
 
     return SchedulingService(

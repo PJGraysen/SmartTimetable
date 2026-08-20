@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
@@ -8,6 +8,27 @@ from ortools.sat.python import cp_model
 
 from apps.scheduling.engine.domain.problem import SchedulingProblem
 from apps.scheduling.engine.solver.variables import AssignmentVariable
+
+
+def _is_empty_objective_expression(expression: object) -> bool:
+    """
+    Determine whether an objective expression is empty.
+
+    Empty objective builders in this module return the integer 0.
+
+    CP-SAT expressions are not compared directly with zero because
+    LinearExpr / IntVar comparisons can produce constraint expressions
+    rather than a normal Python boolean.
+
+    Therefore this helper deliberately checks only plain scalar values.
+    """
+    if expression is None:
+        return True
+
+    if isinstance(expression, (int, float)):
+        return expression == 0
+
+    return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,16 +168,8 @@ class BalancedTeacherWorkloadObjective:
 
     The objective has two components:
 
-    1. Teacher workload balancing:
-       Minimize the maximum number of lessons assigned to each teacher
-       on any single day.
-
-    2. Lesson distribution:
-       Minimize the maximum number of lessons belonging to the same
-       lesson requirement on any single day.
-
-    Both components are soft objectives. They can improve timetable
-    quality but can never override hard scheduling constraints.
+    1. Teacher workload balancing.
+    2. Lesson distribution across days.
     """
 
     weight: int = 1
@@ -175,13 +188,13 @@ class BalancedTeacherWorkloadObjective:
                 "than zero."
             )
 
-    def apply(
+    def build_expression(
         self,
         *,
         model: cp_model.CpModel,
         problem: SchedulingProblem,
         variables: tuple[AssignmentVariable, ...],
-    ) -> None:
+    ) -> object:
         teacher_terms = self._teacher_workload_terms(
             model=model,
             problem=problem,
@@ -195,14 +208,6 @@ class BalancedTeacherWorkloadObjective:
                 variables=variables,
             )
         )
-
-        objective_terms: list[cp_model.IntVar] = []
-
-        objective_terms.extend(teacher_terms)
-        objective_terms.extend(lesson_distribution_terms)
-
-        if not objective_terms:
-            return
 
         weighted_terms: list[object] = []
 
@@ -218,13 +223,27 @@ class BalancedTeacherWorkloadObjective:
             )
 
         if not weighted_terms:
+            return 0
+
+        return sum(weighted_terms)
+
+    def apply(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> None:
+        expression = self.build_expression(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        if _is_empty_objective_expression(expression):
             return
 
-        model.minimize(sum(weighted_terms))
-
-    # ------------------------------------------------------------------
-    # Teacher workload
-    # ------------------------------------------------------------------
+        model.minimize(expression)
 
     def _teacher_workload_terms(
         self,
@@ -233,11 +252,6 @@ class BalancedTeacherWorkloadObjective:
         problem: SchedulingProblem,
         variables: tuple[AssignmentVariable, ...],
     ) -> list[cp_model.IntVar]:
-        """
-        Create one maximum-daily-workload variable for every active
-        teacher represented by solver variables.
-        """
-
         variables_by_teacher_day: dict[
             tuple[UUID, str],
             list[cp_model.IntVar],
@@ -263,10 +277,7 @@ class BalancedTeacherWorkloadObjective:
             teacher_days = sorted(
                 {
                     day
-                    for (
-                        teacher_id,
-                        day,
-                    ) in variables_by_teacher_day
+                    for teacher_id, day in variables_by_teacher_day
                     if teacher_id == teacher.id
                 }
             )
@@ -303,10 +314,6 @@ class BalancedTeacherWorkloadObjective:
 
         return objective_terms
 
-    # ------------------------------------------------------------------
-    # Lesson distribution
-    # ------------------------------------------------------------------
-
     def _lesson_distribution_terms(
         self,
         *,
@@ -314,15 +321,6 @@ class BalancedTeacherWorkloadObjective:
         problem: SchedulingProblem,
         variables: tuple[AssignmentVariable, ...],
     ) -> list[cp_model.IntVar]:
-        """
-        Create one maximum-daily-load variable for every active lesson
-        requirement represented by solver variables.
-
-        This encourages lessons belonging to the same requirement to be
-        distributed across different days whenever the hard constraints
-        permit it.
-        """
-
         variables_by_requirement_day: dict[
             tuple[UUID, str],
             list[cp_model.IntVar],
@@ -348,10 +346,8 @@ class BalancedTeacherWorkloadObjective:
             requirement_days = sorted(
                 {
                     day
-                    for (
-                        requirement_id,
-                        day,
-                    ) in variables_by_requirement_day
+                    for requirement_id, day
+                    in variables_by_requirement_day
                     if requirement_id == requirement.id
                 }
             )
@@ -401,17 +397,18 @@ class BalancedTeacherWorkloadObjective:
 @dataclass(slots=True)
 class TeacherConsecutivePeriodObjective:
     """
-    Soft optimization objective that penalizes a teacher being scheduled
-    in consecutive teaching periods on the same day.
+    Soft objective penalizing a teacher being scheduled in consecutive
+    teaching periods on the same day.
 
-    A penalty variable is created for every pair of candidate assignments
-    belonging to the same teacher, same day and consecutive timetable
-    periods.
+    Consecutive assignments are represented by Boolean penalty variables.
 
-    The penalty variable is one exactly when both assignments are selected.
+    A penalty variable is 1 exactly when:
 
-    This is deliberately a soft objective. It never makes a timetable
-    infeasible merely because consecutive teaching periods are unavoidable.
+        first_period_assignment == 1
+        AND
+        second_period_assignment == 1
+
+    The objective minimizes the weighted sum of those penalty variables.
     """
 
     weight: int = 1
@@ -423,13 +420,13 @@ class TeacherConsecutivePeriodObjective:
                 "greater than zero."
             )
 
-    def apply(
+    def build_expression(
         self,
         *,
         model: cp_model.CpModel,
         problem: SchedulingProblem,
         variables: tuple[AssignmentVariable, ...],
-    ) -> None:
+    ) -> object:
         penalty_terms = self._consecutive_period_terms(
             model=model,
             problem=problem,
@@ -437,11 +434,27 @@ class TeacherConsecutivePeriodObjective:
         )
 
         if not penalty_terms:
+            return 0
+
+        return self.weight * sum(penalty_terms)
+
+    def apply(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> None:
+        expression = self.build_expression(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        if _is_empty_objective_expression(expression):
             return
 
-        model.minimize(
-            self.weight * sum(penalty_terms)
-        )
+        model.minimize(expression)
 
     def _consecutive_period_terms(
         self,
@@ -450,14 +463,6 @@ class TeacherConsecutivePeriodObjective:
         problem: SchedulingProblem,
         variables: tuple[AssignmentVariable, ...],
     ) -> list[cp_model.IntVar]:
-        """
-        Create penalty variables for consecutive teacher assignments.
-
-        Period adjacency is determined from the domain PeriodEntity.number,
-        rather than from the order in which AssignmentVariable instances
-        happen to appear.
-        """
-
         period_by_id = problem.period_by_id
 
         variables_by_teacher_day_period: dict[
@@ -466,12 +471,17 @@ class TeacherConsecutivePeriodObjective:
         ] = {}
 
         for assignment in variables:
-            period = period_by_id.get(assignment.period_id)
+            period = period_by_id.get(
+                assignment.period_id
+            )
 
             if period is None:
                 continue
 
-            if not period.is_active or not period.is_teaching_period:
+            if not period.is_active:
+                continue
+
+            if not period.is_teaching_period:
                 continue
 
             key = (
@@ -494,7 +504,9 @@ class TeacherConsecutivePeriodObjective:
             teacher_id,
             day,
             period_id,
-        ), period_variables in variables_by_teacher_day_period.items():
+        ), period_variables in (
+            variables_by_teacher_day_period.items()
+        ):
             period = period_by_id[period_id]
 
             indexed_variables.setdefault(
@@ -513,7 +525,9 @@ class TeacherConsecutivePeriodObjective:
         ), periods in indexed_variables.items():
             period_numbers = sorted(periods)
 
-            for index in range(len(period_numbers) - 1):
+            for index in range(
+                len(period_numbers) - 1
+            ):
                 first_number = period_numbers[index]
                 second_number = period_numbers[index + 1]
 
@@ -537,17 +551,90 @@ class TeacherConsecutivePeriodObjective:
                         model.add(
                             penalty <= first_variable
                         )
+
                         model.add(
                             penalty <= second_variable
                         )
+
                         model.add(
                             penalty
-                            >= first_variable + second_variable - 1
+                            >= first_variable
+                            + second_variable
+                            - 1
                         )
 
-                        penalty_terms.append(penalty)
+                        penalty_terms.append(
+                            penalty
+                        )
 
         return penalty_terms
+
+
+@dataclass(slots=True)
+class CompositeSolverObjective:
+    """
+    Combines multiple soft objectives into one CP-SAT objective.
+
+    CP-SAT has one objective expression, so individual objective
+    expressions are aggregated before model.minimize() is called.
+    """
+
+    objectives: tuple[object, ...]
+
+    def __init__(
+        self,
+        objectives: tuple[object, ...] | list[object],
+    ) -> None:
+        self.objectives = tuple(objectives)
+
+        for objective in self.objectives:
+            if not hasattr(objective, "build_expression"):
+                raise TypeError(
+                    "CompositeSolverObjective requires objectives "
+                    "that implement build_expression()."
+                )
+
+    def build_expression(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> object:
+        expressions: list[object] = []
+
+        for objective in self.objectives:
+            expression = objective.build_expression(
+                model=model,
+                problem=problem,
+                variables=variables,
+            )
+
+            if not _is_empty_objective_expression(expression):
+                expressions.append(expression)
+
+        if not expressions:
+            return 0
+
+        return sum(expressions)
+
+    def apply(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> None:
+        expression = self.build_expression(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        if _is_empty_objective_expression(expression):
+            return
+
+        model.minimize(expression)
 
 
 def apply_solver_objectives(
