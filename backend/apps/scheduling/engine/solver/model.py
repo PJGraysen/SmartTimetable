@@ -8,6 +8,9 @@ from ortools.sat.python import cp_model
 
 from apps.scheduling.engine.domain.enums import PartOfDay
 from apps.scheduling.engine.domain.problem import SchedulingProblem
+from apps.scheduling.engine.solver.objective import (
+    apply_solver_objectives,
+)
 from apps.scheduling.engine.solver.variables import AssignmentVariable
 
 
@@ -20,7 +23,10 @@ class SolverModel:
     model: cp_model.CpModel
     variables: tuple[AssignmentVariable, ...]
 
-    def variables_for_lesson(self, lesson_requirement_id: UUID):
+    def variables_for_lesson(
+        self,
+        lesson_requirement_id: UUID,
+    ) -> tuple[AssignmentVariable, ...]:
         """Return variables belonging to one lesson requirement."""
         return tuple(
             variable
@@ -33,9 +39,22 @@ class SolverModelBuilder:
     """
     Builds a CP-SAT model from a validated SchedulingProblem.
 
-    This class is responsible for translating the domain problem into
-    solver variables and hard constraints.
+    The builder translates the domain problem into:
+    - CP-SAT assignment variables
+    - hard constraints
+    - optimization objectives
+
+    The optimization objective is injected by the application layer so
+    that hard constraints remain independent from soft optimization
+    behavior.
     """
+
+    def __init__(
+        self,
+        *,
+        objective=None,
+    ) -> None:
+        self.objective = objective
 
     def build(self, problem: SchedulingProblem) -> SolverModel:
         model = cp_model.CpModel()
@@ -84,6 +103,14 @@ class SolverModelBuilder:
             variables=variables,
         )
 
+        if self.objective is not None:
+            apply_solver_objectives(
+                model=model,
+                problem=problem,
+                variables=tuple(variables),
+                objective=self.objective,
+            )
+
         return SolverModel(
             model=model,
             variables=tuple(variables),
@@ -99,7 +126,6 @@ class SolverModelBuilder:
         model: cp_model.CpModel,
         problem: SchedulingProblem,
     ) -> list[AssignmentVariable]:
-
         variables: list[AssignmentVariable] = []
 
         active_requirements = [
@@ -127,7 +153,8 @@ class SolverModelBuilder:
         ]
 
         teachers_by_requirement: dict[
-            UUID, list[UUID]
+            UUID,
+            list[UUID],
         ] = defaultdict(list)
 
         for assignment in problem.teacher_assignments:
@@ -154,7 +181,6 @@ class SolverModelBuilder:
         }
 
         for requirement in active_requirements:
-
             if requirement.teaching_group_id not in valid_group_ids:
                 continue
 
@@ -167,10 +193,10 @@ class SolverModelBuilder:
             ]
 
             for teacher_id in eligible_teacher_ids:
-
                 for slot in problem.slots:
-
-                    period = problem.period_by_id.get(slot.period_id)
+                    period = problem.period_by_id.get(
+                        slot.period_id
+                    )
 
                     if period is None:
                         continue
@@ -182,7 +208,6 @@ class SolverModelBuilder:
                         continue
 
                     for room in active_rooms:
-
                         if room.id not in valid_room_ids:
                             continue
 
@@ -213,7 +238,7 @@ class SolverModelBuilder:
 
         return variables
 
-       # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Lesson requirements
     # ------------------------------------------------------------------
 
@@ -224,9 +249,9 @@ class SolverModelBuilder:
         problem: SchedulingProblem,
         variables: list[AssignmentVariable],
     ) -> None:
-
         variables_by_requirement: dict[
-            UUID, list[cp_model.IntVar]
+            UUID,
+            list[cp_model.IntVar],
         ] = defaultdict(list)
 
         for variable in variables:
@@ -258,7 +283,6 @@ class SolverModelBuilder:
         model: cp_model.CpModel,
         variables: list[AssignmentVariable],
     ) -> None:
-
         groups: dict[
             tuple[UUID, str, UUID],
             list[cp_model.IntVar],
@@ -286,7 +310,6 @@ class SolverModelBuilder:
         model: cp_model.CpModel,
         variables: list[AssignmentVariable],
     ) -> None:
-
         groups: dict[
             tuple[UUID, str, UUID],
             list[cp_model.IntVar],
@@ -314,14 +337,12 @@ class SolverModelBuilder:
         model: cp_model.CpModel,
         variables: list[AssignmentVariable],
     ) -> None:
-
         groups: dict[
             tuple[UUID, str, UUID],
             list[cp_model.IntVar],
         ] = defaultdict(list)
 
         for variable in variables:
-
             if variable.room_id is None:
                 continue
 
@@ -347,7 +368,6 @@ class SolverModelBuilder:
         problem: SchedulingProblem,
         variables: list[AssignmentVariable],
     ) -> None:
-
         unavailable_slots: set[
             tuple[UUID, str, UUID]
         ] = {
@@ -362,7 +382,6 @@ class SolverModelBuilder:
         }
 
         for variable in variables:
-
             key = (
                 variable.teacher_id,
                 variable.day,
@@ -383,9 +402,7 @@ class SolverModelBuilder:
         problem: SchedulingProblem,
         variables: list[AssignmentVariable],
     ) -> None:
-
         for teacher in problem.teachers:
-
             if not teacher.is_active:
                 continue
 
@@ -399,7 +416,6 @@ class SolverModelBuilder:
                 )
 
             for variable in variables:
-
                 if variable.teacher_id != teacher.id:
                     continue
 
@@ -419,13 +435,9 @@ class SolverModelBuilder:
                 if not period.is_teaching_period:
                     continue
 
-
                 if period.part_of_day != PartOfDay.AFTERNOON:
                     continue
 
-                # HARD CONSTRAINT:
-                # teacher cannot teach during their designated
-                # free afternoon.
                 model.add(variable.variable == 0)
 
     # ------------------------------------------------------------------
@@ -439,30 +451,60 @@ class SolverModelBuilder:
         problem: SchedulingProblem,
         variables: list[AssignmentVariable],
     ) -> None:
+        """
+        Enforce configured room availability as a hard constraint.
 
-        unavailable_slots: set[
-            tuple[UUID, str, UUID]
-        ] = {
-            (
-                availability.room_id,
-                availability.day.value,
-                availability.period_id,
-            )
+        If a room has active availability records, those records define
+        the legal room/time domain for that room.
+
+        Therefore:
+        - is_available=True  -> allowed
+        - is_available=False -> forbidden
+        - no active records  -> unrestricted
+        """
+
+        active_availability = [
+            availability
             for availability in problem.room_availability
             if availability.is_active
-            and not availability.is_available
+        ]
+
+        configured_rooms = {
+            availability.room_id
+            for availability in active_availability
         }
 
-        for variable in variables:
+        available_slots_by_room: dict[
+            UUID,
+            set[tuple[str, UUID]],
+        ] = defaultdict(set)
 
+        for availability in active_availability:
+            if not availability.is_available:
+                continue
+
+            available_slots_by_room[
+                availability.room_id
+            ].add(
+                (
+                    availability.day.value,
+                    availability.period_id,
+                )
+            )
+
+        for variable in variables:
             if variable.room_id is None:
                 continue
 
+            if variable.room_id not in configured_rooms:
+                continue
+
             key = (
-                variable.room_id,
                 variable.day,
                 variable.period_id,
             )
 
-            if key in unavailable_slots:
+            if key not in available_slots_by_room[
+                variable.room_id
+            ]:
                 model.add(variable.variable == 0)

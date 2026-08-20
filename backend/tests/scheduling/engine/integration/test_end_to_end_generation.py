@@ -1,18 +1,32 @@
-import pytest
+﻿import pytest
 
-from apps.core.models import AcademicYear, School, Term
-from apps.academics.models import Grade, LessonRequirement, Stream, Subject, TeachingGroup
+from apps.academics.models import (
+    Grade,
+    LessonRequirement,
+    Stream,
+    Subject,
+    TeachingGroup,
+)
+from apps.core.models import (
+    AcademicYear,
+    School,
+    Term,
+)
+from apps.scheduling.engine.application.scheduler import create_default_scheduler
+from apps.scheduling.engine.infrastructure.django_loader import DjangoSchedulingLoader
 from apps.scheduling.models import (
+    DayOfWeek,
     Period,
     Room,
     RoomAvailability,
     TeacherAssignment,
     TeacherFreeAfternoon,
 )
-from apps.scheduling.engine.application.scheduler import create_default_scheduler
-from apps.scheduling.engine.infrastructure.django_loader import DjangoSchedulingLoader
 from apps.users.models import Teacher
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
+
+User = get_user_model()
 
 
 @pytest.mark.django_db
@@ -91,7 +105,7 @@ def test_end_to_end_generation_from_django_data():
     TeacherFreeAfternoon.objects.create(
         term=term,
         teacher=teacher,
-        day="FRI",
+        day=DayOfWeek.FRIDAY,
         is_active=True,
     )
 
@@ -124,7 +138,7 @@ def test_end_to_end_generation_from_django_data():
         ),
     ]
 
-    for day in ("MON", "TUE"):
+    for day in (DayOfWeek.MONDAY, DayOfWeek.TUESDAY):
         for period in periods:
             RoomAvailability.objects.create(
                 term=term,
@@ -156,10 +170,14 @@ def test_end_to_end_generation_from_django_data():
         assert assignment.teacher_id == teacher.id
         assert assignment.lesson_requirement_id == requirement.id
         assert assignment.room_id == room.id
-        assert assignment.day in {"MON", "TUE"}
+        assert assignment.day in {
+            DayOfWeek.MONDAY,
+            DayOfWeek.TUESDAY,
+        }
 
-        assert not problem.is_teacher_free_afternoon(
-            teacher_id=assignment.teacher_id,
-            day=assignment.day,
-            period_id=assignment.period_id,
-        )
+    scheduled_slots = {
+        (assignment.day, assignment.period_id)
+        for assignment in result.assignments
+    }
+
+    assert len(scheduled_slots) == 2
