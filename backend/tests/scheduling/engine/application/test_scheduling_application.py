@@ -1,6 +1,5 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -8,43 +7,200 @@ import pytest
 from apps.scheduling.engine.application.scheduling_application import (
     SchedulingApplicationService,
 )
-from apps.scheduling.engine.domain.enums import SolverStatus
-from apps.scheduling.models import (
-    SchedulingRunStatus,
-    SolverStatus as DjangoSolverStatus,
+from apps.scheduling.engine.application.timetable_persistence import (
+    PersistenceResult,
 )
+from apps.scheduling.engine.domain.enums import SolverStatus
+from apps.scheduling.engine.solver.result import (
+    SolverResult,
+    SolverStatistics,
+)
+from apps.scheduling.models import SchedulingRunStatus
+
+
+# ---------------------------------------------------------------------------
+# Successful FEASIBLE execution
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
-def test_execute_marks_pending_run_running_before_execution(
+def test_execute_persists_feasible_solver_result(
     scheduling_run,
 ):
     scheduler = Mock()
     persistence = Mock()
-    problem = Mock()
 
-    solver_result = Mock()
-    solver_result.status = SolverStatus.INFEASIBLE
-    solver_result.statistics = SimpleNamespace(
-        wall_time_seconds=1.25,
-        branches=10,
-        conflicts=2,
+    solver_result = SolverResult(
+        status=SolverStatus.FEASIBLE,
+        assignments=(),
+        statistics=SolverStatistics(
+            wall_time_seconds=1.25,
+            branches=10,
+            conflicts=2,
+            objective_value=100.0,
+        ),
+    )
+
+    persistence_result = Mock(spec=PersistenceResult)
+
+    scheduler.generate.return_value = solver_result
+    persistence.persist.return_value = persistence_result
+
+    with patch(
+        "apps.scheduling.engine.application.scheduling_application."
+        "load_scheduling_problem"
+    ) as load_problem:
+        problem = object()
+        load_problem.return_value = problem
+
+        service = SchedulingApplicationService(
+            scheduler=scheduler,
+            persistence=persistence,
+        )
+
+        result = service.execute(
+            scheduling_run=scheduling_run,
+            version_name="Generated Timetable",
+            version_number=1,
+        )
+
+    scheduling_run.refresh_from_db()
+
+    assert result.scheduling_run.pk == scheduling_run.pk
+    assert result.solver_result is solver_result
+    assert result.persistence_result is persistence_result
+
+    # The persistence service is responsible for changing the run
+    # to COMPLETED. It is mocked in this test, so the run remains
+    # RUNNING here.
+    assert scheduling_run.status == SchedulingRunStatus.RUNNING
+
+    load_problem.assert_called_once_with(
+        term=scheduling_run.term,
+    )
+
+    scheduler.generate.assert_called_once_with(
+        problem,
+    )
+
+    persistence.persist.assert_called_once_with(
+        scheduling_run=scheduling_run,
+        solver_result=solver_result,
+        version_name="Generated Timetable",
+        version_number=1,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Successful OPTIMAL execution
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_execute_persists_optimal_solver_result(
+    scheduling_run,
+):
+    scheduler = Mock()
+    persistence = Mock()
+
+    solver_result = SolverResult(
+        status=SolverStatus.OPTIMAL,
+        assignments=(),
+        statistics=SolverStatistics(
+            wall_time_seconds=2.5,
+            branches=20,
+            conflicts=3,
+            objective_value=75.0,
+        ),
+    )
+
+    persistence_result = Mock(spec=PersistenceResult)
+
+    scheduler.generate.return_value = solver_result
+    persistence.persist.return_value = persistence_result
+
+    with patch(
+        "apps.scheduling.engine.application.scheduling_application."
+        "load_scheduling_problem"
+    ) as load_problem:
+        problem = object()
+        load_problem.return_value = problem
+
+        service = SchedulingApplicationService(
+            scheduler=scheduler,
+            persistence=persistence,
+        )
+
+        result = service.execute(
+            scheduling_run=scheduling_run,
+            version_name="Optimal Timetable",
+            version_number=1,
+        )
+
+    scheduling_run.refresh_from_db()
+
+    assert result.solver_result is solver_result
+    assert result.persistence_result is persistence_result
+
+    # The persistence service owns successful run completion.
+    assert scheduling_run.status == SchedulingRunStatus.RUNNING
+
+    load_problem.assert_called_once_with(
+        term=scheduling_run.term,
+    )
+
+    scheduler.generate.assert_called_once_with(
+        problem,
+    )
+
+    persistence.persist.assert_called_once_with(
+        scheduling_run=scheduling_run,
+        solver_result=solver_result,
+        version_name="Optimal Timetable",
+        version_number=1,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Unsuccessful solver execution
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_execute_marks_unsuccessful_solver_result_as_failed(
+    scheduling_run,
+):
+    scheduler = Mock()
+    persistence = Mock()
+
+    solver_result = SolverResult(
+        status=SolverStatus.INFEASIBLE,
+        assignments=(),
+        statistics=SolverStatistics(
+            wall_time_seconds=3.0,
+            branches=30,
+            conflicts=15,
+            objective_value=None,
+        ),
     )
 
     scheduler.generate.return_value = solver_result
 
-    service = SchedulingApplicationService(
-        scheduler=scheduler,
-        persistence=persistence,
-    )
-
     with patch(
-        "apps.scheduling.engine.application.scheduling_application.load_scheduling_problem",
-        return_value=problem,
-    ) as loader:
+        "apps.scheduling.engine.application.scheduling_application."
+        "load_scheduling_problem"
+    ) as load_problem:
+        problem = object()
+        load_problem.return_value = problem
+
+        service = SchedulingApplicationService(
+            scheduler=scheduler,
+            persistence=persistence,
+        )
+
         result = service.execute(
             scheduling_run=scheduling_run,
-            version_name="Test Version",
+            version_name="Should Not Be Persisted",
             version_number=1,
         )
 
@@ -54,135 +210,122 @@ def test_execute_marks_pending_run_running_before_execution(
     assert result.persistence_result is None
 
     assert scheduling_run.status == SchedulingRunStatus.FAILED
-    assert (
-        scheduling_run.solver_status
-        == DjangoSolverStatus.INFEASIBLE
+    assert scheduling_run.completed_at is not None
+
+    assert scheduling_run.error_message == (
+        "Scheduling solver finished with status INFEASIBLE."
     )
 
-    loader.assert_called_once_with(
+    load_problem.assert_called_once_with(
         term=scheduling_run.term,
     )
 
-    scheduler.generate.assert_called_once_with(problem)
+    scheduler.generate.assert_called_once_with(
+        problem,
+    )
 
     persistence.persist.assert_not_called()
 
 
-@pytest.mark.django_db
-def test_execute_persists_successful_solver_result(
-    scheduling_run,
-):
-    scheduler = Mock()
-    persistence = Mock()
-    problem = Mock()
-
-    solver_result = Mock()
-    solver_result.status = SolverStatus.FEASIBLE
-
-    persistence_result = Mock()
-
-    scheduler.generate.return_value = solver_result
-    persistence.persist.return_value = persistence_result
-
-    service = SchedulingApplicationService(
-        scheduler=scheduler,
-        persistence=persistence,
-    )
-
-    with patch(
-        "apps.scheduling.engine.application.scheduling_application.load_scheduling_problem",
-        return_value=problem,
-    ) as loader:
-        result = service.execute(
-            scheduling_run=scheduling_run,
-            version_name="Generated Version",
-            version_number=1,
-        )
-
-    scheduling_run.refresh_from_db()
-
-    assert result.solver_result is solver_result
-    assert result.persistence_result is persistence_result
-
-    loader.assert_called_once_with(
-        term=scheduling_run.term,
-    )
-
-    scheduler.generate.assert_called_once_with(problem)
-
-    persistence.persist.assert_called_once_with(
-        scheduling_run=scheduling_run,
-        solver_result=solver_result,
-        version_name="Generated Version",
-        version_number=1,
-    )
+# ---------------------------------------------------------------------------
+# Invalid scheduling-run lifecycle state
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
-def test_execute_accepts_optimal_solver_result(
-    scheduling_run,
-):
-    scheduler = Mock()
-    persistence = Mock()
-    problem = Mock()
-
-    solver_result = Mock()
-    solver_result.status = SolverStatus.OPTIMAL
-
-    persistence_result = Mock()
-
-    scheduler.generate.return_value = solver_result
-    persistence.persist.return_value = persistence_result
-
-    service = SchedulingApplicationService(
-        scheduler=scheduler,
-        persistence=persistence,
-    )
-
-    with patch(
-        "apps.scheduling.engine.application.scheduling_application.load_scheduling_problem",
-        return_value=problem,
-    ) as loader:
-        result = service.execute(
-            scheduling_run=scheduling_run,
-            version_name="Optimal Version",
-            version_number=1,
-        )
-
-    scheduling_run.refresh_from_db()
-
-    assert result.solver_result is solver_result
-    assert result.persistence_result is persistence_result
-
-    loader.assert_called_once_with(
-        term=scheduling_run.term,
-    )
-
-    scheduler.generate.assert_called_once_with(problem)
-
-    persistence.persist.assert_called_once_with(
-        scheduling_run=scheduling_run,
-        solver_result=solver_result,
-        version_name="Optimal Version",
-        version_number=1,
-    )
-
-
-@pytest.mark.django_db
-def test_execute_rejects_completed_run(
+def test_execute_rejects_completed_scheduling_run(
     scheduling_run,
 ):
     scheduling_run.status = SchedulingRunStatus.COMPLETED
-    scheduling_run.save(update_fields=["status"])
-
-    service = SchedulingApplicationService(
-        scheduler=Mock(),
-        persistence=Mock(),
+    scheduling_run.save(
+        update_fields=[
+            "status",
+            "updated_at",
+        ],
     )
 
-    with pytest.raises(ValueError, match="PENDING or RUNNING"):
+    scheduler = Mock()
+    persistence = Mock()
+
+    service = SchedulingApplicationService(
+        scheduler=scheduler,
+        persistence=persistence,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Scheduling run must be PENDING or RUNNING "
+            "before execution."
+        ),
+    ):
         service.execute(
             scheduling_run=scheduling_run,
-            version_name="Invalid Version",
+            version_name="Invalid Execution",
             version_number=1,
         )
+
+    scheduler.generate.assert_not_called()
+    persistence.persist.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Pending run transitions to RUNNING before execution
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_execute_moves_pending_run_to_running_before_generation(
+    scheduling_run,
+):
+    scheduling_run.status = SchedulingRunStatus.PENDING
+    scheduling_run.save(
+        update_fields=[
+            "status",
+            "updated_at",
+        ],
+    )
+
+    scheduler = Mock()
+    persistence = Mock()
+
+    solver_result = SolverResult(
+        status=SolverStatus.INFEASIBLE,
+        assignments=(),
+        statistics=SolverStatistics(),
+    )
+
+    scheduler.generate.return_value = solver_result
+
+    with patch(
+        "apps.scheduling.engine.application.scheduling_application."
+        "load_scheduling_problem"
+    ) as load_problem:
+        problem = object()
+        load_problem.return_value = problem
+
+        service = SchedulingApplicationService(
+            scheduler=scheduler,
+            persistence=persistence,
+        )
+
+        service.execute(
+            scheduling_run=scheduling_run,
+            version_name="Pending Run",
+            version_number=1,
+        )
+
+    scheduling_run.refresh_from_db()
+
+    assert scheduling_run.started_at is not None
+    assert scheduling_run.status == SchedulingRunStatus.FAILED
+
+    load_problem.assert_called_once_with(
+        term=scheduling_run.term,
+    )
+
+    scheduler.generate.assert_called_once_with(
+        problem,
+    )
+
+    persistence.persist.assert_not_called()
