@@ -143,3 +143,23 @@ def test_teacher_workload_objective_rejects_invalid_weight():
         BalancedTeacherWorkloadObjective(
             weight=0,
         )
+
+
+def test_teacher_workload_objective_accepts_valid_distribution_weight():
+    objective = BalancedTeacherWorkloadObjective(
+        weight=5,
+        lesson_distribution_weight=3,
+    )
+
+    assert objective.weight == 5
+    assert objective.lesson_distribution_weight == 3
+
+
+def test_teacher_workload_objective_rejects_invalid_distribution_weight():
+    with pytest.raises(
+        ValueError,
+        match="Lesson distribution objective weight must be greater than zero",
+    ):
+        BalancedTeacherWorkloadObjective(
+            lesson_distribution_weight=0,
+        )
