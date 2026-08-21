@@ -13,8 +13,11 @@ type AcademicTerm = {
   id: string;
   name: string;
   academic_year: string;
+  academic_year_name: string;
+  number: number;
   start_date: string;
   end_date: string;
+  is_active: boolean;
 };
 
 type SchedulingRun = {
@@ -49,7 +52,7 @@ function statusClass(status: string) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "—";
+  if (!value) return "â€”";
   return new Date(value).toLocaleString();
 }
 
@@ -69,7 +72,7 @@ export default function SchedulingRuns() {
 
     try {
       const [termsResponse, runsResponse] = await Promise.all([
-        api.get<AcademicTerm[]>("/academics/terms/"),
+        api.get<AcademicTerm[]>("/core/terms/"),
         api.get<SchedulingRun[]>("/scheduling/runs/"),
       ]);
 
@@ -238,7 +241,7 @@ export default function SchedulingRuns() {
 
             {terms.map((term) => (
               <option key={term.id} value={term.id}>
-                {term.name} — {term.academic_year}
+                {term.name} â€” {term.academic_year}
               </option>
             ))}
           </select>
@@ -325,10 +328,10 @@ export default function SchedulingRuns() {
                       <td>
                         {run.solver_status_display ??
                           run.solver_status ??
-                          "—"}
+                          "â€”"}
                       </td>
 
-                      <td>{run.objective_value ?? "—"}</td>
+                      <td>{run.objective_value ?? "â€”"}</td>
 
                       <td>{formatDate(run.created_at)}</td>
 
@@ -355,7 +358,7 @@ export default function SchedulingRuns() {
                           <span>
                             {run.completed_at
                               ? formatDate(run.completed_at)
-                              : "—"}
+                              : "â€”"}
                           </span>
                         )}
                       </td>

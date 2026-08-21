@@ -34,6 +34,11 @@ urlpatterns = [
         ),
         name="redoc",
     ),
+    # Core API
+    path(
+        "api/core/",
+        include("apps.core.api.urls"),
+    ),
 
     # Scheduling API
     path(
