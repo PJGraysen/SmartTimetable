@@ -196,6 +196,69 @@ def test_persist_creates_timetable_version_and_entries(
 
 
 @pytest.mark.django_db
+def test_persist_resolves_existing_version_number(
+    scheduling_data,
+):
+    data = scheduling_data
+
+    assignment = SchedulingAssignment(
+        lesson_requirement_id=data["requirement"].id,
+        teacher_id=data["teacher"].id,
+        teaching_group_id=data["group"].id,
+        period_id=data["period"].id,
+        day=DayOfWeek.MONDAY,
+        room_id=data["room"].id,
+    )
+
+    result = SolverResult(
+        status=SolverStatus.OPTIMAL,
+        assignments=(assignment,),
+        statistics=SolverStatistics(
+            wall_time_seconds=0.1,
+            branches=0,
+            conflicts=0,
+            objective_value=0.0,
+        ),
+    )
+
+    first_result = TimetablePersistenceService().persist(
+        scheduling_run=data["run"],
+        solver_result=result,
+        version_name="First Timetable",
+        version_number=1,
+    )
+
+    assert first_result.timetable_version.version_number == 1
+
+    second_run = SchedulingRun.objects.create(
+        term=data["term"],
+        status=SchedulingRunStatus.RUNNING,
+    )
+
+    second_result = TimetablePersistenceService().persist(
+        scheduling_run=second_run,
+        solver_result=result,
+        version_name="Second Timetable",
+        version_number=1,
+    )
+
+    assert second_result.timetable_version.version_number == 2
+
+    versions = list(
+        TimetableVersion.objects.filter(
+            term=data["term"],
+        )
+        .order_by("version_number")
+        .values_list("version_number", "name")
+    )
+
+    assert versions == [
+        (1, "First Timetable"),
+        (2, "Second Timetable"),
+    ]
+
+
+@pytest.mark.django_db
 def test_persist_accepts_feasible_result(
     scheduling_data,
 ):

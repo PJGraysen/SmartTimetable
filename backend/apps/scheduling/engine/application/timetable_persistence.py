@@ -66,6 +66,11 @@ class TimetablePersistenceService:
             version_number=version_number,
         )
 
+        version_number = self._resolve_version_number(
+            term=scheduling_run.term,
+            requested_version_number=version_number,
+        )
+
         assignments = tuple(solver_result.assignments)
 
         self._validate_assignments(assignments)
@@ -168,6 +173,33 @@ class TimetablePersistenceService:
             raise ValueError(
                 "Timetable version number must be greater than zero."
             )
+
+    @staticmethod
+    def _resolve_version_number(
+        *,
+        term,
+        requested_version_number: int,
+    ) -> int:
+        """
+        Resolve a requested timetable version number to an available number.
+
+        If the requested number is already used for the term, continue from
+        the highest existing version number and use the next available value.
+        """
+        if not TimetableVersion.objects.filter(
+            term=term,
+            version_number=requested_version_number,
+        ).exists():
+            return requested_version_number
+
+        highest_version = (
+            TimetableVersion.objects.filter(term=term)
+            .order_by("-version_number")
+            .values_list("version_number", flat=True)
+            .first()
+        )
+
+        return (highest_version or 0) + 1
 
     @staticmethod
     def _validate_assignments(
