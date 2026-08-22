@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from rest_framework import serializers
 
@@ -113,7 +113,7 @@ class LessonRequirementSerializer(serializers.ModelSerializer):
     )
 
     teaching_group_name = serializers.CharField(
-        source="teaching_group.__str__",
+        source="instructional_group.__str__",
         read_only=True,
     )
 
@@ -128,7 +128,7 @@ class LessonRequirementSerializer(serializers.ModelSerializer):
             "id",
             "term",
             "term_name",
-            "teaching_group",
+            "instructional_group",
             "teaching_group_name",
             "subject",
             "subject_name",

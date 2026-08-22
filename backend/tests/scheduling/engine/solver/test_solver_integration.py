@@ -9,7 +9,7 @@ from apps.scheduling.engine.domain.entities import (
     TeacherAssignmentEntity,
     TeacherEntity,
     TeacherFreeAfternoonEntity,
-    TeachingGroupEntity,
+    InstructionalGroupEntity,
     TimetableSlot,
 )
 from apps.scheduling.engine.domain.enums import (
@@ -64,8 +64,8 @@ def build_test_problem() -> SchedulingProblem:
         ),
     )
 
-    teaching_groups = (
-        TeachingGroupEntity(
+    instructional_groups = (
+        InstructionalGroupEntity(
             id=group_id,
             name="Test Group",
             code="G001",
@@ -84,7 +84,7 @@ def build_test_problem() -> SchedulingProblem:
     lesson_requirements = (
         LessonRequirementEntity(
             id=requirement_id,
-            teaching_group_id=group_id,
+            instructional_group_id=group_id,
             subject_id=uuid4(),
             periods_per_week=2,
         ),
@@ -141,7 +141,7 @@ def build_test_problem() -> SchedulingProblem:
     return SchedulingProblem.from_iterables(
         periods=periods,
         teachers=teachers,
-        teaching_groups=teaching_groups,
+        instructional_groups=instructional_groups,
         rooms=rooms,
         lesson_requirements=lesson_requirements,
         teacher_assignments=teacher_assignments,

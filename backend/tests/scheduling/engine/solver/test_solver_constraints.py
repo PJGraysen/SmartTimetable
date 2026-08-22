@@ -10,7 +10,7 @@ from apps.scheduling.engine.domain.entities import (
     TeacherAvailabilityEntity,
     TeacherEntity,
     TeacherFreeAfternoonEntity,
-    TeachingGroupEntity,
+    InstructionalGroupEntity,
     TimetableSlot,
 )
 from apps.scheduling.engine.domain.enums import (
@@ -60,8 +60,8 @@ def build_constraint_problem(
         for index in range(teacher_count)
     )
 
-    teaching_groups = tuple(
-        TeachingGroupEntity(
+    instructional_groups = tuple(
+        InstructionalGroupEntity(
             id=uuid4(),
             name=f"Group {index + 1}",
             code=f"G{index + 1:03d}",
@@ -106,11 +106,11 @@ def build_constraint_problem(
     requirements = tuple(
         LessonRequirementEntity(
             id=uuid4(),
-            teaching_group_id=group.id,
+            instructional_group_id=group.id,
             subject_id=uuid4(),
             periods_per_week=periods_per_week,
         )
-        for group in teaching_groups
+        for group in instructional_groups
     )
 
     if teacher_assignments is None:
@@ -165,7 +165,7 @@ def build_constraint_problem(
     return SchedulingProblem.from_iterables(
         periods=periods,
         teachers=teachers,
-        teaching_groups=teaching_groups,
+        instructional_groups=instructional_groups,
         rooms=rooms,
         lesson_requirements=requirements,
         teacher_assignments=teacher_assignments,
@@ -199,7 +199,7 @@ def test_teacher_clash_is_prevented():
     problem = SchedulingProblem.from_iterables(
         periods=problem.periods,
         teachers=problem.teachers,
-        teaching_groups=problem.teaching_groups,
+        instructional_groups=problem.instructional_groups,
         rooms=problem.rooms,
         lesson_requirements=problem.lesson_requirements,
         teacher_assignments=teacher_assignments,
@@ -240,7 +240,7 @@ def test_teaching_group_clash_is_prevented():
 
     assert result.is_successful
 
-    group_id = problem.teaching_groups[0].id
+    group_id = problem.instructional_groups[0].id
 
     for slot in {
         (assignment.day, assignment.period_id)
@@ -249,7 +249,7 @@ def test_teaching_group_clash_is_prevented():
         group_assignments = [
             assignment
             for assignment in result.assignments
-            if assignment.teaching_group_id == group_id
+            if assignment.instructional_group_id == group_id
             and (assignment.day, assignment.period_id) == slot
         ]
 
@@ -310,7 +310,7 @@ def test_teacher_unavailability_is_respected():
     problem = SchedulingProblem.from_iterables(
         periods=problem.periods,
         teachers=problem.teachers,
-        teaching_groups=problem.teaching_groups,
+        instructional_groups=problem.instructional_groups,
         rooms=problem.rooms,
         lesson_requirements=problem.lesson_requirements,
         teacher_assignments=problem.teacher_assignments,
@@ -366,7 +366,7 @@ def test_room_unavailability_is_respected():
     problem = SchedulingProblem.from_iterables(
         periods=problem.periods,
         teachers=problem.teachers,
-        teaching_groups=problem.teaching_groups,
+        instructional_groups=problem.instructional_groups,
         rooms=problem.rooms,
         lesson_requirements=problem.lesson_requirements,
         teacher_assignments=problem.teacher_assignments,
@@ -457,8 +457,8 @@ def test_teacher_free_afternoon_is_hard_constraint():
         ),
     )
 
-    teaching_groups = (
-        TeachingGroupEntity(
+    instructional_groups = (
+        InstructionalGroupEntity(
             id=group_id,
             name="Group 1",
             code="G001",
@@ -477,7 +477,7 @@ def test_teacher_free_afternoon_is_hard_constraint():
     requirements = (
         LessonRequirementEntity(
             id=requirement_id,
-            teaching_group_id=group_id,
+            instructional_group_id=group_id,
             subject_id=uuid4(),
             periods_per_week=1,
         ),
@@ -521,7 +521,7 @@ def test_teacher_free_afternoon_is_hard_constraint():
     problem = SchedulingProblem.from_iterables(
         periods=periods,
         teachers=teachers,
-        teaching_groups=teaching_groups,
+        instructional_groups=instructional_groups,
         rooms=rooms,
         lesson_requirements=requirements,
         teacher_assignments=teacher_assignments,
@@ -576,7 +576,7 @@ def test_inactive_teacher_assignment_is_ignored():
     problem = SchedulingProblem.from_iterables(
         periods=problem.periods,
         teachers=problem.teachers,
-        teaching_groups=problem.teaching_groups,
+        instructional_groups=problem.instructional_groups,
         rooms=problem.rooms,
         lesson_requirements=problem.lesson_requirements,
         teacher_assignments=(inactive_assignment,),
@@ -611,7 +611,7 @@ def test_inactive_teacher_cannot_be_scheduled():
     problem = SchedulingProblem.from_iterables(
         periods=problem.periods,
         teachers=(inactive_teacher,),
-        teaching_groups=problem.teaching_groups,
+        instructional_groups=problem.instructional_groups,
         rooms=problem.rooms,
         lesson_requirements=problem.lesson_requirements,
         teacher_assignments=problem.teacher_assignments,
@@ -647,7 +647,7 @@ def test_inactive_room_cannot_be_scheduled():
     problem = SchedulingProblem.from_iterables(
         periods=problem.periods,
         teachers=problem.teachers,
-        teaching_groups=problem.teaching_groups,
+        instructional_groups=problem.instructional_groups,
         rooms=(inactive_room,),
         lesson_requirements=problem.lesson_requirements,
         teacher_assignments=problem.teacher_assignments,
@@ -674,7 +674,7 @@ def test_inactive_lesson_requirement_is_not_scheduled():
 
     inactive_requirement = LessonRequirementEntity(
         id=requirement.id,
-        teaching_group_id=requirement.teaching_group_id,
+        instructional_group_id=requirement.instructional_group_id,
         subject_id=requirement.subject_id,
         periods_per_week=requirement.periods_per_week,
         is_active=False,
@@ -683,7 +683,7 @@ def test_inactive_lesson_requirement_is_not_scheduled():
     problem = SchedulingProblem.from_iterables(
         periods=problem.periods,
         teachers=problem.teachers,
-        teaching_groups=problem.teaching_groups,
+        instructional_groups=problem.instructional_groups,
         rooms=problem.rooms,
         lesson_requirements=(inactive_requirement,),
         teacher_assignments=problem.teacher_assignments,

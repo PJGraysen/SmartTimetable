@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Iterable
 from uuid import UUID
@@ -12,7 +12,7 @@ from apps.scheduling.engine.domain.entities import (
     TeacherAvailabilityEntity,
     TeacherEntity,
     TeacherFreeAfternoonEntity,
-    TeachingGroupEntity,
+    InstructionalGroupEntity,
     TimetableSlot,
 )
 from apps.scheduling.engine.domain.enums import (
@@ -27,7 +27,7 @@ from apps.scheduling.models import (
     TeacherAvailability,
     TeacherFreeAfternoon,
 )
-from apps.academics.models import LessonRequirement, TeachingGroup
+from apps.academics.models import InstructionalGroup, LessonRequirement
 from apps.users.models import Teacher
 from apps.scheduling.engine.domain.problem import SchedulingProblem
 
@@ -68,13 +68,13 @@ def load_teachers(
     ]
 
 
-def load_teaching_groups(
-    queryset: Iterable[TeachingGroup],
-) -> list[TeachingGroupEntity]:
-    """Convert Django TeachingGroup records into domain entities."""
+def load_instructional_groups(
+    queryset: Iterable[InstructionalGroup],
+) -> list[InstructionalGroupEntity]:
+    """Convert Django InstructionalGroup records into domain entities."""
 
     return [
-        TeachingGroupEntity(
+        InstructionalGroupEntity(
             id=group.id,
             name=str(group),
             code=getattr(group, "code", str(group.id)),
@@ -109,7 +109,7 @@ def load_lesson_requirements(
     return [
         LessonRequirementEntity(
             id=requirement.id,
-            teaching_group_id=requirement.teaching_group_id,
+            instructional_group_id=requirement.instructional_group_id,
             subject_id=requirement.subject_id,
             periods_per_week=requirement.lessons_per_week,
             is_active=requirement.is_active,
@@ -245,7 +245,7 @@ def load_scheduling_problem(term) -> "SchedulingProblem":
         is_active=True,
     ).order_by("employee_code")
 
-    teaching_groups_queryset = TeachingGroup.objects.filter(
+    instructional_groups_queryset = InstructionalGroup.objects.filter(
         is_active=True,
     )
 
@@ -256,7 +256,7 @@ def load_scheduling_problem(term) -> "SchedulingProblem":
     lesson_requirements_queryset = LessonRequirement.objects.filter(
         term=term,
         is_active=True,
-    ).order_by("teaching_group", "subject")
+    ).order_by("instructional_group", "subject")
 
     teacher_assignments_queryset = TeacherAssignment.objects.filter(
         is_active=True,
@@ -282,7 +282,7 @@ def load_scheduling_problem(term) -> "SchedulingProblem":
 
     teachers = load_teachers(teachers_queryset)
 
-    teaching_groups = load_teaching_groups(teaching_groups_queryset)
+    instructional_groups = load_instructional_groups(instructional_groups_queryset)
 
     rooms = load_rooms(rooms_queryset)
 
@@ -301,7 +301,7 @@ def load_scheduling_problem(term) -> "SchedulingProblem":
     return SchedulingProblem.from_iterables(
         periods=periods,
         teachers=teachers,
-        teaching_groups=teaching_groups,
+        instructional_groups=instructional_groups,
         rooms=rooms,
         lesson_requirements=lesson_requirements,
         teacher_assignments=teacher_assignments,
@@ -314,4 +314,4 @@ class DjangoSchedulingLoader:
     """Infrastructure adapter for loading scheduling problems from Django."""
 
     def load_problem(self, *, term) -> SchedulingProblem:
-        return load_scheduling_problem(term)        
+        return load_scheduling_problem(term)

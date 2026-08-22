@@ -1,4 +1,5 @@
-﻿import { NavLink, Route, Routes } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Route, Routes } from "react-router-dom";
 import {
   CalendarDays,
   ClipboardCheck,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import "./index.css";
 import Scheduling from "./Scheduling";
+import { getAcademicTerms } from "./services/core";
 
 function Sidebar() {
   const links = [
@@ -31,6 +33,7 @@ function Sidebar() {
         <div className="brand-mark">
           <CalendarDays size={24} />
         </div>
+
         <div>
           <div className="brand-title">SmartTimetable</div>
           <div className="brand-subtitle">Pro</div>
@@ -76,17 +79,49 @@ function Sidebar() {
 }
 
 function Header() {
+  const [activeTerm, setActiveTerm] = useState<{
+    academic_year_name: string;
+    name: string;
+  } | null>(null);
+
+  useEffect(() => {
+    getAcademicTerms()
+      .then((terms) => {
+        const term = terms.find((item) => item.is_active);
+
+        setActiveTerm(
+          term
+            ? {
+                academic_year_name: term.academic_year_name,
+                name: term.name,
+              }
+            : null,
+        );
+      })
+      .catch(() => {
+        setActiveTerm(null);
+      });
+  }, []);
+
   return (
     <header className="topbar">
       <div>
-        <div className="school-name">Queen of Apostles Seminary Senior School</div>
+        <div className="school-name">
+          Queen of Apostles Seminary Senior School
+        </div>
+
         <div className="school-context">SmartTimetable Pro</div>
       </div>
 
       <div className="header-actions">
         <div className="current-term">
           <span className="term-label">Current Term</span>
-          <strong>2026 Term 3</strong>
+
+          <strong>
+            {activeTerm
+              ? `${activeTerm.academic_year_name} ${activeTerm.name}`
+              : "--"}
+          </strong>
         </div>
 
         <div className="user-avatar">IT</div>
@@ -115,9 +150,10 @@ function Dashboard() {
           <div className="stat-icon">
             <GraduationCap size={21} />
           </div>
+
           <div>
             <div className="stat-label">Teaching Groups</div>
-            <div className="stat-value">—</div>
+            <div className="stat-value">--</div>
             <div className="stat-note">From academic data</div>
           </div>
         </div>
@@ -126,9 +162,10 @@ function Dashboard() {
           <div className="stat-icon">
             <Users size={21} />
           </div>
+
           <div>
             <div className="stat-label">Teachers</div>
-            <div className="stat-value">—</div>
+            <div className="stat-value">--</div>
             <div className="stat-note">Teacher assignments</div>
           </div>
         </div>
@@ -137,9 +174,10 @@ function Dashboard() {
           <div className="stat-icon">
             <BookOpen size={21} />
           </div>
+
           <div>
             <div className="stat-label">Subjects</div>
-            <div className="stat-value">—</div>
+            <div className="stat-value">--</div>
             <div className="stat-note">Active subjects</div>
           </div>
         </div>
@@ -148,9 +186,10 @@ function Dashboard() {
           <div className="stat-icon">
             <DoorOpen size={21} />
           </div>
+
           <div>
             <div className="stat-label">Rooms</div>
-            <div className="stat-value">—</div>
+            <div className="stat-value">--</div>
             <div className="stat-note">Available rooms</div>
           </div>
         </div>
@@ -161,7 +200,9 @@ function Dashboard() {
           <div className="panel-header">
             <div>
               <h2>Timetable Generation</h2>
-              <p>Run the scheduling engine to generate a new timetable.</p>
+              <p>
+                Run the scheduling engine to generate a new timetable.
+              </p>
             </div>
           </div>
 
@@ -172,6 +213,7 @@ function Dashboard() {
 
             <div className="generation-content">
               <h3>Ready to generate</h3>
+
               <p>
                 The scheduling engine will enforce teacher clashes,
                 room clashes, availability, lesson requirements and teacher
@@ -231,7 +273,9 @@ function Dashboard() {
 
         <div className="empty-state">
           <CalendarDays size={38} />
+
           <h3>No scheduling runs displayed yet</h3>
+
           <p>
             Once the UI is connected to the scheduling API, recent runs will
             appear here automatically.
@@ -264,31 +308,39 @@ function App() {
         <main className="content">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+
             <Route
               path="/timetables"
               element={<Placeholder title="Timetables" />}
             />
+
             <Route path="/scheduling" element={<Scheduling />} />
+
             <Route
               path="/academics"
               element={<Placeholder title="Academics" />}
             />
+
             <Route
               path="/teachers"
               element={<Placeholder title="Teachers" />}
             />
+
             <Route
               path="/subjects"
               element={<Placeholder title="Subjects" />}
             />
+
             <Route
               path="/rooms"
               element={<Placeholder title="Rooms" />}
             />
+
             <Route
               path="/validation"
               element={<Placeholder title="Validation" />}
             />
+
             <Route
               path="/settings"
               element={<Placeholder title="Settings" />}

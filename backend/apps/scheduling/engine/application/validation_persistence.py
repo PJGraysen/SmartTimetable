@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections.abc import Iterable
 from typing import Any
@@ -193,9 +193,9 @@ def _build_validation_result_kwargs(
             finding,
             "teacher",
         ),
-        "teaching_group_id": _extract_model_id(
+        "instructional_group_id": _extract_model_id(
             finding,
-            "teaching_group",
+            "instructional_group",
         ),
         "period_id": _extract_model_id(
             finding,

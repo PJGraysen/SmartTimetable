@@ -9,7 +9,7 @@ from apps.scheduling.engine.domain.entities import (
     SchedulingAssignment,
     TeacherEntity,
     TeacherFreeAfternoonEntity,
-    TeachingGroupEntity,
+    InstructionalGroupEntity,
 )
 from apps.scheduling.engine.domain.enums import (
     DayOfWeek,
@@ -54,8 +54,8 @@ def make_teacher() -> TeacherEntity:
     )
 
 
-def make_group() -> TeachingGroupEntity:
-    return TeachingGroupEntity(
+def make_group() -> InstructionalGroupEntity:
+    return InstructionalGroupEntity(
         id=uuid4(),
         name="Form 1A",
         code="F1A",
@@ -69,7 +69,7 @@ def make_requirement(
 ) -> LessonRequirementEntity:
     return LessonRequirementEntity(
         id=uuid4(),
-        teaching_group_id=group_id,
+        instructional_group_id=group_id,
         subject_id=uuid4(),
         periods_per_week=periods_per_week,
     )
@@ -86,7 +86,7 @@ def make_assignment(
     return SchedulingAssignment(
         lesson_requirement_id=requirement.id,
         teacher_id=teacher.id,
-        teaching_group_id=group.id,
+        instructional_group_id=group.id,
         period_id=period.id,
         day=day,
         room_id=None,
@@ -104,7 +104,7 @@ def make_problem(
     return SchedulingProblem.from_iterables(
         periods=periods,
         teachers=teachers,
-        teaching_groups=groups,
+        instructional_groups=groups,
         rooms=(),
         lesson_requirements=requirements,
         teacher_assignments=(),

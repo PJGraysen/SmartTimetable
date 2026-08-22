@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import time
 from uuid import uuid4
@@ -10,7 +10,7 @@ from apps.scheduling.engine.domain.entities import (
     PeriodEntity,
     TeacherEntity,
     TeacherFreeAfternoonEntity,
-    TeachingGroupEntity,
+    InstructionalGroupEntity,
     TimetableSlot,
 )
 from apps.scheduling.engine.domain.enums import (
@@ -33,8 +33,8 @@ def _teacher(code: str = "T001") -> TeacherEntity:
     )
 
 
-def _group() -> TeachingGroupEntity:
-    return TeachingGroupEntity(
+def _group() -> InstructionalGroupEntity:
+    return InstructionalGroupEntity(
         id=uuid4(),
         name="Test Group",
         code="G001",
@@ -68,11 +68,11 @@ def _period(number: int) -> PeriodEntity:
 
 
 def _requirement(
-    group: TeachingGroupEntity,
+    group: InstructionalGroupEntity,
 ) -> LessonRequirementEntity:
     return LessonRequirementEntity(
         id=uuid4(),
-        teaching_group_id=group.id,
+        instructional_group_id=group.id,
         subject_id=uuid4(),
         periods_per_week=2,
         is_active=True,
@@ -93,7 +93,7 @@ def _free_afternoon(
 def _problem(
     *,
     teachers: tuple[TeacherEntity, ...],
-    groups: tuple[TeachingGroupEntity, ...],
+    groups: tuple[InstructionalGroupEntity, ...],
     periods: tuple[PeriodEntity, ...],
     requirements: tuple[LessonRequirementEntity, ...],
 ) -> SchedulingProblem:
@@ -117,7 +117,7 @@ def _problem(
         periods=periods,
         slots=slots,
         teachers=teachers,
-        teaching_groups=groups,
+        instructional_groups=groups,
         rooms=tuple(),
         lesson_requirements=requirements,
         teacher_assignments=tuple(),
@@ -138,7 +138,7 @@ def _variables(
         AssignmentVariable(
             lesson_requirement_id=requirement.id,
             teacher_id=teacher.id,
-            teaching_group_id=requirement.teaching_group_id,
+            instructional_group_id=requirement.instructional_group_id,
             period_id=period.id,
             day=DayOfWeek.MONDAY.value,
             room_id=None,
@@ -337,7 +337,7 @@ def test_consecutive_period_objective_does_not_penalize_different_teachers():
         AssignmentVariable(
             lesson_requirement_id=requirement_one.id,
             teacher_id=teacher_one.id,
-            teaching_group_id=group.id,
+            instructional_group_id=group.id,
             period_id=periods[0].id,
             day=DayOfWeek.MONDAY.value,
             room_id=None,
@@ -348,7 +348,7 @@ def test_consecutive_period_objective_does_not_penalize_different_teachers():
         AssignmentVariable(
             lesson_requirement_id=requirement_two.id,
             teacher_id=teacher_two.id,
-            teaching_group_id=group.id,
+            instructional_group_id=group.id,
             period_id=periods[1].id,
             day=DayOfWeek.MONDAY.value,
             room_id=None,
@@ -400,7 +400,7 @@ def test_consecutive_period_objective_does_not_penalize_different_days():
         AssignmentVariable(
             lesson_requirement_id=requirement.id,
             teacher_id=teacher.id,
-            teaching_group_id=group.id,
+            instructional_group_id=group.id,
             period_id=periods[0].id,
             day=DayOfWeek.MONDAY.value,
             room_id=None,
@@ -411,7 +411,7 @@ def test_consecutive_period_objective_does_not_penalize_different_days():
         AssignmentVariable(
             lesson_requirement_id=requirement.id,
             teacher_id=teacher.id,
-            teaching_group_id=group.id,
+            instructional_group_id=group.id,
             period_id=periods[1].id,
             day=DayOfWeek.TUESDAY.value,
             room_id=None,

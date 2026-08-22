@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from uuid import UUID
@@ -17,7 +17,7 @@ class AssignmentVariable:
 
     lesson_requirement_id: UUID
     teacher_id: UUID
-    teaching_group_id: UUID
+    instructional_group_id: UUID
     period_id: UUID
     day: str
     room_id: UUID | None

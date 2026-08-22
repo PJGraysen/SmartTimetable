@@ -82,7 +82,7 @@ def test_validation_finding_preserves_context():
         message="Teacher is scheduled during their free afternoon.",
         details={"period_part": "AFTERNOON"},
         teacher_id="teacher-1",
-        teaching_group_id="group-1",
+        instructional_group_id="group-1",
         period_id="period-5",
         day="MON",
         room_id="room-1",
@@ -90,7 +90,7 @@ def test_validation_finding_preserves_context():
     )
 
     assert finding.teacher_id == "teacher-1"
-    assert finding.teaching_group_id == "group-1"
+    assert finding.instructional_group_id == "group-1"
     assert finding.period_id == "period-5"
     assert finding.day == "MON"
     assert finding.room_id == "room-1"

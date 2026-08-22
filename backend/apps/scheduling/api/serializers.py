@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from rest_framework import serializers
 
@@ -135,7 +135,7 @@ class TimetableEntryResultSerializer(serializers.ModelSerializer):
     )
 
     teaching_group_name = serializers.CharField(
-        source="teaching_group.__str__",
+        source="instructional_group.__str__",
         read_only=True,
     )
 
@@ -161,7 +161,7 @@ class TimetableEntryResultSerializer(serializers.ModelSerializer):
             "period_name",
             "period_start_time",
             "period_end_time",
-            "teaching_group",
+            "instructional_group",
             "teaching_group_name",
             "teacher",
             "teacher_name",

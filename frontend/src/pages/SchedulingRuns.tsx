@@ -7,7 +7,12 @@ import {
   Play,
   RefreshCw,
 } from "lucide-react";
-import api from "../services/api";
+import {
+  createSchedulingRun,
+  executeSchedulingRun,
+  getSchedulingRuns,
+} from "../services/scheduling";
+import { getAcademicTerms } from "../services/core";
 
 type AcademicTerm = {
   id: string;
@@ -52,7 +57,7 @@ function statusClass(status: string) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "â€”";
+  if (!value) return "--";
   return new Date(value).toLocaleString();
 }
 
@@ -72,19 +77,19 @@ export default function SchedulingRuns() {
 
     try {
       const [termsResponse, runsResponse] = await Promise.all([
-        api.get<AcademicTerm[]>("/core/terms/"),
-        api.get<SchedulingRun[]>("/scheduling/runs/"),
+        getAcademicTerms(),
+        getSchedulingRuns(),
       ]);
 
       setTerms(
-        Array.isArray(termsResponse.data)
-          ? termsResponse.data
+        Array.isArray(termsResponse)
+          ? termsResponse
           : []
       );
 
       setRuns(
-        Array.isArray(runsResponse.data)
-          ? runsResponse.data
+        Array.isArray(runsResponse)
+          ? runsResponse
           : []
       );
     } catch {
@@ -112,16 +117,13 @@ export default function SchedulingRuns() {
     setError(null);
 
     try {
-      const response = await api.post<SchedulingRun>(
-        "/scheduling/runs/",
-        {
-          term: selectedTerm,
-        }
-      );
+      const response = await createSchedulingRun({
+        term: selectedTerm,
+      });
 
-      setRuns((current) => [response.data, ...current]);
+      setRuns((current) => [response, ...current]);
       setMessage(
-        `Scheduling run created for ${response.data.term_name}.`
+        `Scheduling run created for ${response.term_name}.`
       );
     } catch (requestError: any) {
       setError(
@@ -140,17 +142,14 @@ export default function SchedulingRuns() {
     setError(null);
 
     try {
-      const response = await api.post<SchedulingRun>(
-        `/scheduling/runs/${run.id}/execute/`,
-        {
-          version_name: "Generated Timetable",
-          version_number: 1,
-        }
-      );
+      const response = await executeSchedulingRun(run.id, {
+        version_name: "Generated Timetable",
+        version_number: 1,
+      });
 
       setRuns((current) =>
         current.map((item) =>
-          item.id === run.id ? response.data : item
+          item.id === run.id ? response : item
         )
       );
 
@@ -241,7 +240,7 @@ export default function SchedulingRuns() {
 
             {terms.map((term) => (
               <option key={term.id} value={term.id}>
-                {term.name} â€” {term.academic_year}
+                {term.name} -- {term.academic_year}
               </option>
             ))}
           </select>
@@ -328,10 +327,10 @@ export default function SchedulingRuns() {
                       <td>
                         {run.solver_status_display ??
                           run.solver_status ??
-                          "â€”"}
+                          "--"}
                       </td>
 
-                      <td>{run.objective_value ?? "â€”"}</td>
+                      <td>{run.objective_value ?? "--"}</td>
 
                       <td>{formatDate(run.created_at)}</td>
 
@@ -358,7 +357,7 @@ export default function SchedulingRuns() {
                           <span>
                             {run.completed_at
                               ? formatDate(run.completed_at)
-                              : "â€”"}
+                              : "--"}
                           </span>
                         )}
                       </td>

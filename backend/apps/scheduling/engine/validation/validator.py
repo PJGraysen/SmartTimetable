@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections.abc import Iterable
 
@@ -15,7 +15,7 @@ from .rules import (
     validate_teacher_availability,
     validate_teacher_clashes,
     validate_teacher_free_afternoons,
-    validate_teaching_group_clashes,
+    validate_instructional_group_clashes,
 )
 
 
@@ -77,7 +77,7 @@ class TimetableValidator:
         )
 
         findings.extend(
-            validate_teaching_group_clashes(assignments)
+            validate_instructional_group_clashes(assignments)
         )
 
         findings.extend(

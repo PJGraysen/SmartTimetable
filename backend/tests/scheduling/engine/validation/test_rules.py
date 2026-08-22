@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import time
 from uuid import uuid4
@@ -12,7 +12,7 @@ from apps.scheduling.engine.domain.entities import (
     TeacherAvailabilityEntity,
     TeacherEntity,
     TeacherFreeAfternoonEntity,
-    TeachingGroupEntity,
+    InstructionalGroupEntity,
 )
 from apps.scheduling.engine.domain.enums import (
     DayOfWeek,
@@ -30,7 +30,7 @@ from apps.scheduling.engine.validation.rules import (
     validate_teacher_availability,
     validate_teacher_clashes,
     validate_teacher_free_afternoons,
-    validate_teaching_group_clashes,
+    validate_instructional_group_clashes,
 )
 
 
@@ -63,8 +63,8 @@ def make_teacher() -> TeacherEntity:
     )
 
 
-def make_group() -> TeachingGroupEntity:
-    return TeachingGroupEntity(
+def make_group() -> InstructionalGroupEntity:
+    return InstructionalGroupEntity(
         id=uuid4(),
         name="Form 1A",
         code="F1A",
@@ -87,7 +87,7 @@ def make_requirement(
 ) -> LessonRequirementEntity:
     return LessonRequirementEntity(
         id=uuid4(),
-        teaching_group_id=group_id,
+        instructional_group_id=group_id,
         subject_id=uuid4(),
         periods_per_week=periods_per_week,
     )
@@ -105,7 +105,7 @@ def make_assignment(
     return SchedulingAssignment(
         lesson_requirement_id=requirement.id,
         teacher_id=teacher.id,
-        teaching_group_id=group.id,
+        instructional_group_id=group.id,
         period_id=period.id,
         day=day,
         room_id=room.id if room else None,
@@ -152,7 +152,7 @@ def make_problem(
     return SchedulingProblem.from_iterables(
         periods=periods,
         teachers=teachers,
-        teaching_groups=groups,
+        instructional_groups=groups,
         rooms=rooms,
         lesson_requirements=requirements,
         teacher_assignments=teacher_assignments,
@@ -264,14 +264,14 @@ def test_teaching_group_clash_is_detected():
         period=period,
     )
 
-    findings = validate_teaching_group_clashes(
+    findings = validate_instructional_group_clashes(
         (assignment_one, assignment_two)
     )
 
     assert len(findings) == 1
     assert findings[0].severity == ValidationSeverity.ERROR.value
     assert findings[0].category == ValidationCategory.GROUP_CLASH.value
-    assert findings[0].teaching_group_id == str(group.id)
+    assert findings[0].instructional_group_id == str(group.id)
 
 
 # ---------------------------------------------------------------------------

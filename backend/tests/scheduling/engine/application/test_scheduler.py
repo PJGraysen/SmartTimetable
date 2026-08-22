@@ -22,7 +22,7 @@ def make_empty_problem() -> SchedulingProblem:
     return SchedulingProblem.from_iterables(
         periods=[],
         teachers=[],
-        teaching_groups=[],
+        instructional_groups=[],
         rooms=[],
         lesson_requirements=[],
         teacher_assignments=[],

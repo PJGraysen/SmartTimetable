@@ -1,6 +1,7 @@
 import pytest
 
 from apps.academics.models import (
+    InstructionalGroup,
     Grade,
     LessonRequirement,
     Stream,
@@ -18,7 +19,7 @@ from apps.scheduling.engine.infrastructure.django_loader import (
     load_teacher_availability,
     load_teacher_free_afternoons,
     load_teachers,
-    load_teaching_groups,
+    load_instructional_groups,
 )
 from apps.scheduling.models import (
     Period,
@@ -85,7 +86,7 @@ def test_load_teachers_uses_employee_code():
 
 
 @pytest.mark.django_db
-def test_load_teaching_groups_preserves_group_identity():
+def test_load_instructional_groups_preserves_group_identity():
     school = School.objects.create(
         name="Test School",
         code="TEST",
@@ -118,7 +119,7 @@ def test_load_teaching_groups_preserves_group_identity():
         is_active=True,
     )
 
-    result = load_teaching_groups(
+    result = load_instructional_groups(
         TeachingGroup.objects.all()
     )
 
@@ -201,6 +202,15 @@ def test_load_lesson_requirements():
         learner_count=45,
     )
 
+
+    instructional_group = InstructionalGroup.objects.create(
+        teaching_group=group,
+        name=group.name,
+        code=group.code,
+        learner_count=group.learner_count,
+        is_active=group.is_active,
+    )
+
     subject = Subject.objects.create(
         name="Computer Science",
         code="CS",
@@ -208,7 +218,7 @@ def test_load_lesson_requirements():
 
     requirement = LessonRequirement.objects.create(
         term=term,
-        teaching_group=group,
+        instructional_group=instructional_group,
         subject=subject,
         lessons_per_week=4,
         is_active=True,
@@ -223,7 +233,7 @@ def test_load_lesson_requirements():
     entity = result[0]
 
     assert entity.id == requirement.id
-    assert entity.teaching_group_id == group.id
+    assert entity.instructional_group_id == instructional_group.id
     assert entity.subject_id == subject.id
     assert entity.periods_per_week == 4
     assert entity.is_active is True
@@ -269,6 +279,15 @@ def test_load_teacher_assignments():
         code="G10A",
     )
 
+
+    instructional_group = InstructionalGroup.objects.create(
+        teaching_group=group,
+        name=group.name,
+        code=group.code,
+        learner_count=group.learner_count,
+        is_active=group.is_active,
+    )
+
     subject = Subject.objects.create(
         name="Computer Science",
         code="CS",
@@ -276,7 +295,7 @@ def test_load_teacher_assignments():
 
     requirement = LessonRequirement.objects.create(
         term=term,
-        teaching_group=group,
+        instructional_group=instructional_group,
         subject=subject,
         lessons_per_week=2,
     )

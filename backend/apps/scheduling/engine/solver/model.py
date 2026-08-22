@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
@@ -142,7 +142,7 @@ class SolverModelBuilder:
 
         active_groups = [
             group
-            for group in problem.teaching_groups
+            for group in problem.instructional_groups
             if group.is_active
         ]
 
@@ -181,7 +181,7 @@ class SolverModelBuilder:
         }
 
         for requirement in active_requirements:
-            if requirement.teaching_group_id not in valid_group_ids:
+            if requirement.instructional_group_id not in valid_group_ids:
                 continue
 
             eligible_teacher_ids = [
@@ -226,8 +226,8 @@ class SolverModelBuilder:
                             AssignmentVariable(
                                 lesson_requirement_id=requirement.id,
                                 teacher_id=teacher_id,
-                                teaching_group_id=(
-                                    requirement.teaching_group_id
+                                instructional_group_id=(
+                                    requirement.instructional_group_id
                                 ),
                                 period_id=slot.period_id,
                                 day=slot.day.value,
@@ -318,7 +318,7 @@ class SolverModelBuilder:
         for variable in variables:
             groups[
                 (
-                    variable.teaching_group_id,
+                    variable.instructional_group_id,
                     variable.day,
                     variable.period_id,
                 )

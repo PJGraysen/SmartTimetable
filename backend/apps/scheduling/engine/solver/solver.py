@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Optional
 
@@ -136,8 +136,8 @@ class CPSATSolver:
                         variable.lesson_requirement_id
                     ),
                     teacher_id=variable.teacher_id,
-                    teaching_group_id=(
-                        variable.teaching_group_id
+                    instructional_group_id=(
+                        variable.instructional_group_id
                     ),
                     period_id=variable.period_id,
                     day=problem_day(variable.day),

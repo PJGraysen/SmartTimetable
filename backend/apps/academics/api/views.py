@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from drf_spectacular.utils import extend_schema_view
 
@@ -120,7 +120,7 @@ class LessonRequirementListCreateView(generics.ListCreateAPIView):
     queryset = LessonRequirement.objects.select_related(
         "term",
         "term__academic_year",
-        "teaching_group",
+        "instructional_group",
         "teaching_group__stream",
         "teaching_group__stream__grade",
         "subject",
@@ -138,7 +138,7 @@ class LessonRequirementDetailView(
     queryset = LessonRequirement.objects.select_related(
         "term",
         "term__academic_year",
-        "teaching_group",
+        "instructional_group",
         "teaching_group__stream",
         "teaching_group__stream__grade",
         "subject",

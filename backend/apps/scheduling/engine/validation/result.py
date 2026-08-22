@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
@@ -21,7 +21,7 @@ class ValidationFinding:
     details: dict[str, Any] = field(default_factory=dict)
 
     teacher_id: str | None = None
-    teaching_group_id: str | None = None
+    instructional_group_id: str | None = None
     period_id: str | None = None
     day: str | None = None
     room_id: str | None = None

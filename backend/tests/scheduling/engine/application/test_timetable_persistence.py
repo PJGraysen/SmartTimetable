@@ -12,6 +12,7 @@ from apps.scheduling.engine.solver.result import (
     SolverStatistics,
 )
 from apps.academics.models import (
+    InstructionalGroup,
     Grade,
     LessonRequirement,
     Stream,
@@ -72,6 +73,15 @@ def scheduling_data():
         learner_count=45,
     )
 
+
+    instructional_group = InstructionalGroup.objects.create(
+        teaching_group=group,
+        name=group.name,
+        code=group.code,
+        learner_count=group.learner_count,
+        is_active=group.is_active,
+    )
+
     subject = Subject.objects.create(
         name="Computer Science",
         code="CS",
@@ -79,7 +89,7 @@ def scheduling_data():
 
     requirement = LessonRequirement.objects.create(
         term=term,
-        teaching_group=group,
+        instructional_group=instructional_group,
         subject=subject,
         lessons_per_week=1,
         is_active=True,
@@ -123,6 +133,7 @@ def scheduling_data():
     return {
         "term": term,
         "group": group,
+        "instructional_group": instructional_group,
         "requirement": requirement,
         "teacher": teacher,
         "period": period,
@@ -140,7 +151,7 @@ def test_persist_creates_timetable_version_and_entries(
     assignment = SchedulingAssignment(
         lesson_requirement_id=data["requirement"].id,
         teacher_id=data["teacher"].id,
-        teaching_group_id=data["group"].id,
+        instructional_group_id=data["instructional_group"].id,
         period_id=data["period"].id,
         day=DayOfWeek.MONDAY,
         room_id=data["room"].id,
@@ -180,7 +191,7 @@ def test_persist_creates_timetable_version_and_entries(
 
     assert entry.day == "MON"
     assert entry.period_id == data["period"].id
-    assert entry.teaching_group_id == data["group"].id
+    assert entry.instructional_group_id == data["instructional_group"].id
     assert entry.teacher_id == data["teacher"].id
     assert entry.lesson_requirement_id == data["requirement"].id
     assert entry.room_id == data["room"].id
@@ -204,7 +215,7 @@ def test_persist_resolves_existing_version_number(
     assignment = SchedulingAssignment(
         lesson_requirement_id=data["requirement"].id,
         teacher_id=data["teacher"].id,
-        teaching_group_id=data["group"].id,
+        instructional_group_id=data["instructional_group"].id,
         period_id=data["period"].id,
         day=DayOfWeek.MONDAY,
         room_id=data["room"].id,
@@ -267,7 +278,7 @@ def test_persist_accepts_feasible_result(
     assignment = SchedulingAssignment(
         lesson_requirement_id=data["requirement"].id,
         teacher_id=data["teacher"].id,
-        teaching_group_id=data["group"].id,
+        instructional_group_id=data["instructional_group"].id,
         period_id=data["period"].id,
         day=DayOfWeek.MONDAY,
     )
@@ -351,7 +362,7 @@ def test_persist_rolls_back_version_when_entry_creation_fails(
     invalid_assignment = SchedulingAssignment(
         lesson_requirement_id=uuid4(),
         teacher_id=data["teacher"].id,
-        teaching_group_id=data["group"].id,
+        instructional_group_id=data["instructional_group"].id,
         period_id=data["period"].id,
         day=DayOfWeek.MONDAY,
     )

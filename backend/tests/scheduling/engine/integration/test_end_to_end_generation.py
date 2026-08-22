@@ -1,6 +1,7 @@
-﻿import pytest
+import pytest
 
 from apps.academics.models import (
+    InstructionalGroup,
     Grade,
     LessonRequirement,
     Stream,
@@ -71,6 +72,15 @@ def test_end_to_end_generation_from_django_data():
         is_active=True,
     )
 
+
+    instructional_group = InstructionalGroup.objects.create(
+        teaching_group=group,
+        name=group.name,
+        code=group.code,
+        learner_count=group.learner_count,
+        is_active=group.is_active,
+    )
+
     subject = Subject.objects.create(
         name="Computer Science",
         code="CS",
@@ -78,7 +88,7 @@ def test_end_to_end_generation_from_django_data():
 
     requirement = LessonRequirement.objects.create(
         term=term,
-        teaching_group=group,
+        instructional_group=instructional_group,
         subject=subject,
         lessons_per_week=2,
         is_active=True,
@@ -153,7 +163,7 @@ def test_end_to_end_generation_from_django_data():
     problem = loader.load_problem(term=term)
 
     assert len(problem.teachers) == 1
-    assert len(problem.teaching_groups) == 1
+    assert len(problem.instructional_groups) == 1
     assert len(problem.rooms) == 1
     assert len(problem.lesson_requirements) == 1
     assert len(problem.teacher_assignments) == 1

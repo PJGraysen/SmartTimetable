@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+﻿from dataclasses import dataclass, field
 from typing import Iterable, Mapping
 from uuid import UUID
 
@@ -11,7 +11,7 @@ from .entities import (
     TeacherAvailabilityEntity,
     TeacherEntity,
     TeacherFreeAfternoonEntity,
-    TeachingGroupEntity,
+    InstructionalGroupEntity,
     TimetableSlot,
 )
 from .enums import DayOfWeek, PartOfDay
@@ -29,7 +29,7 @@ class SchedulingProblem:
 
     periods: tuple[PeriodEntity, ...]
     teachers: tuple[TeacherEntity, ...]
-    teaching_groups: tuple[TeachingGroupEntity, ...]
+    instructional_groups: tuple[InstructionalGroupEntity, ...]
     rooms: tuple[RoomEntity, ...]
     lesson_requirements: tuple[LessonRequirementEntity, ...]
     teacher_assignments: tuple[TeacherAssignmentEntity, ...]
@@ -93,11 +93,11 @@ class SchedulingProblem:
         return {period.id: period for period in self.periods}
 
     @property
-    def teaching_group_by_id(self) -> Mapping[UUID, TeachingGroupEntity]:
-        """Map teaching-group IDs to teaching-group entities."""
+    def instructional_group_by_id(self) -> Mapping[UUID, InstructionalGroupEntity]:
+        """Map instructional-group IDs to instructional-group entities."""
         return {
-            teaching_group.id: teaching_group
-            for teaching_group in self.teaching_groups
+            instructional_group.id: instructional_group
+            for instructional_group in self.instructional_groups
         }
 
     @property
@@ -179,7 +179,7 @@ class SchedulingProblem:
         collections = (
             ("period", self.periods),
             ("teacher", self.teachers),
-            ("teaching group", self.teaching_groups),
+            ("instructional group", self.instructional_groups),
             ("room", self.rooms),
             ("lesson requirement", self.lesson_requirements),
             ("teacher assignment", self.teacher_assignments),
@@ -202,7 +202,7 @@ class SchedulingProblem:
         period_ids = {period.id for period in self.periods}
         teacher_ids = {teacher.id for teacher in self.teachers}
         group_ids = {
-            teaching_group.id for teaching_group in self.teaching_groups
+            instructional_group.id for instructional_group in self.instructional_groups
         }
         room_ids = {room.id for room in self.rooms}
         requirement_ids = {
@@ -210,11 +210,11 @@ class SchedulingProblem:
         }
 
         for requirement in self.lesson_requirements:
-            if requirement.teaching_group_id not in group_ids:
+            if requirement.instructional_group_id not in group_ids:
                 raise ValueError(
                     "Lesson requirement "
-                    f"{requirement.id} references unknown teaching group "
-                    f"{requirement.teaching_group_id}."
+                    f"{requirement.id} references unknown instructional group "
+                    f"{requirement.instructional_group_id}."
                 )
 
         for assignment in self.teacher_assignments:
@@ -451,7 +451,7 @@ class SchedulingProblem:
         *,
         periods: Iterable[PeriodEntity],
         teachers: Iterable[TeacherEntity],
-        teaching_groups: Iterable[TeachingGroupEntity],
+        instructional_groups: Iterable[InstructionalGroupEntity],
         rooms: Iterable[RoomEntity],
         lesson_requirements: Iterable[LessonRequirementEntity],
         teacher_assignments: Iterable[TeacherAssignmentEntity],
@@ -469,7 +469,7 @@ class SchedulingProblem:
         return cls(
             periods=tuple(periods),
             teachers=tuple(teachers),
-            teaching_groups=tuple(teaching_groups),
+            instructional_groups=tuple(instructional_groups),
             rooms=tuple(rooms),
             lesson_requirements=tuple(lesson_requirements),
             teacher_assignments=tuple(teacher_assignments),

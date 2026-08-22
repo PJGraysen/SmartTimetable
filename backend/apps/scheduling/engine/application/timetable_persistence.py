@@ -66,9 +66,10 @@ class TimetablePersistenceService:
             version_number=version_number,
         )
 
-        version_number = self._resolve_version_number(
+        version_number, version_name = self._resolve_version_details(
             term=scheduling_run.term,
             requested_version_number=version_number,
+            requested_version_name=version_name,
         )
 
         assignments = tuple(solver_result.assignments)
@@ -175,31 +176,66 @@ class TimetablePersistenceService:
             )
 
     @staticmethod
-    def _resolve_version_number(
+    def _resolve_version_details(
         *,
         term,
         requested_version_number: int,
-    ) -> int:
+        requested_version_name: str,
+    ) -> tuple[int, str]:
         """
-        Resolve a requested timetable version number to an available number.
+        Resolve both timetable version number and name.
 
-        If the requested number is already used for the term, continue from
-        the highest existing version number and use the next available value.
+        TimetableVersion has two independent uniqueness constraints:
+
+            (term, version_number)
+            (term, name)
+
+        Both values must therefore be unique for the term.
         """
-        if not TimetableVersion.objects.filter(
+
+        base_name = requested_version_name.strip()
+
+        # ----------------------------------------------------------
+        # Resolve version number.
+        # ----------------------------------------------------------
+
+        if TimetableVersion.objects.filter(
             term=term,
             version_number=requested_version_number,
         ).exists():
-            return requested_version_number
+            highest_version = (
+                TimetableVersion.objects.filter(term=term)
+                .order_by("-version_number")
+                .values_list("version_number", flat=True)
+                .first()
+            )
 
-        highest_version = (
-            TimetableVersion.objects.filter(term=term)
-            .order_by("-version_number")
-            .values_list("version_number", flat=True)
-            .first()
-        )
+            version_number = (highest_version or 0) + 1
+        else:
+            version_number = requested_version_number
 
-        return (highest_version or 0) + 1
+        # ----------------------------------------------------------
+        # Resolve version name.
+        # ----------------------------------------------------------
+
+        if not TimetableVersion.objects.filter(
+            term=term,
+            name=base_name,
+        ).exists():
+            return version_number, base_name
+
+        suffix = 2
+
+        while True:
+            candidate_name = f"{base_name} v{suffix}"
+
+            if not TimetableVersion.objects.filter(
+                term=term,
+                name=candidate_name,
+            ).exists():
+                return version_number, candidate_name
+
+            suffix += 1
 
     @staticmethod
     def _validate_assignments(
@@ -231,8 +267,8 @@ class TimetablePersistenceService:
             for assignment in assignments
         }
 
-        teaching_group_ids = {
-            assignment.teaching_group_id
+        instructional_group_ids = {
+            assignment.instructional_group_id
             for assignment in assignments
         }
 
@@ -241,7 +277,7 @@ class TimetablePersistenceService:
             for assignment in assignments
         }
 
-        from apps.academics.models import LessonRequirement, TeachingGroup
+        from apps.academics.models import LessonRequirement, InstructionalGroup
         from apps.scheduling.models import Period
         from apps.users.models import Teacher
 
@@ -289,12 +325,12 @@ class TimetablePersistenceService:
         # --------------------------------------------------------------
 
         existing_group_ids = set(
-            TeachingGroup.objects.filter(
-                id__in=teaching_group_ids,
+            InstructionalGroup.objects.filter(
+                id__in=instructional_group_ids,
             ).values_list("id", flat=True)
         )
 
-        missing_groups = teaching_group_ids - existing_group_ids
+        missing_groups = instructional_group_ids - existing_group_ids
 
         if missing_groups:
             raise ValueError(
@@ -336,8 +372,8 @@ class TimetablePersistenceService:
             requirement = requirements[assignment.lesson_requirement_id]
 
             if (
-                assignment.teaching_group_id
-                != requirement.teaching_group_id
+                assignment.instructional_group_id
+                != requirement.instructional_group_id
             ):
                 raise ValueError(
                     "Solver assignment teaching group does not match "
@@ -365,7 +401,7 @@ class TimetablePersistenceService:
                 timetable_version=timetable_version,
                 day=assignment.day.value,
                 period_id=assignment.period_id,
-                teaching_group_id=assignment.teaching_group_id,
+                instructional_group_id=assignment.instructional_group_id,
                 teacher_id=assignment.teacher_id,
                 lesson_requirement_id=assignment.lesson_requirement_id,
                 room_id=assignment.room_id,

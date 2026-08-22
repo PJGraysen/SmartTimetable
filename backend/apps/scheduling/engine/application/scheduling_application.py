@@ -186,6 +186,7 @@ class SchedulingApplicationService:
         )
 
     @staticmethod
+    @staticmethod
     def _mark_failed_solver_run(
         *,
         scheduling_run: SchedulingRun,

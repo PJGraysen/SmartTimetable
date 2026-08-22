@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections import defaultdict
 from typing import Iterable
@@ -30,7 +30,7 @@ def _slot_key(
     return (
         assignment.lesson_requirement_id,
         assignment.teacher_id,
-        assignment.teaching_group_id,
+        assignment.instructional_group_id,
         assignment.period_id,
         assignment.day,
     )
@@ -47,7 +47,7 @@ def _assignment_key(
     return (
         assignment.lesson_requirement_id,
         assignment.teacher_id,
-        assignment.teaching_group_id,
+        assignment.instructional_group_id,
         assignment.period_id,
         assignment.day,
         assignment.room_id,
@@ -96,8 +96,8 @@ def _finding(
             if assignment is not None
             else None
         ),
-        teaching_group_id=(
-            str(assignment.teaching_group_id)
+        instructional_group_id=(
+            str(assignment.instructional_group_id)
             if assignment is not None
             else None
         ),
@@ -184,7 +184,7 @@ def validate_teacher_clashes(
 # ---------------------------------------------------------------------------
 
 
-def validate_teaching_group_clashes(
+def validate_instructional_group_clashes(
     assignments: Iterable[SchedulingAssignment],
 ) -> tuple[ValidationFinding, ...]:
     """
@@ -200,7 +200,7 @@ def validate_teaching_group_clashes(
 
     for assignment in _unique_assignments(assignments):
         key = (
-            assignment.teaching_group_id,
+            assignment.instructional_group_id,
             assignment.day,
             assignment.period_id,
         )
@@ -226,7 +226,7 @@ def validate_teaching_group_clashes(
                     "during the same day and period."
                 ),
                 assignment=first,
-                teaching_group_id=str(group_id),
+                instructional_group_id=str(group_id),
                 day=day.value,
                 period_id=str(period_id),
                 conflicting_assignment_ids=[
@@ -545,7 +545,7 @@ def validate_invalid_assignments(
 
     group_ids = {
         group.id
-        for group in problem.teaching_groups
+        for group in problem.instructional_groups
         if group.is_active
     }
 
@@ -582,7 +582,7 @@ def validate_invalid_assignments(
                 )
             )
 
-        if assignment.teaching_group_id not in group_ids:
+        if assignment.instructional_group_id not in group_ids:
             findings.append(
                 _finding(
                     severity=ValidationSeverity.ERROR,
@@ -592,8 +592,8 @@ def validate_invalid_assignments(
                         "teaching group."
                     ),
                     assignment=assignment,
-                    invalid_teaching_group_id=str(
-                        assignment.teaching_group_id
+                    invalid_instructional_group_id=str(
+                        assignment.instructional_group_id
                     ),
                 )
             )

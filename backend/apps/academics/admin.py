@@ -1,4 +1,4 @@
-from django.contrib import admin
+﻿from django.contrib import admin
 
 from .models import (
     Grade,
@@ -77,7 +77,7 @@ class SubjectAdmin(admin.ModelAdmin):
 class LessonRequirementAdmin(admin.ModelAdmin):
     list_display = (
         "term",
-        "teaching_group",
+        "instructional_group",
         "subject",
         "lessons_per_week",
         "is_active",
@@ -88,6 +88,6 @@ class LessonRequirementAdmin(admin.ModelAdmin):
         "subject",
     )
     search_fields = (
-        "teaching_group__name",
+        "instructional_group__name",
         "subject__name",
     )

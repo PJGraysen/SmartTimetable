@@ -1,4 +1,4 @@
-from django.db import models
+﻿from django.db import models
 
 from apps.core.models import AcademicYear, TimeStampedModel
 
@@ -67,10 +67,11 @@ class Stream(TimeStampedModel):
 
 class TeachingGroup(TimeStampedModel):
     """
-    Represents a group of learners receiving instruction.
+    Represents an administrative teaching group.
 
-    A teaching group may represent a complete stream or a subject-specific
-    grouping where learners are divided according to subject choices.
+    A teaching group may represent a complete stream or class. Learners
+    within the teaching group may subsequently be divided into
+    instructional groups for subject-specific scheduling.
     """
 
     stream = models.ForeignKey(
@@ -105,6 +106,53 @@ class TeachingGroup(TimeStampedModel):
         return f"{self.stream} - {self.name}"
 
 
+class InstructionalGroup(TimeStampedModel):
+    """
+    Represents a schedulable cohort of learners within a teaching group.
+
+    A teaching group represents the administrative class/stream, while an
+    instructional group represents the actual learner cohort that attends
+    particular lessons together.
+
+    Examples:
+        Form 3E - Core
+        Form 3E - Physics
+        Form 3E - Computer Studies
+        Grade 10A - Agriculture
+    """
+
+    teaching_group = models.ForeignKey(
+        TeachingGroup,
+        on_delete=models.PROTECT,
+        related_name="instructional_groups",
+    )
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=50)
+    learner_count = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "instructional_group"
+        ordering = ["teaching_group", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["teaching_group", "name"],
+                name="uq_instructional_group_teaching_group_name",
+            ),
+            models.UniqueConstraint(
+                fields=["teaching_group", "code"],
+                name="uq_instructional_group_teaching_group_code",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(learner_count__gte=0),
+                name="ck_instructional_group_learner_count",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.teaching_group} - {self.name}"
+
+
 class Subject(TimeStampedModel):
     """
     Represents a subject taught within the school.
@@ -124,10 +172,10 @@ class Subject(TimeStampedModel):
 
 class LessonRequirement(TimeStampedModel):
     """
-    Defines the teaching requirement for a subject and teaching group.
+    Defines the teaching requirement for a subject and instructional group.
 
-    This represents how many lessons of a subject a teaching group requires
-    within the applicable term.
+    This represents how many lessons of a subject an instructional group
+    requires within the applicable term.
     """
 
     term = models.ForeignKey(
@@ -135,10 +183,11 @@ class LessonRequirement(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="lesson_requirements",
     )
-    teaching_group = models.ForeignKey(
-        TeachingGroup,
+    instructional_group = models.ForeignKey(
+        InstructionalGroup,
         on_delete=models.PROTECT,
         related_name="lesson_requirements",
+        null=True,
     )
     subject = models.ForeignKey(
         Subject,
@@ -150,11 +199,11 @@ class LessonRequirement(TimeStampedModel):
 
     class Meta:
         db_table = "lesson_requirement"
-        ordering = ["teaching_group", "subject"]
+        ordering = ["instructional_group", "subject"]
         constraints = [
             models.UniqueConstraint(
-                fields=["term", "teaching_group", "subject"],
-                name="uq_lesson_requirement_term_group_subject",
+                fields=["term", "instructional_group", "subject"],
+                name="uq_lesson_requirement_term_instructional_group_subject",
             ),
             models.CheckConstraint(
                 condition=models.Q(lessons_per_week__gte=1),
@@ -164,6 +213,6 @@ class LessonRequirement(TimeStampedModel):
 
     def __str__(self):
         return (
-            f"{self.teaching_group} - "
+            f"{self.instructional_group} - "
             f"{self.subject} ({self.lessons_per_week}/week)"
         )

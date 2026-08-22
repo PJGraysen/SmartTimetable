@@ -1,8 +1,11 @@
-from django.core.exceptions import ValidationError
+﻿from django.core.exceptions import ValidationError
 from django.db import models
 
-from apps.academics.models import LessonRequirement, TeachingGroup, Subject
-from apps.core.models import AcademicYear, School, Term, TimeStampedModel
+from apps.academics.models import (
+    InstructionalGroup,
+    LessonRequirement,
+)
+from apps.core.models import School, Term, TimeStampedModel
 from apps.users.models import Teacher
 
 
@@ -128,9 +131,6 @@ class TeacherAssignment(TimeStampedModel):
 class TeacherAvailability(TimeStampedModel):
     """
     Defines teacher availability for a specific term, day and period.
-
-    An explicit record represents the teacher's availability state for
-    that slot.
     """
 
     term = models.ForeignKey(
@@ -321,9 +321,6 @@ class RoomAvailability(TimeStampedModel):
 class TimetableVersion(TimeStampedModel):
     """
     Represents a version of a timetable for an academic term.
-
-    Multiple versions may exist for the same term to preserve timetable
-    history and support draft, published and archived schedules.
     """
 
     term = models.ForeignKey(
@@ -357,6 +354,9 @@ class TimetableVersion(TimeStampedModel):
 class TimetableEntry(TimeStampedModel):
     """
     Represents one scheduled lesson within a timetable version.
+
+    The schedulable learner cohort is an InstructionalGroup rather than
+    the administrative TeachingGroup.
     """
 
     timetable_version = models.ForeignKey(
@@ -373,10 +373,11 @@ class TimetableEntry(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="timetable_entries",
     )
-    teaching_group = models.ForeignKey(
-        TeachingGroup,
+    instructional_group = models.ForeignKey(
+        InstructionalGroup,
         on_delete=models.PROTECT,
         related_name="timetable_entries",
+        null=True,
     )
     teacher = models.ForeignKey(
         Teacher,
@@ -405,7 +406,7 @@ class TimetableEntry(TimeStampedModel):
                     "timetable_version",
                     "day",
                     "period",
-                    "teaching_group",
+                    "instructional_group",
                 ],
                 name="uq_timetable_entry_group_slot",
             ),
@@ -447,12 +448,12 @@ class TimetableEntry(TimeStampedModel):
 
         requirement = self.lesson_requirement
 
-        if self.teaching_group_id != requirement.teaching_group_id:
+        if self.instructional_group_id != requirement.instructional_group_id:
             raise ValidationError(
                 {
-                    "teaching_group": (
-                        "The timetable entry teaching group must match "
-                        "the lesson requirement teaching group."
+                    "instructional_group": (
+                        "The timetable entry instructional group must match "
+                        "the lesson requirement instructional group."
                     )
                 }
             )
@@ -462,8 +463,10 @@ class TimetableEntry(TimeStampedModel):
             f"{self.timetable_version} - "
             f"{self.day} - "
             f"{self.period} - "
-            f"{self.teaching_group}"
+            f"{self.instructional_group}"
         )
+
+
 class SchedulingRunStatus(models.TextChoices):
     PENDING = "PENDING", "Pending"
     RUNNING = "RUNNING", "Running"
@@ -525,7 +528,7 @@ class SchedulingRun(TimeStampedModel):
     """
 
     term = models.ForeignKey(
-        "core.Term",
+        Term,
         on_delete=models.PROTECT,
         related_name="scheduling_runs",
     )
@@ -596,8 +599,8 @@ class ValidationResult(TimeStampedModel):
     """
     Represents one validation finding associated with a scheduling run.
 
-    Validation results may refer to the specific teacher, teaching group,
-    period, room, or timetable entry involved in the finding.
+    Validation results may refer to the specific teacher, instructional
+    group, period, room, or timetable entry involved in the finding.
     """
 
     scheduling_run = models.ForeignKey(
@@ -631,8 +634,8 @@ class ValidationResult(TimeStampedModel):
         blank=True,
     )
 
-    teaching_group = models.ForeignKey(
-        TeachingGroup,
+    instructional_group = models.ForeignKey(
+        InstructionalGroup,
         on_delete=models.PROTECT,
         related_name="validation_results",
         null=True,
@@ -655,7 +658,7 @@ class ValidationResult(TimeStampedModel):
     )
 
     room = models.ForeignKey(
-        "Room",
+        Room,
         on_delete=models.PROTECT,
         related_name="validation_results",
         null=True,

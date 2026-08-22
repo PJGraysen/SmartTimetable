@@ -195,6 +195,21 @@ class SchedulingRunExecuteView(APIView):
             )
 
         except Exception as exc:
+            from django.utils import timezone
+
+            scheduling_run.status = SchedulingRunStatus.FAILED
+            scheduling_run.completed_at = timezone.now()
+            scheduling_run.error_message = str(exc)
+
+            scheduling_run.save(
+                update_fields=[
+                    "status",
+                    "completed_at",
+                    "error_message",
+                    "updated_at",
+                ]
+            )
+
             return Response(
                 {
                     "detail": "Scheduling execution failed.",
@@ -204,7 +219,7 @@ class SchedulingRunExecuteView(APIView):
             )
 
         return Response(
-            SchedulingRunResultSerializer(
+            SchedulingRunSerializer(
                 result.scheduling_run,
             ).data,
             status=status.HTTP_200_OK,

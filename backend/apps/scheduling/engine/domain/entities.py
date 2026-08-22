@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 from datetime import time
 from typing import Optional
 from uuid import UUID
@@ -31,7 +31,7 @@ class TeacherEntity:
 
 
 @dataclass(frozen=True, slots=True)
-class TeachingGroupEntity:
+class InstructionalGroupEntity:
     """A class or teaching group that receives lessons."""
 
     id: UUID
@@ -59,7 +59,7 @@ class LessonRequirementEntity:
     """
 
     id: UUID
-    teaching_group_id: UUID
+    instructional_group_id: UUID
     subject_id: UUID
     periods_per_week: int
     is_active: bool = True
@@ -138,7 +138,7 @@ class SchedulingAssignment:
 
     lesson_requirement_id: UUID
     teacher_id: UUID
-    teaching_group_id: UUID
+    instructional_group_id: UUID
     period_id: UUID
     day: DayOfWeek
     room_id: Optional[UUID] = None
