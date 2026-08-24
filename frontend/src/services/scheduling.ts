@@ -1,4 +1,4 @@
-import http from "./http";
+﻿import http from "./http";
 
 export type AcademicTerm = {
   id: string;
@@ -29,6 +29,52 @@ export type SchedulingRun = {
   updated_at: string;
 };
 
+export type TimetableEntryResult = {
+  id: string;
+  day: string;
+  day_display: string;
+  period: string;
+  period_number: number;
+  period_name: string;
+  period_start_time: string;
+  period_end_time: string;
+  instructional_group: string;
+  instructional_group_name: string;
+
+  /* Compatibility field used by the restored approved timetable renderer. */
+  teaching_group_name?: string | null;
+  teacher: string;
+  teacher_name: string;
+  teacher_code?: string | null;
+  teacher_number?: number | null;
+  employee_code?: string | null;
+  subject_code?: string | null;
+  subject_name?: string | null;
+  lesson_requirement: string;
+  lesson_requirement_name: string;
+  room: string | null;
+  room_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TimetableVersionResult = {
+  id: string;
+  term: string;
+  term_name: string;
+  name: string;
+  version_number: number;
+  is_published: boolean;
+  is_active: boolean;
+  entries_count: number;
+  entries: TimetableEntryResult[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type SchedulingRunResult = SchedulingRun & {
+  timetable_version: TimetableVersionResult | null;
+};
 export async function getSchedulingRuns() {
   const response = await http.get<SchedulingRun[]>("/scheduling/runs/");
   return response.data;
@@ -54,7 +100,9 @@ export async function executeSchedulingRun(
 }
 
 export async function getSchedulingRunResults(id: string) {
-  const response = await http.get(`/scheduling/runs/${id}/results/`);
+  const response = await http.get<SchedulingRunResult>(
+    `/scheduling/runs/${id}/results/`,
+  );
   return response.data;
 }
 
@@ -73,3 +121,7 @@ export async function createSchedulingRun(
   );
   return response.data;
 }
+
+
+
+

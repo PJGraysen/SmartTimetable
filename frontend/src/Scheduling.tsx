@@ -1,172 +1,118 @@
 ﻿import { useEffect, useState } from "react";
-import { AlertCircle, PlayCircle, RefreshCw } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  PlayCircle,
+  RefreshCw,
+} from "lucide-react";
 
-import http from "./services/http";
 import {
   createSchedulingRun,
   executeSchedulingRun,
+  getSchedulingRuns,
+  type SchedulingRun,
 } from "./services/scheduling";
 
+import {
+  getAcademicTerms,
+  type AcademicTerm,
+} from "./services/core";
+
+/*
+ * IMPORTANT:
+ * Timetable.tsx is the single authoritative timetable renderer.
+ *
+ * Scheduling.tsx deliberately does NOT contain another timetable
+ * implementation. This guarantees that the timetable shown here
+ * is exactly the same timetable shown on the Timetable page.
+ */
 import Timetable from "./pages/Timetable";
 
-type AcademicTerm = {
-  id: string;
-  name: string;
-  academic_year_name?: string;
-  number?: number;
-  start_date?: string;
-  end_date?: string;
-  is_active?: boolean;
-};
-
-export default function Scheduling() {
+function Scheduling() {
   const [terms, setTerms] = useState<AcademicTerm[]>([]);
   const [selectedTerm, setSelectedTerm] = useState("");
-
-  const [versionName, setVersionName] =
-    useState("Generated Timetable");
-
-  const [versionNumber, setVersionNumber] = useState(1);
-
-  const [loadingTerms, setLoadingTerms] = useState(true);
+  const [runs, setRuns] = useState<SchedulingRun[]>([]);
+  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   /*
-   * Changing this key remounts Timetable.tsx.
-   *
-   * Timetable.tsx remains the SINGLE SOURCE OF TRUTH
-   * for displaying generated timetable data.
+   * Changing this value forces the authoritative Timetable component
+   * to remount and retrieve the newest completed timetable from the
+   * database.
    */
-  const [timetableKey, setTimetableKey] = useState(0);
+  const [timetableRefreshKey, setTimetableRefreshKey] = useState(0);
 
-  useEffect(() => {
-    let mounted = true;
+  async function loadData(refreshTimetable = false) {
+    setLoading(true);
+    setError("");
 
-    async function loadTerms() {
-      try {
-        setLoadingTerms(true);
-        setError("");
+    try {
+      const [termsData, runsData] = await Promise.all([
+        getAcademicTerms(),
+        getSchedulingRuns(),
+      ]);
 
-        const response = await http.get<AcademicTerm[]>(
-          "/core/terms/",
-        );
+      setTerms(termsData);
+      setRuns(runsData);
 
-        if (!mounted) {
-          return;
-        }
+      const activeTerm = termsData.find((term) => term.is_active);
 
-        const data = response.data ?? [];
-
-        setTerms(data);
-
-        const activeTerm =
-          data.find((term) => term.is_active) ?? data[0];
-
-        if (activeTerm) {
-          setSelectedTerm(activeTerm.id);
-        }
-      } catch (requestError: any) {
-        if (!mounted) {
-          return;
-        }
-
-        setError(
-          requestError?.response?.data?.detail ??
-            requestError?.response?.data?.error ??
-            requestError?.message ??
-            "Unable to load academic terms.",
-        );
-      } finally {
-        if (mounted) {
-          setLoadingTerms(false);
-        }
+      if (activeTerm && !selectedTerm) {
+        setSelectedTerm(activeTerm.id);
       }
+
+      if (refreshTimetable) {
+        setTimetableRefreshKey((current) => current + 1);
+      }
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.detail ||
+          err?.response?.data?.error ||
+          err?.detail ||
+          err?.error ||
+          "Unable to load academic terms and scheduling runs. Make sure the Django API is running.",
+      );
+    } finally {
+      setLoading(false);
     }
+  }
 
-    void loadTerms();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  async function handleGenerate() {
+  async function generateTimetable() {
     if (!selectedTerm) {
-      setError("Please select an academic term.");
+      setError("Select an academic term before generating a timetable.");
       return;
     }
 
-    try {
-      setGenerating(true);
-      setError("");
-      setSuccess("");
+    setGenerating(true);
+    setError("");
 
+    try {
       /*
-       * STEP 1
-       * Create the scheduling run.
+       * Preserve the established database generation workflow:
+       *
+       * 1. Create scheduling run.
+       * 2. Execute scheduling run.
+       * 3. Backend persists the timetable version and entries.
+       * 4. Reload scheduling runs.
+       * 5. Remount the authoritative Timetable component.
        */
       const run = await createSchedulingRun({
         term: selectedTerm,
-        version_name:
-          versionName.trim() || "Generated Timetable",
-        version_number:
-          Number.isFinite(versionNumber) && versionNumber > 0
-            ? versionNumber
-            : 1,
       });
 
-      /*
-       * STEP 2
-       * Execute the backend scheduling engine.
-       */
-      const completedRun = await executeSchedulingRun(run.id, {
-        version_name:
-          versionName.trim() || "Generated Timetable",
-        version_number:
-          Number.isFinite(versionNumber) && versionNumber > 0
-            ? versionNumber
-            : 1,
+      await executeSchedulingRun(run.id, {
+        version_name: "Generated Timetable",
       });
 
-      /*
-       * The backend has generated and persisted the timetable.
-       *
-       * We do NOT construct or maintain another timetable here.
-       */
-      if (
-        completedRun.status?.toUpperCase() !== "COMPLETED"
-      ) {
-        throw new Error(
-          completedRun.error_message ||
-            "Timetable generation did not complete successfully.",
-        );
-      }
-
-      /*
-       * Force Timetable.tsx to remount.
-       *
-       * Its own loadTimetable() then requests the latest
-       * completed scheduling run and displays its persisted
-       * TimetableVersion.
-       */
-      setTimetableKey((current) => current + 1);
-
-      setSuccess(
-        "Timetable generated successfully. The live timetable below has been refreshed.",
-      );
-
-      /*
-       * Prepare the next version number.
-       */
-      setVersionNumber((current) => current + 1);
-    } catch (requestError: any) {
+      await loadData(true);
+    } catch (err: any) {
       setError(
-        requestError?.response?.data?.detail ??
-          requestError?.response?.data?.error ??
-          requestError?.message ??
+        err?.response?.data?.detail ||
+          err?.response?.data?.error ||
+          err?.detail ||
+          err?.error ||
           "Timetable generation failed.",
       );
     } finally {
@@ -174,177 +120,247 @@ export default function Scheduling() {
     }
   }
 
+  useEffect(() => {
+    void loadData(true);
+  }, []);
+
   return (
-    <div className="scheduling-page">
+    <>
       <div className="page-header">
         <div>
           <span className="eyebrow">SCHEDULING ENGINE</span>
 
-          <h1>Generate Timetable</h1>
+          <h1>Scheduling</h1>
 
           <p>
-            Generate a complete school timetable using the
-            scheduling engine and view the newly generated
-            timetable immediately below.
+            Generate and monitor automated timetable scheduling runs.
           </p>
+        </div>
+
+        <div className="page-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void loadData(true)}
+            disabled={loading || generating}
+          >
+            <RefreshCw
+              size={17}
+              className={loading ? "spin" : undefined}
+            />
+
+            Refresh
+          </button>
+
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => void generateTimetable()}
+            disabled={generating || loading || !selectedTerm}
+          >
+            {generating ? (
+              <RefreshCw size={17} className="spin" />
+            ) : (
+              <PlayCircle size={17} />
+            )}
+
+            {generating ? "Generating..." : "Generate Timetable"}
+          </button>
         </div>
       </div>
 
-      <section className="panel">
-        <div className="panel-header">
+      {error ? (
+        <div
+          className="section-card"
+          style={{
+            marginBottom: "1.25rem",
+            borderColor: "#fecaca",
+            background: "#fff7f7",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.65rem",
+              color: "#b91c1c",
+              padding: "1rem",
+            }}
+          >
+            <AlertCircle size={19} />
+
+            <span>{error}</span>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="section-card">
+        <div className="section-card-header">
           <div>
-            <h2>Timetable Generation</h2>
+            <span className="eyebrow">NEW RUN</span>
+
+            <h2>Select Academic Term</h2>
+          </div>
+        </div>
+
+        <div style={{ padding: "1rem 0" }}>
+          <select
+            value={selectedTerm}
+            onChange={(event) =>
+              setSelectedTerm(event.target.value)
+            }
+            disabled={loading || generating}
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              padding: "0.75rem",
+              borderRadius: "8px",
+              border: "1px solid #d1d5db",
+              fontSize: "0.95rem",
+            }}
+          >
+            <option value="">
+              {loading
+                ? "Loading academic terms..."
+                : "Select an academic term"}
+            </option>
+
+            {terms.map((term) => (
+              <option key={term.id} value={term.id}>
+                {term.name} — {term.academic_year_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <section
+        className="section-card"
+        style={{
+          marginTop: "1.5rem",
+        }}
+      >
+        <div className="section-card-header">
+          <div>
+            <span className="eyebrow">SCHEDULING RESULTS</span>
+
+            <h2>Generated Timetable</h2>
 
             <p>
-              The scheduling engine enforces teacher clashes,
-              room clashes, availability, lesson requirements
-              and teacher free-afternoon constraints.
+              The timetable below is the same authoritative database-backed
+              timetable displayed on the Timetable page.
             </p>
           </div>
         </div>
 
-        <div className="generation-panel">
-          <div className="generation-icon">
-            <PlayCircle size={32} />
-          </div>
-
-          <div className="generation-content">
-            <h3>Generate a new timetable</h3>
-
-            <div
-              style={{
-                display: "grid",
-                gap: "14px",
-                marginTop: "18px",
-                maxWidth: "720px",
-              }}
-            >
-              <label>
-                <strong>Academic Term</strong>
-
-                <select
-                  value={selectedTerm}
-                  onChange={(event) =>
-                    setSelectedTerm(event.target.value)
-                  }
-                  disabled={loadingTerms || generating}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    marginTop: "6px",
-                    padding: "10px",
-                  }}
-                >
-                  <option value="">
-                    {loadingTerms
-                      ? "Loading terms..."
-                      : "Select term"}
-                  </option>
-
-                  {terms.map((term) => (
-                    <option key={term.id} value={term.id}>
-                      {term.name}
-                      {term.academic_year_name
-                        ? ` - ${term.academic_year_name}`
-                        : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                <strong>Version Name</strong>
-
-                <input
-                  type="text"
-                  value={versionName}
-                  onChange={(event) =>
-                    setVersionName(event.target.value)
-                  }
-                  disabled={generating}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    marginTop: "6px",
-                    padding: "10px",
-                  }}
-                />
-              </label>
-
-              <label>
-                <strong>Version Number</strong>
-
-                <input
-                  type="number"
-                  min="1"
-                  value={versionNumber}
-                  onChange={(event) =>
-                    setVersionNumber(
-                      Math.max(
-                        1,
-                        Number(event.target.value) || 1,
-                      ),
-                    )
-                  }
-                  disabled={generating}
-                  style={{
-                    display: "block",
-                    width: "160px",
-                    marginTop: "6px",
-                    padding: "10px",
-                  }}
-                />
-              </label>
-
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => void handleGenerate()}
-                disabled={
-                  generating ||
-                  loadingTerms ||
-                  !selectedTerm
-                }
-              >
-                {generating ? (
-                  <>
-                    <RefreshCw
-                      size={18}
-                      className="spin"
-                    />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <PlayCircle size={18} />
-                    Generate Timetable
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {error && (
-        <div className="timetable-error">
-          <AlertCircle size={18} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {success && (
         <div
-          className="status-badge ready"
-          style={{ marginTop: "16px" }}
+          style={{
+            padding: "1rem",
+          }}
         >
-          {success}
+          <Timetable key={timetableRefreshKey} />
         </div>
-      )}
-
-      <section style={{ marginTop: "24px" }}>
-        <Timetable key={timetableKey} />
       </section>
-    </div>
+
+      <section
+        className="section-card"
+        style={{
+          marginTop: "1.5rem",
+        }}
+      >
+        <div className="section-card-header">
+          <div>
+            <span className="eyebrow">RUN HISTORY</span>
+
+            <h2>Scheduling Runs</h2>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="table-state">
+            <RefreshCw size={20} className="spin" />
+            Loading scheduling data...
+          </div>
+        ) : runs.length === 0 ? (
+          <div className="empty-state">
+            <Clock size={38} />
+
+            <h3>No scheduling runs</h3>
+
+            <p>
+              No timetable generation runs have been recorded yet.
+              Select an academic term and generate the first timetable.
+            </p>
+          </div>
+        ) : (
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Term</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Completed</th>
+                  <th>Timetable Version</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {runs.map((run) => (
+                  <tr key={run.id}>
+                    <td>
+                      <strong>
+                        {run.term_name || run.term || "--"}
+                      </strong>
+                    </td>
+
+                    <td>
+                      <span
+                        className={`status-badge ${run.status.toLowerCase()}`}
+                      >
+                        {run.status.toUpperCase() === "COMPLETED" ? (
+                          <CheckCircle2 size={15} />
+                        ) : run.status.toUpperCase() === "FAILED" ? (
+                          <AlertCircle size={15} />
+                        ) : (
+                          <Clock size={15} />
+                        )}
+
+                        {run.status_display}
+                      </span>
+                    </td>
+
+                    <td>
+                      {run.created_at
+                        ? new Date(run.created_at).toLocaleString()
+                        : "--"}
+                    </td>
+
+                    <td>
+                      {run.completed_at
+                        ? new Date(run.completed_at).toLocaleString()
+                        : "--"}
+                    </td>
+
+                    <td>
+                      {run.timetable_version ? (
+                        <span className="timetable-created">
+                          <CheckCircle2 size={15} />
+                          Available
+                        </span>
+                      ) : (
+                        "--"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
   );
 }
+
+export default Scheduling;
