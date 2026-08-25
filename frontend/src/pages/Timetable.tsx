@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Printer,
   RefreshCw,
@@ -485,26 +485,20 @@ function entryMatches(
   return classMatches(entry, schoolClass);
 }
 
-function findEntry(
+function findEntries(
   entries: TimetableEntry[],
   dayCode: string,
   schoolClass: SchoolClass,
   periodNumber: number,
-): TimetableEntry | null {
-  for (const entry of entries) {
-    if (
-      entryMatches(
-        entry,
-        dayCode,
-        schoolClass,
-        periodNumber,
-      )
-    ) {
-      return entry;
-    }
-  }
-
-  return null;
+): TimetableEntry[] {
+  return entries.filter((entry) =>
+    entryMatches(
+      entry,
+      dayCode,
+      schoolClass,
+      periodNumber,
+    )
+  );
 }
 
 function formatEntry(entry: TimetableEntry) {
@@ -1254,53 +1248,175 @@ function Timetable() {
                               );
                             }
 
-                            const entry =
-                              slot.periodNumber !== null
-                                ? findEntry(
-                                    entries,
-                                    day.code,
-                                    schoolClass,
-                                    slot.periodNumber,
-                                  )
-                                : null;
+                            const slotEntries =
 
-                            if (!entry) {
+
+                              slot.periodNumber !== null
+
+
+                                ? findEntries(
+
+
+                                    entries,
+
+
+                                    day.code,
+
+
+                                    schoolClass,
+
+
+                                    slot.periodNumber,
+
+
+                                  )
+
+
+                                : [];
+
+
+
+                            if (slotEntries.length === 0) {
+
+
                               return (
+
+
                                 <td
+
+
                                   key={slot.key}
+
+
                                   className="lesson-cell"
+
+
                                 >
+
+
                                   <span className="empty-mark">
+
+
                                     —
+
+
                                   </span>
+
+
                                 </td>
+
+
                               );
+
+
                             }
 
-                            const formatted =
-                              formatEntry(entry);
+
+
+                            const formattedEntries =
+
+
+                              slotEntries.map((entry) => formatEntry(entry));
+
+
 
                             return (
-                              <td
-                                key={slot.key}
-                                className="lesson-cell"
-                                title={[
-                                  formatted.subject,
-                                  formatted.teacher,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" • ")}
-                              >
-                                <span className="cell-subject">
-                                  {formatted.title}
-                                </span>
 
-                                {formatted.subtitle ? (
-                                  <span className="cell-teacher">
-                                    {formatted.subtitle}
-                                  </span>
-                                ) : null}
+
+                              <td
+
+
+                                key={slot.key}
+
+
+                                className="lesson-cell"
+
+
+                                title={formattedEntries
+
+
+                                  .map((formatted) =>
+
+
+                                    [formatted.subject, formatted.teacher]
+
+
+                                      .filter(Boolean)
+
+
+                                      .join(" • ")
+
+
+                                  )
+
+
+                                  .filter(Boolean)
+
+
+                                  .join(" | ")}
+
+
+                              >
+
+
+                                {formattedEntries.map((formatted, index) => (
+
+
+                                  <div
+
+
+                                    key={[
+
+
+                                      formatted.subject,
+
+
+                                      formatted.teacher,
+
+
+                                      index,
+
+
+                                    ].join("-")}
+
+
+                                  >
+
+
+                                    <span className="cell-subject">
+
+
+                                      {formatted.title}
+
+
+                                    </span>
+
+
+
+                                    {formatted.subtitle ? (
+
+
+                                      <span className="cell-teacher">
+
+
+                                        {formatted.subtitle}
+
+
+                                      </span>
+
+
+                                    ) : null}
+
+
+                                  </div>
+
+
+                                ))}
+
+
                               </td>
+
+
                             );
                           })}
                         </tr>
