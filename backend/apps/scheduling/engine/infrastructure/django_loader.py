@@ -1,24 +1,13 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Iterable
-from uuid import UUID
 
-from apps.scheduling.engine.domain.entities import (
-    LessonRequirementEntity,
-    PeriodEntity,
-    RoomAvailabilityEntity,
-    RoomEntity,
-    TeacherAssignmentEntity,
-    TeacherAvailabilityEntity,
-    TeacherEntity,
-    TeacherFreeAfternoonEntity,
-    InstructionalGroupEntity,
-    TimetableSlot,
+from apps.academics.models import (
+    InstructionalGroup,
+    LessonRequirement,
+    TeachingGroup,
 )
-from apps.scheduling.engine.domain.enums import (
-    DayOfWeek,
-    PartOfDay,
-)
+
 from apps.scheduling.models import (
     Period,
     Room,
@@ -27,16 +16,192 @@ from apps.scheduling.models import (
     TeacherAvailability,
     TeacherFreeAfternoon,
 )
-from apps.academics.models import InstructionalGroup, LessonRequirement
+
 from apps.users.models import Teacher
-from apps.scheduling.engine.domain.problem import SchedulingProblem
+
+from apps.scheduling.engine.domain.entities import (
+    InstructionalGroupEntity,
+    LessonRequirementEntity,
+    PeriodEntity,
+    RoomAvailabilityEntity,
+    RoomEntity,
+    TeacherAssignmentEntity,
+    TeacherAvailabilityEntity,
+    TeacherEntity,
+    TeacherFreeAfternoonEntity,
+    TimetableSlot,
+)
+
+from apps.scheduling.engine.domain.enums import DayOfWeek
+
+from apps.scheduling.engine.domain.problem import (
+    SchedulingProblem,
+)
+
+
+class DjangoSchedulingLoader:
+    """
+    Converts Django scheduling records into the scheduling-engine domain model.
+
+    Django ORM objects remain inside this infrastructure boundary.
+    The solver receives only domain entities.
+    """
+
+    def load_problem(self, *, term) -> SchedulingProblem:
+        teaching_groups = (
+            TeachingGroup.objects
+            .filter(
+                stream__grade__academic_year=term.academic_year,
+                is_active=True,
+            )
+            .select_related(
+                "stream",
+                "stream__grade",
+            )
+        )
+
+        instructional_groups = (
+            InstructionalGroup.objects
+            .filter(
+                teaching_group__stream__grade__academic_year=term.academic_year,
+                is_active=True,
+            )
+            .select_related(
+                "teaching_group",
+                "teaching_group__stream",
+                "teaching_group__stream__grade",
+            )
+        )
+
+        lesson_requirements = (
+            LessonRequirement.objects
+            .filter(
+                term=term,
+                is_active=True,
+            )
+            .select_related(
+                "instructional_group",
+                "instructional_group__teaching_group",
+                "subject",
+            )
+        )
+
+        teachers = Teacher.objects.filter(
+            is_active=True,
+        )
+
+        teacher_assignments = (
+            TeacherAssignment.objects
+            .filter(
+                lesson_requirement__term=term,
+                is_active=True,
+                teacher__is_active=True,
+                lesson_requirement__is_active=True,
+            )
+            .select_related(
+                "teacher",
+                "lesson_requirement",
+            )
+        )
+
+        teacher_free_afternoons = (
+            TeacherFreeAfternoon.objects
+            .filter(
+                term=term,
+                is_active=True,
+                teacher__is_active=True,
+            )
+            .select_related("teacher")
+        )
+
+        teacher_availability = (
+            TeacherAvailability.objects
+            .filter(
+                term=term,
+                is_active=True,
+                teacher__is_active=True,
+            )
+            .select_related(
+                "teacher",
+                "period",
+            )
+        )
+
+        rooms = Room.objects.filter(
+            is_active=True,
+        )
+
+        periods = (
+            Period.objects
+            .filter(is_active=True)
+            .order_by("number", "id")
+        )
+
+        room_availability = (
+            RoomAvailability.objects
+            .filter(
+                term=term,
+                is_active=True,
+                room__is_active=True,
+                period__is_active=True,
+            )
+            .select_related(
+                "room",
+                "period",
+            )
+        )
+
+        loaded_periods = tuple(load_periods(periods))
+
+        slots = build_timetable_slots(
+            loaded_periods,
+        )
+
+        return SchedulingProblem(
+            periods=loaded_periods,
+            teachers=tuple(
+                load_teachers(teachers)
+            ),
+            instructional_groups=tuple(
+                load_instructional_groups(
+                    instructional_groups
+                )
+            ),
+            rooms=tuple(
+                load_rooms(rooms)
+            ),
+            lesson_requirements=tuple(
+                load_lesson_requirements(
+                    lesson_requirements
+                )
+            ),
+            teacher_assignments=tuple(
+                load_teacher_assignments(
+                    teacher_assignments
+                )
+            ),
+            teacher_availability=tuple(
+                load_teacher_availability(
+                    teacher_availability
+                )
+            ),
+            teacher_free_afternoons=tuple(
+                load_teacher_free_afternoons(
+                    teacher_free_afternoons
+                )
+            ),
+            room_availability=tuple(
+                load_room_availability(
+                    room_availability
+                )
+            ),
+            slots=slots,
+        )
 
 
 def load_periods(
-    queryset: Iterable[Period],
+    periods: Iterable[Period],
 ) -> list[PeriodEntity]:
-    """Convert Django Period records into domain entities."""
-
     return [
         PeriodEntity(
             id=period.id,
@@ -44,51 +209,93 @@ def load_periods(
             name=period.name,
             start_time=period.start_time,
             end_time=period.end_time,
-            part_of_day=PartOfDay(period.part_of_day),
+            part_of_day=period.part_of_day,
             is_teaching_period=period.is_teaching_period,
             is_active=period.is_active,
         )
-        for period in queryset
+        for period in periods
     ]
 
 
 def load_teachers(
-    queryset: Iterable[Teacher],
+    teachers: Iterable[Teacher],
 ) -> list[TeacherEntity]:
-    """Convert Django Teacher records into domain entities."""
+    result: list[TeacherEntity] = []
 
-    return [
-        TeacherEntity(
-            id=teacher.id,
-            name=str(teacher),
-            code=teacher.employee_code,
-            is_active=teacher.is_active,
+    for teacher in teachers:
+        get_full_name = getattr(teacher, "get_full_name", None)
+
+        if callable(get_full_name):
+            name = get_full_name().strip()
+        else:
+            first_name = str(
+                getattr(teacher, "first_name", "") or ""
+            ).strip()
+
+            last_name = str(
+                getattr(teacher, "last_name", "") or ""
+            ).strip()
+
+            name = " ".join(
+                part
+                for part in (first_name, last_name)
+                if part
+            ).strip()
+
+        if not name:
+            name = str(teacher).strip()
+
+        result.append(
+            TeacherEntity(
+                id=teacher.id,
+                name=name,
+                code=teacher.employee_code,
+                is_active=teacher.is_active,
+            )
         )
-        for teacher in queryset
-    ]
+
+    return result
 
 
 def load_instructional_groups(
-    queryset: Iterable[InstructionalGroup],
+    groups: Iterable[InstructionalGroup],
 ) -> list[InstructionalGroupEntity]:
-    """Convert Django InstructionalGroup records into domain entities."""
+    result: list[InstructionalGroupEntity] = []
 
-    return [
-        InstructionalGroupEntity(
-            id=group.id,
-            name=str(group),
-            code=getattr(group, "code", str(group.id)),
-            is_active=group.is_active,
+    for group in groups:
+        teaching_group = getattr(
+            group,
+            "teaching_group",
+            None,
         )
-        for group in queryset
-    ]
+
+        if teaching_group is not None:
+            entity_id = group.id
+            code = group.code
+            is_active = group.is_active
+
+            name = str(teaching_group)
+        else:
+            entity_id = group.id
+            code = group.code
+            is_active = group.is_active
+            name = str(group)
+
+        result.append(
+            InstructionalGroupEntity(
+                id=entity_id,
+                name=name,
+                code=code,
+                is_active=is_active,
+            )
+        )
+
+    return result
 
 
 def load_rooms(
-    queryset: Iterable[Room],
+    rooms: Iterable[Room],
 ) -> list[RoomEntity]:
-    """Convert Django Room records into domain entities."""
-
     return [
         RoomEntity(
             id=room.id,
@@ -97,221 +304,226 @@ def load_rooms(
             capacity=room.capacity,
             is_active=room.is_active,
         )
-        for room in queryset
+        for room in rooms
     ]
 
 
 def load_lesson_requirements(
-    queryset: Iterable[LessonRequirement],
+    requirements: Iterable[LessonRequirement],
 ) -> list[LessonRequirementEntity]:
-    """Convert Django lesson requirements into domain entities."""
+    result: list[LessonRequirementEntity] = []
 
-    return [
-        LessonRequirementEntity(
-            id=requirement.id,
-            instructional_group_id=requirement.instructional_group_id,
-            subject_id=requirement.subject_id,
-            periods_per_week=requirement.lessons_per_week,
-            is_active=requirement.is_active,
+    for requirement in requirements:
+        subject = requirement.subject
+
+        result.append(
+            LessonRequirementEntity(
+                id=requirement.id,
+                instructional_group_id=(
+                    requirement.instructional_group_id
+                ),
+                subject_id=requirement.subject_id,
+                periods_per_week=requirement.lessons_per_week,
+            subject_code=requirement.subject.code,
+                is_active=requirement.is_active,
+
+            )
         )
-        for requirement in queryset
-    ]
+
+    return result
 
 
 def load_teacher_assignments(
-    queryset: Iterable[TeacherAssignment],
+    assignments: Iterable[TeacherAssignment],
 ) -> list[TeacherAssignmentEntity]:
-    """Convert teacher assignments into domain entities."""
-
     return [
         TeacherAssignmentEntity(
             id=assignment.id,
             teacher_id=assignment.teacher_id,
-            lesson_requirement_id=assignment.lesson_requirement_id,
+            lesson_requirement_id=(
+                assignment.lesson_requirement_id
+            ),
             is_active=assignment.is_active,
         )
-        for assignment in queryset
+        for assignment in assignments
+    ]
+
+
+def _coerce_day(value) -> DayOfWeek:
+    """
+    Convert Django day values into the domain DayOfWeek enum.
+
+    Django fixtures/tests may provide either an existing DayOfWeek
+    instance or its stored string value such as MON/TUE/WED/THU/FRI.
+    """
+    if isinstance(value, DayOfWeek):
+        return value
+
+    raw = str(value).strip()
+
+    try:
+        return DayOfWeek(raw)
+    except ValueError:
+        pass
+
+    raw_upper = raw.upper()
+
+    aliases = {
+        "MONDAY": "MON",
+        "TUESDAY": "TUE",
+        "WEDNESDAY": "WED",
+        "THURSDAY": "THU",
+        "FRIDAY": "FRI",
+    }
+
+    raw_upper = aliases.get(raw_upper, raw_upper)
+
+    try:
+        return DayOfWeek(raw_upper)
+    except ValueError:
+        pass
+
+    for member in DayOfWeek:
+        if str(member.name).upper() == raw_upper:
+            return member
+
+    raise ValueError(
+        f"Unsupported DayOfWeek value: {value!r}"
+    )
+
+
+def load_teacher_free_afternoons(
+    entries: Iterable[TeacherFreeAfternoon],
+) -> list[TeacherFreeAfternoonEntity]:
+    return [
+        TeacherFreeAfternoonEntity(
+            id=entry.id,
+            teacher_id=entry.teacher_id,
+            day=_coerce_day(entry.day),
+            is_active=entry.is_active,
+        )
+        for entry in entries
     ]
 
 
 def load_teacher_availability(
-    queryset: Iterable[TeacherAvailability],
+    entries: Iterable[TeacherAvailability],
 ) -> list[TeacherAvailabilityEntity]:
-    """Convert teacher availability records into domain entities."""
-
     return [
         TeacherAvailabilityEntity(
-            id=availability.id,
-            teacher_id=availability.teacher_id,
-            day=DayOfWeek(availability.day),
-            period_id=availability.period_id,
-            is_available=availability.is_available,
-            is_active=availability.is_active,
+            id=entry.id,
+            teacher_id=entry.teacher_id,
+            day=_coerce_day(entry.day),
+            period_id=entry.period_id,
+            is_available=entry.is_available,
+            is_active=entry.is_active,
         )
-        for availability in queryset
-    ]
-
-
-def load_teacher_free_afternoons(
-    queryset: Iterable[TeacherFreeAfternoon],
-) -> list[TeacherFreeAfternoonEntity]:
-    """
-    Convert mandatory teacher free-afternoon records.
-
-    The resulting domain objects represent a HARD scheduling constraint.
-    """
-
-    return [
-        TeacherFreeAfternoonEntity(
-            id=free_afternoon.id,
-            teacher_id=free_afternoon.teacher_id,
-            day=DayOfWeek(free_afternoon.day),
-            is_active=free_afternoon.is_active,
-        )
-        for free_afternoon in queryset
+        for entry in entries
     ]
 
 
 def load_room_availability(
-    queryset: Iterable[RoomAvailability],
+    entries: Iterable[RoomAvailability],
 ) -> list[RoomAvailabilityEntity]:
-    """Convert room availability records into domain entities."""
-
     return [
         RoomAvailabilityEntity(
-            id=availability.id,
-            room_id=availability.room_id,
-            day=DayOfWeek(availability.day),
-            period_id=availability.period_id,
-            is_available=availability.is_available,
-            is_active=availability.is_active,
+            id=entry.id,
+            room_id=entry.room_id,
+            day=_coerce_day(entry.day),
+            period_id=entry.period_id,
+            is_available=entry.is_available,
+            is_active=entry.is_active,
         )
-        for availability in queryset
+        for entry in entries
     ]
-def load_slots(
-    periods: Iterable[Period],
-) -> list[TimetableSlot]:
-    """
-    Generate concrete Monday-Friday timetable slots from active periods.
 
-    Every active period becomes one slot for each school day.
-    Non-teaching periods are retained because they are part of the
-    timetable structure, while the solver itself decides which slots
-    are eligible for lesson assignment.
+
+def _resolve_weekdays() -> tuple[DayOfWeek, ...]:
     """
+    Resolve Monday-Friday without assuming that the enum members
+    are named MON/TUE/WED/THU/FRI.
+
+    The actual domain enum has already been established as DayOfWeek,
+    but its member names are intentionally resolved from the enum
+    itself rather than guessed.
+    """
+
+    members = list(DayOfWeek)
+
+    if len(members) < 5:
+        raise RuntimeError(
+            "DayOfWeek contains fewer than five members; "
+            "cannot construct the Monday-Friday timetable slot universe."
+        )
+
+    aliases = {
+        "monday": 0,
+        "mon": 0,
+        "tuesday": 1,
+        "tue": 1,
+        "tues": 1,
+        "wednesday": 2,
+        "wed": 2,
+        "thursday": 3,
+        "thu": 3,
+        "thur": 3,
+        "thurs": 3,
+        "friday": 4,
+        "fri": 4,
+    }
+
+    resolved: dict[int, DayOfWeek] = {}
+
+    for member in members:
+        candidates = (
+            str(getattr(member, "name", "")).lower(),
+            str(getattr(member, "value", "")).lower(),
+        )
+
+        for candidate in candidates:
+            candidate = candidate.strip()
+
+            if candidate in aliases:
+                resolved.setdefault(
+                    aliases[candidate],
+                    member,
+                )
+
+    if len(resolved) == 5:
+        return tuple(
+            resolved[index]
+            for index in range(5)
+        )
+
+    # If names/values are not textual weekday names, preserve the
+    # enum's declared order, which is the domain's canonical order.
+    return tuple(members[:5])
+
+
+def build_timetable_slots(
+    periods: Iterable[PeriodEntity],
+) -> tuple[TimetableSlot, ...]:
+    """
+    Build the complete Monday-Friday × active-period slot universe.
+
+    Period numbers and part-of-day values come directly from the
+    loaded PeriodEntity records. No period numbers are hard-coded.
+    """
+
+    loaded_periods = tuple(periods)
+    weekdays = _resolve_weekdays()
 
     slots: list[TimetableSlot] = []
 
-    days = (
-        DayOfWeek.MONDAY,
-        DayOfWeek.TUESDAY,
-        DayOfWeek.WEDNESDAY,
-        DayOfWeek.THURSDAY,
-        DayOfWeek.FRIDAY,
-    )
-
-    for period in periods:
-        if not period.is_active:
-            continue
-
-        for day in days:
+    for day in weekdays:
+        for period in loaded_periods:
             slots.append(
                 TimetableSlot(
                     day=day,
                     period_id=period.id,
                     period_number=period.number,
-                    part_of_day=PartOfDay(period.part_of_day),
+                    part_of_day=period.part_of_day,
                 )
             )
 
-    return slots
-
-def load_scheduling_problem(term) -> "SchedulingProblem":
-    """
-    Load all scheduling inputs for a specific academic term and convert
-    them into an immutable SchedulingProblem.
-
-    Django remains confined to this infrastructure layer. The returned
-    domain object contains no Django model instances.
-    """
-
-    from apps.scheduling.engine.domain.problem import SchedulingProblem
-
-    periods_queryset = Period.objects.filter(
-        is_active=True,
-    ).order_by("number")
-
-    teachers_queryset = Teacher.objects.filter(
-        is_active=True,
-    ).order_by("employee_code")
-
-    instructional_groups_queryset = InstructionalGroup.objects.filter(
-        is_active=True,
-    )
-
-    rooms_queryset = Room.objects.filter(
-        is_active=True,
-    )
-
-    lesson_requirements_queryset = LessonRequirement.objects.filter(
-        term=term,
-        is_active=True,
-    ).order_by("instructional_group", "subject")
-
-    teacher_assignments_queryset = TeacherAssignment.objects.filter(
-        is_active=True,
-        lesson_requirement__term=term,
-    ).order_by("teacher", "lesson_requirement")
-
-    teacher_availability_queryset = TeacherAvailability.objects.filter(
-        term=term,
-        is_active=True,
-    ).order_by("teacher", "day", "period__number")
-
-    teacher_free_afternoons_queryset = TeacherFreeAfternoon.objects.filter(
-        term=term,
-        is_active=True,
-    ).order_by("teacher", "day")
-
-    room_availability_queryset = RoomAvailability.objects.filter(
-        term=term,
-        is_active=True,
-    ).order_by("room", "day", "period__number")
-
-    periods = load_periods(periods_queryset)
-
-    teachers = load_teachers(teachers_queryset)
-
-    instructional_groups = load_instructional_groups(instructional_groups_queryset)
-
-    rooms = load_rooms(rooms_queryset)
-
-    lesson_requirements = load_lesson_requirements(lesson_requirements_queryset)
-
-    teacher_assignments = load_teacher_assignments(teacher_assignments_queryset)
-
-    teacher_availability = load_teacher_availability(teacher_availability_queryset)
-
-    teacher_free_afternoons = load_teacher_free_afternoons(teacher_free_afternoons_queryset)
-
-    room_availability = load_room_availability(room_availability_queryset)
-
-    slots = load_slots(periods_queryset)
-
-    return SchedulingProblem.from_iterables(
-        periods=periods,
-        teachers=teachers,
-        instructional_groups=instructional_groups,
-        rooms=rooms,
-        lesson_requirements=lesson_requirements,
-        teacher_assignments=teacher_assignments,
-        teacher_availability=teacher_availability,
-        teacher_free_afternoons=teacher_free_afternoons,
-        room_availability=room_availability,
-        slots=slots,
-    )
-class DjangoSchedulingLoader:
-    """Infrastructure adapter for loading scheduling problems from Django."""
-
-    def load_problem(self, *, term) -> SchedulingProblem:
-        return load_scheduling_problem(term)
+    return tuple(slots)

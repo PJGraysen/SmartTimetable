@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
@@ -26,7 +26,6 @@ class PersistenceResult:
     timetable_version: TimetableVersion
     scheduling_run: SchedulingRun
     entries_created: int
-
 
 class TimetablePersistenceService:
     """
@@ -78,11 +77,21 @@ class TimetablePersistenceService:
 
         # --------------------------------------------------------------
         # Create the timetable version.
+        #
+        # _resolve_version_details() has already guaranteed that both
+        # the name and number are unique within the term.
         # --------------------------------------------------------------
+
+        TimetableVersion.objects.filter(
+            term=scheduling_run.term,
+            is_active=True,
+        ).update(
+            is_active=False,
+        )
 
         timetable_version = TimetableVersion.objects.create(
             term=scheduling_run.term,
-            name=version_name.strip(),
+            name=version_name,
             version_number=version_number,
             is_published=False,
             is_active=True,
@@ -321,7 +330,7 @@ class TimetablePersistenceService:
             )
 
         # --------------------------------------------------------------
-        # Validate teaching groups.
+        # Validate instructional groups.
         # --------------------------------------------------------------
 
         existing_group_ids = set(
@@ -334,7 +343,7 @@ class TimetablePersistenceService:
 
         if missing_groups:
             raise ValueError(
-                "Solver assignment references unknown teaching "
+                "Solver assignment references unknown instructional "
                 "group(s): "
                 f"{sorted(str(value) for value in missing_groups)}"
             )
@@ -376,8 +385,8 @@ class TimetablePersistenceService:
                 != requirement.instructional_group_id
             ):
                 raise ValueError(
-                    "Solver assignment teaching group does not match "
-                    "the lesson requirement teaching group for lesson "
+                    "Solver assignment instructional group does not match "
+                    "the lesson requirement instructional group for lesson "
                     f"requirement {requirement.id}."
                 )
 
@@ -507,3 +516,6 @@ class TimetablePersistenceService:
             "Unsupported solver status for persistence: "
             f"{status!r}"
         )
+
+
+

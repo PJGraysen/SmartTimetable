@@ -329,3 +329,69 @@ def test_execute_moves_pending_run_to_running_before_generation(
     )
 
     persistence.persist.assert_not_called()
+
+def test_execute_propagates_infeasible_solver_diagnostic_to_scheduling_run(
+    db,
+    scheduling_run,
+):
+    """
+    Regression test for the complete solver -> application -> SchedulingRun
+    infeasibility diagnostic propagation path.
+
+    The solver returns an INFEASIBLE SolverResult containing the domain-level
+    diagnostic. SchedulingApplicationService.execute() must preserve that
+    exact diagnostic on the SchedulingRun and return the failed execution
+    result without attempting persistence.
+    """
+    from unittest.mock import Mock, patch
+
+    from apps.scheduling.engine.domain.enums import SolverStatus
+    from apps.scheduling.engine.solver.result import (
+        SolverResult,
+        SolverStatistics,
+    )
+
+    diagnostic_message = (
+        "TIMETABLE GENERATION FAILED\n"
+        "\n"
+        "Required input: TeacherAssignment"
+    )
+
+    solver_result = SolverResult(
+        status=SolverStatus.INFEASIBLE,
+        assignments=(),
+        statistics=SolverStatistics(),
+        error_message=diagnostic_message,
+    )
+
+    scheduler = Mock()
+    scheduler.generate.return_value = solver_result
+
+    persistence = Mock()
+    loader = Mock()
+
+    service = SchedulingApplicationService(
+        scheduler=scheduler,
+        persistence=persistence,
+        loader=loader,
+    )
+
+    with patch(
+        "apps.scheduling.engine.application.scheduling_application.load_scheduling_problem",
+        return_value=Mock(),
+    ):
+        execution_result = service.execute(
+            scheduling_run,
+        )
+
+    assert execution_result.scheduling_run is scheduling_run
+    assert execution_result.solver_result is solver_result
+    assert execution_result.persistence_result is None
+
+    assert scheduling_run.status == SchedulingRunStatus.FAILED
+    assert scheduling_run.error_message == diagnostic_message
+
+    scheduler.generate.assert_called_once()
+    persistence.persist.assert_not_called()
+
+

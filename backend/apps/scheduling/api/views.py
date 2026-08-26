@@ -253,8 +253,9 @@ class SchedulingRunResultView(APIView):
             .select_related(
                 "period",
                 "teacher",
-                "teaching_group",
+                "instructional_group",
                 "lesson_requirement",
+                "lesson_requirement__subject",
                 "room",
             )
             .order_by(

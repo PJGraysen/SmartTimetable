@@ -8,6 +8,7 @@ from apps.academics.models import (
     Stream,
     Subject,
     TeachingGroup,
+    InstructionalGroup,
 )
 from apps.core.models import AcademicYear, School, Term
 from apps.scheduling.models import (
@@ -86,15 +87,25 @@ def subject():
 
 
 @pytest.fixture
-def lesson_requirement(term, teaching_group, subject):
+def instructional_group(teaching_group):
+    return InstructionalGroup.objects.create(
+        teaching_group=teaching_group,
+        name="Core",
+        code="G10A-CORE",
+        learner_count=45,
+        is_active=True,
+    )
+
+
+@pytest.fixture
+def lesson_requirement(term, instructional_group, subject):
     return LessonRequirement.objects.create(
         term=term,
-        teaching_group=teaching_group,
+        instructional_group=instructional_group,
         subject=subject,
         lessons_per_week=4,
         is_active=True,
     )
-
 
 @pytest.fixture
 def scheduling_run():

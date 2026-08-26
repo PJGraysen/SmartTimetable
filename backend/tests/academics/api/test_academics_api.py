@@ -339,14 +339,14 @@ def test_list_lesson_requirements(api_client, lesson_requirement):
 def test_create_lesson_requirement(
     api_client,
     term,
-    teaching_group,
+    instructional_group,
     subject,
 ):
     response = api_client.post(
         "/api/academics/lesson-requirements/",
         {
             "term": str(term.id),
-            "teaching_group": str(teaching_group.id),
+            "instructional_group": str(instructional_group.id),
             "subject": str(subject.id),
             "lessons_per_week": 4,
             "is_active": True,
@@ -361,7 +361,7 @@ def test_create_lesson_requirement(
     )
 
     assert requirement.term_id == term.id
-    assert requirement.teaching_group_id == teaching_group.id
+    assert requirement.instructional_group_id == instructional_group.id
     assert requirement.subject_id == subject.id
     assert requirement.lessons_per_week == 4
 
@@ -468,8 +468,8 @@ def test_create_lesson_requirement_rejects_duplicate(
         "/api/academics/lesson-requirements/",
         {
             "term": str(lesson_requirement.term_id),
-            "teaching_group": str(
-                lesson_requirement.teaching_group_id,
+            "instructional_group": str(
+                lesson_requirement.instructional_group_id,
             ),
             "subject": str(lesson_requirement.subject_id),
             "lessons_per_week": 4,
@@ -485,14 +485,14 @@ def test_create_lesson_requirement_rejects_duplicate(
 def test_create_lesson_requirement_rejects_zero_lessons(
     api_client,
     term,
-    teaching_group,
+    instructional_group,
     subject,
 ):
     response = api_client.post(
         "/api/academics/lesson-requirements/",
         {
             "term": str(term.id),
-            "teaching_group": str(teaching_group.id),
+            "instructional_group": str(instructional_group.id),
             "subject": str(subject.id),
             "lessons_per_week": 0,
             "is_active": True,

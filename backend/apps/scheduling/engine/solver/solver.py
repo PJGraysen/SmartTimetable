@@ -6,12 +6,14 @@ from ortools.sat.python import cp_model
 
 from apps.scheduling.engine.domain.entities import (
     SchedulingAssignment,
-
 )
 
 from apps.scheduling.engine.domain.problem import SchedulingProblem
 
 from apps.scheduling.engine.domain.enums import SolverStatus
+from apps.scheduling.engine.solver.infeasibility_diagnostics import (
+    analyze_infeasibility,
+)
 from apps.scheduling.engine.solver.model import SolverModel
 from apps.scheduling.engine.solver.result import (
     SolverResult,
@@ -25,6 +27,11 @@ class CPSATSolver:
 
     The solver itself does not know anything about Django.
     It receives a validated SchedulingProblem through SolverModel.
+
+    When CP-SAT proves the model infeasible, the solver also runs
+    the domain-level infeasibility diagnostic engine against the
+    original SchedulingProblem and exposes the resulting report
+    through SolverResult.error_message.
     """
 
     def __init__(
@@ -85,10 +92,20 @@ class CPSATSolver:
                 ),
             )
 
+            error_message: str | None = None
+
+            if status == cp_model.INFEASIBLE:
+                diagnostic_report = analyze_infeasibility(
+                    problem,
+                )
+
+                error_message = diagnostic_report.format_message()
+
             return SolverResult(
                 status=solver_status,
                 assignments=assignments,
                 statistics=statistics,
+                error_message=error_message,
             )
 
         except Exception as exc:

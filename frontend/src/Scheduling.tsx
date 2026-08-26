@@ -102,10 +102,40 @@ function Scheduling() {
         term: selectedTerm,
       });
 
-      await executeSchedulingRun(run.id, {
+      const result = await executeSchedulingRun(run.id, {
         version_name: "Generated Timetable",
       });
 
+      /*
+       * The backend persists FAILED runs and returns the authoritative
+       * error_message in the SchedulingRun response. Do not discard that
+       * response and do not refresh the timetable when generation failed.
+       */
+      if (result.status?.toUpperCase() === "FAILED") {
+        const diagnostic =
+          result.error_message?.trim() ||
+          result.solver_status_display?.trim() ||
+          result.solver_status?.trim() ||
+          "Timetable generation failed.";
+
+        /*
+         * Refresh run history first. loadData() clears the transient
+         * page error while reloading, so the authoritative diagnostic
+         * must be restored after the refresh completes.
+         */
+        await loadData(false);
+
+        /*
+         * Display the backend-persisted diagnostic to the user.
+         */
+        setError(diagnostic);
+        return;
+      }
+
+      /*
+       * Only a successful scheduling run is allowed to refresh the
+       * authoritative timetable renderer.
+       */
       await loadData(true);
     } catch (err: any) {
       setError(
@@ -302,6 +332,7 @@ function Scheduling() {
                   <th>Created</th>
                   <th>Completed</th>
                   <th>Timetable Version</th>
+                  <th>Diagnostic</th>
                 </tr>
               </thead>
 
@@ -352,6 +383,26 @@ function Scheduling() {
                         "--"
                       )}
                     </td>
+
+                    <td>
+                      {run.status.toUpperCase() === "FAILED" ? (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            maxWidth: "520px",
+                            whiteSpace: "normal",
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {run.error_message?.trim() ||
+                            run.solver_status_display ||
+                            run.solver_status ||
+                            "Scheduling run failed without a diagnostic."}
+                        </span>
+                      ) : (
+                        "--"
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -364,3 +415,6 @@ function Scheduling() {
 }
 
 export default Scheduling;
+
+
+

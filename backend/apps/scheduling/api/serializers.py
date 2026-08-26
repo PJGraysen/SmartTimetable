@@ -134,13 +134,39 @@ class TimetableEntryResultSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
-    teaching_group_name = serializers.CharField(
+    teacher_code = serializers.CharField(
+        source="teacher.employee_code",
+        read_only=True,
+    )
+
+    teacher_number = serializers.IntegerField(
+        source="teacher.teacher_number",
+        read_only=True,
+        allow_null=True,
+    )
+
+    employee_code = serializers.CharField(
+        source="teacher.employee_code",
+        read_only=True,
+    )
+
+    instructional_group_name = serializers.CharField(
         source="instructional_group.__str__",
         read_only=True,
     )
 
     lesson_requirement_name = serializers.CharField(
         source="lesson_requirement.__str__",
+        read_only=True,
+    )
+
+    subject_name = serializers.CharField(
+        source="lesson_requirement.subject.name",
+        read_only=True,
+    )
+
+    subject_code = serializers.CharField(
+        source="lesson_requirement.subject.code",
         read_only=True,
     )
 
@@ -162,11 +188,16 @@ class TimetableEntryResultSerializer(serializers.ModelSerializer):
             "period_start_time",
             "period_end_time",
             "instructional_group",
-            "teaching_group_name",
+            "instructional_group_name",
             "teacher",
             "teacher_name",
+            "teacher_code",
+            "teacher_number",
+            "employee_code",
             "lesson_requirement",
             "lesson_requirement_name",
+            "subject_name",
+            "subject_code",
             "room",
             "room_name",
             "created_at",
@@ -243,3 +274,4 @@ class SchedulingRunResultSerializer(serializers.ModelSerializer):
         )
 
         read_only_fields = fields
+

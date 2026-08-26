@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from drf_spectacular.utils import extend_schema_view
 
@@ -121,8 +121,7 @@ class LessonRequirementListCreateView(generics.ListCreateAPIView):
         "term",
         "term__academic_year",
         "instructional_group",
-        "teaching_group__stream",
-        "teaching_group__stream__grade",
+        "instructional_group__teaching_group__stream__grade",
         "subject",
     ).all()
     serializer_class = LessonRequirementSerializer
@@ -139,8 +138,7 @@ class LessonRequirementDetailView(
         "term",
         "term__academic_year",
         "instructional_group",
-        "teaching_group__stream",
-        "teaching_group__stream__grade",
+        "instructional_group__teaching_group__stream__grade",
         "subject",
     ).all()
     serializer_class = LessonRequirementSerializer

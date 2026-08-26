@@ -1,4 +1,4 @@
-"""
+﻿"""
 URL configuration for SmartTimetable Pro.
 """
 
@@ -12,7 +12,10 @@ from drf_spectacular.views import (
 
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path(
+        "admin/",
+        admin.site.urls,
+    ),
 
     # API documentation
     path(
@@ -34,6 +37,7 @@ urlpatterns = [
         ),
         name="redoc",
     ),
+
     # Core API
     path(
         "api/core/",
@@ -45,9 +49,16 @@ urlpatterns = [
         "api/scheduling/",
         include("apps.scheduling.api.urls"),
     ),
-            # Academics API
+
+    # Academics API
     path(
         "api/academics/",
         include("apps.academics.api.urls"),
+    ),
+
+    # Academics management API
+    path(
+        "api/academics/management/",
+        include("apps.academics.api.management_urls"),
     ),
 ]

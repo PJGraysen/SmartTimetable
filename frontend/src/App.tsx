@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import "./index.css";
 import Scheduling from "./Scheduling";
+import Timetable from "./pages/Timetable";
 import { getAcademicTerms } from "./services/core";
 
 function Sidebar() {
@@ -309,10 +310,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
 
-            <Route
-              path="/timetables"
-              element={<Placeholder title="Timetables" />}
-            />
+            <Route path="/timetables" element={<Timetable />} />
 
             <Route path="/scheduling" element={<Scheduling />} />
 
