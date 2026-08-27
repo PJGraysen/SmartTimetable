@@ -1,0 +1,413 @@
+﻿import { useEffect, useState } from "react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  PlayCircle,
+  RefreshCw,
+} from "lucide-react";
+
+import {
+  createSchedulingRun,
+  executeSchedulingRun,
+  getSchedulingRuns,
+  type SchedulingRun,
+} from "./services/scheduling";
+
+import {
+  getAcademicTerms,
+  type AcademicTerm,
+} from "./services/core";
+
+function Scheduling() {
+  const [terms, setTerms] = useState<AcademicTerm[]>([]);
+  const [selectedTerm, setSelectedTerm] = useState("");
+  const [runs, setRuns] = useState<SchedulingRun[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState("");
+
+  async function loadData() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const [termsData, runsData] = await Promise.all([
+        getAcademicTerms(),
+        getSchedulingRuns(),
+      ]);
+
+      setTerms(termsData);
+      setRuns(runsData);
+
+      const activeTerm = termsData.find(
+        (term) => term.is_active,
+      );
+
+      if (activeTerm && !selectedTerm) {
+        setSelectedTerm(activeTerm.id);
+      }
+    } catch {
+      setError(
+        "Unable to load academic terms and scheduling runs. " +
+        "Make sure the Django API is running.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function generateTimetable() {
+    if (!selectedTerm) {
+      setError(
+        "Select an academic term before generating a timetable.",
+      );
+      return;
+    }
+
+    setGenerating(true);
+    setError("");
+
+    try {
+      const run = await createSchedulingRun({
+        term: selectedTerm,
+      });
+
+      await executeSchedulingRun(run.id, {
+        version_name: "Generated Timetable",
+      });
+
+      await loadData();
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.detail ||
+          err?.response?.data?.error ||
+          err?.detail ||
+          err?.error ||
+          "Timetable generation failed.",
+      );
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  const completedRuns = runs.filter(
+    (run) =>
+      String(run.status).toUpperCase() === "COMPLETED",
+  );
+
+  const latestCompletedRun =
+    completedRuns.length > 0
+      ? [...completedRuns].sort((a, b) => {
+          const aTime = a.completed_at
+            ? new Date(a.completed_at).getTime()
+            : 0;
+
+          const bTime = b.completed_at
+            ? new Date(b.completed_at).getTime()
+            : 0;
+
+          return bTime - aTime;
+        })[0]
+      : null;
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1>Scheduling</h1>
+
+          <p>
+            Generate and monitor automated timetable
+            scheduling runs.
+          </p>
+        </div>
+
+        <div className="page-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void loadData()}
+            disabled={loading || generating}
+          >
+            <RefreshCw
+              size={17}
+              className={loading ? "spin" : ""}
+            />
+
+            Refresh
+          </button>
+
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => void generateTimetable()}
+            disabled={
+              generating ||
+              loading ||
+              !selectedTerm
+            }
+          >
+            <PlayCircle size={18} />
+
+            {generating
+              ? "Generating..."
+              : "Generate Timetable"}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="alert error">
+          <AlertCircle size={19} />
+
+          <div>
+            <strong>Scheduling error</strong>
+            <span>{error}</span>
+          </div>
+        </div>
+      )}
+
+      <section className="panel scheduling-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Generate Timetable</h2>
+
+            <p>
+              Select the academic term for timetable
+              generation.
+            </p>
+          </div>
+        </div>
+
+        <div className="scheduling-form">
+          <div className="form-group">
+            <label htmlFor="academic-term">
+              Academic Term
+            </label>
+
+            <select
+              id="academic-term"
+              value={selectedTerm}
+              onChange={(event) =>
+                setSelectedTerm(event.target.value)
+              }
+              disabled={
+                loading || generating
+              }
+            >
+              <option value="">
+                Select academic term
+              </option>
+
+              {terms.map((term) => (
+                <option
+                  key={term.id}
+                  value={term.id}
+                >
+                  {term.name}
+                  {term.is_active
+                    ? " (Active)"
+                    : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
+      {latestCompletedRun && (
+        <section className="panel scheduling-panel">
+          <div className="panel-header">
+            <div>
+              <h2>Latest Completed Timetable</h2>
+
+              <p>
+                The timetable itself is displayed on the
+                Timetable page from the persisted database
+                result.
+              </p>
+            </div>
+
+            <div className="timetable-created">
+              <CheckCircle2 size={15} />
+              Completed
+            </div>
+          </div>
+
+          <div className="scheduling-form">
+            <div className="form-group">
+              <label>Completed</label>
+
+              <div>
+                {latestCompletedRun.completed_at
+                  ? new Date(
+                      latestCompletedRun.completed_at,
+                    ).toLocaleString()
+                  : "--"}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Status</label>
+
+              <div>
+                {latestCompletedRun.status_display ||
+                  latestCompletedRun.status ||
+                  "--"}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Timetable Version</label>
+
+              <div>
+                {latestCompletedRun.timetable_version
+                  ? "Available"
+                  : "--"}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="panel scheduling-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Scheduling Runs</h2>
+
+            <p>
+              Generation history and solver execution
+              status.
+            </p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="table-state">
+            <RefreshCw
+              size={20}
+              className="spin"
+            />
+
+            Loading scheduling data...
+          </div>
+        ) : runs.length === 0 ? (
+          <div className="empty-state">
+            <Clock size={38} />
+
+            <h3>No scheduling runs</h3>
+
+            <p>
+              No timetable generation runs have been
+              recorded yet. Select an academic term and
+              generate the first timetable.
+            </p>
+          </div>
+        ) : (
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Term</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Completed</th>
+                  <th>Timetable Version</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {runs.map((run) => {
+                  const status =
+                    String(
+                      run.status || "",
+                    ).toUpperCase();
+
+                  const isCompleted =
+                    status === "COMPLETED";
+
+                  const isFailed =
+                    status === "FAILED";
+
+                  return (
+                    <tr key={run.id}>
+                      <td>
+                        <strong>
+                          {run.term_name ||
+                            run.term ||
+                            "--"}
+                        </strong>
+                      </td>
+
+                      <td>
+                        <span
+                          className={`status-badge ${String(
+                            run.status || "",
+                          ).toLowerCase()}`}
+                        >
+                          {isCompleted ? (
+                            <CheckCircle2
+                              size={15}
+                            />
+                          ) : isFailed ? (
+                            <AlertCircle
+                              size={15}
+                            />
+                          ) : (
+                            <Clock
+                              size={15}
+                            />
+                          )}
+
+                          {run.status_display ||
+                            run.status ||
+                            "--"}
+                        </span>
+                      </td>
+
+                      <td>
+                        {run.created_at
+                          ? new Date(
+                              run.created_at,
+                            ).toLocaleString()
+                          : "--"}
+                      </td>
+
+                      <td>
+                        {run.completed_at
+                          ? new Date(
+                              run.completed_at,
+                            ).toLocaleString()
+                          : "--"}
+                      </td>
+
+                      <td>
+                        {run.timetable_version ? (
+                          <span className="timetable-created">
+                            <CheckCircle2
+                              size={15}
+                            />
+                            Available
+                          </span>
+                        ) : (
+                          "--"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+export default Scheduling;

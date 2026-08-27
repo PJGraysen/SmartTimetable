@@ -1,0 +1,1357 @@
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import api from "../api";
+
+type Tab =
+  | "groups"
+  | "teachers"
+  | "subjects"
+  | "rooms";
+
+type RecordItem = {
+  id: string;
+
+  code?: string;
+  name?: string;
+
+  employee_code?: string;
+  first_name?: string;
+  last_name?: string;
+
+  grade?: string | null;
+  grade_code?: string | null;
+
+  stream?: string | null;
+  stream_code?: string | null;
+
+  learner_count?: number;
+
+  capacity?: number;
+
+  is_active?: boolean;
+};
+
+type FormState = {
+  id: string;
+
+  grade_name: string;
+  grade_code: string;
+
+  stream_name: string;
+  stream_code: string;
+
+  name: string;
+  code: string;
+
+  employee_code: string;
+  first_name: string;
+  last_name: string;
+
+  learner_count: string;
+  capacity: string;
+
+  is_active: boolean;
+};
+
+const emptyForm: FormState = {
+  id: "",
+
+  grade_name: "",
+  grade_code: "",
+
+  stream_name: "",
+  stream_code: "",
+
+  name: "",
+  code: "",
+
+  employee_code: "",
+  first_name: "",
+  last_name: "",
+
+  learner_count: "45",
+  capacity: "45",
+
+  is_active: true,
+};
+
+const tabs: {
+  key: Tab;
+  label: string;
+}[] = [
+  {
+    key: "groups",
+    label: "Teaching Groups",
+  },
+  {
+    key: "teachers",
+    label: "Teachers",
+  },
+  {
+    key: "subjects",
+    label: "Subjects",
+  },
+  {
+    key: "rooms",
+    label: "Rooms",
+  },
+];
+
+const endpoints: Record<Tab, string> = {
+  groups:
+    "/academics/management/teaching-groups/",
+  teachers:
+    "/academics/management/teachers/",
+  subjects:
+    "/academics/management/subjects/",
+  rooms:
+    "/academics/management/rooms/",
+};
+
+const titleMap: Record<Tab, string> = {
+  groups: "Teaching Groups",
+  teachers: "Teachers",
+  subjects: "Subjects",
+  rooms: "Rooms",
+};
+
+const CLASS_DISPLAY_ORDER: Record<string, number> = {
+  "8E": 10,
+  "8W": 20,
+  "9E": 30,
+  "9W": 40,
+  "10E": 50,
+  "10W": 60,
+  "G10A": 70,
+  "3E": 80,
+  "3W": 90,
+  "4E": 100,
+  "4W": 110,
+};
+
+const CLASS_DISPLAY_NAMES: Record<string, string> = {
+  "8E": "Grade 8E",
+  "8W": "Grade 8W",
+  "9E": "Grade 9E",
+  "9W": "Grade 9W",
+  "10E": "Grade 10E",
+  "10W": "Grade 10W",
+  "G10A": "Grade 10A",
+  "3E": "Form 3E",
+  "3W": "Form 3W",
+  "4E": "Form 4E",
+  "4W": "Form 4W",
+};
+
+const formatTeachingGroupName = (group: TeachingGroup) =>
+  CLASS_DISPLAY_NAMES[group.code] || group.name || group.code;
+
+const sortTeachingGroups = (groups: TeachingGroup[]) =>
+  [...groups].sort(
+    (a, b) =>
+      (CLASS_DISPLAY_ORDER[a.code] ?? 9999) -
+      (CLASS_DISPLAY_ORDER[b.code] ?? 9999)
+  );
+
+export default function AcademicsManagement() {
+
+  const [tab, setTab] =
+    useState<Tab>("groups");
+
+  const [rows, setRows] =
+    useState<RecordItem[]>([]);
+
+  const [form, setForm] =
+    useState<FormState>(emptyForm);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [message, setMessage] =
+    useState("");
+
+  const editingId = form.id;
+
+  const title =
+    useMemo(
+      () => titleMap[tab],
+      [tab],
+    );
+
+  async function load() {
+
+    setLoading(true);
+    setError("");
+
+    try {
+
+      const response =
+        await api.get(endpoints[tab]);
+
+      setRows(
+        Array.isArray(response.data)
+          ? response.data
+          : [],
+      );
+
+    } catch (err: any) {
+
+      setError(
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Unable to load records.",
+      );
+
+    } finally {
+
+      setLoading(false);
+    }
+  }
+
+  useEffect(
+    () => {
+      void load();
+    },
+    [tab],
+  );
+
+  function resetForm() {
+    setForm(emptyForm);
+    setMessage("");
+    setError("");
+  }
+
+  function changeTab(next: Tab) {
+    setTab(next);
+    resetForm();
+  }
+
+  function beginEdit(item: RecordItem) {
+
+    setMessage("");
+    setError("");
+
+    setForm({
+      id: item.id,
+
+      grade_name: item.grade ?? "",
+      grade_code: item.grade_code ?? "",
+
+      stream_name: item.stream ?? "",
+      stream_code: item.stream_code ?? "",
+
+      name: item.name ?? "",
+      code: item.code ?? "",
+
+      employee_code:
+        item.employee_code ?? "",
+
+      first_name:
+        item.first_name ?? "",
+
+      last_name:
+        item.last_name ?? "",
+
+      learner_count:
+        String(
+          item.learner_count ??
+          45,
+        ),
+
+      capacity:
+        String(
+          item.capacity ??
+          45,
+        ),
+
+      is_active:
+        Boolean(item.is_active),
+    });
+  }
+
+  async function remove(id: string) {
+
+    setSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+
+      await api.delete(
+        endpoints[tab],
+        {
+          data: { id },
+        },
+      );
+
+      setMessage(
+        "Record deactivated successfully.",
+      );
+
+      await load();
+
+    } catch (err: any) {
+
+      setError(
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Unable to remove record.",
+      );
+
+    } finally {
+
+      setSaving(false);
+    }
+  }
+
+  async function save(
+    event: React.FormEvent,
+  ) {
+
+    event.preventDefault();
+
+    setSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+
+      let payload: Record<string, unknown>;
+
+      if (tab === "groups") {
+
+        payload = {
+          id: form.id || undefined,
+
+          grade_name:
+            form.grade_name.trim(),
+
+          grade_code:
+            form.grade_code
+              .trim()
+              .toUpperCase(),
+
+          stream_name:
+            form.stream_name.trim(),
+
+          stream_code:
+            form.stream_code
+              .trim()
+              .toUpperCase(),
+
+          name:
+            form.name.trim(),
+
+          code:
+            form.code
+              .trim()
+              .toUpperCase(),
+
+          learner_count:
+            Number(form.learner_count),
+
+          is_active:
+            form.is_active,
+        };
+
+      } else if (tab === "teachers") {
+
+        payload = {
+          id: form.id || undefined,
+
+          employee_code:
+            form.employee_code
+              .trim()
+              .toUpperCase(),
+
+          first_name:
+            form.first_name.trim(),
+
+          last_name:
+            form.last_name.trim(),
+
+          is_active:
+            form.is_active,
+        };
+
+      } else if (tab === "subjects") {
+
+        payload = {
+          id: form.id || undefined,
+
+          code:
+            form.code
+              .trim()
+              .toUpperCase(),
+
+          name:
+            form.name.trim(),
+
+          is_active:
+            form.is_active,
+        };
+
+      } else {
+
+        payload = {
+          id: form.id || undefined,
+
+          code:
+            form.code
+              .trim()
+              .toUpperCase(),
+
+          name:
+            form.name.trim(),
+
+          capacity:
+            Number(form.capacity),
+
+          is_active:
+            form.is_active,
+        };
+      }
+
+      const response = editingId
+        ? await api.patch(
+            endpoints[tab],
+            payload,
+          )
+        : await api.post(
+            endpoints[tab],
+            payload,
+          );
+
+      if (
+        response.status >= 200 &&
+        response.status < 300
+      ) {
+
+        setMessage(
+          editingId
+            ? "Record updated successfully."
+            : "Record added successfully.",
+        );
+
+        resetForm();
+
+        await load();
+      }
+
+    } catch (err: any) {
+
+      setError(
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Unable to save record.",
+      );
+
+    } finally {
+
+      setSaving(false);
+    }
+  }
+
+  return (
+    <main
+      style={{
+        minHeight: "100%",
+        background: "#f4f7fb",
+        padding: 24,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 1500,
+          margin: "0 auto",
+        }}
+      >
+
+        <div
+          style={{
+            marginBottom: 20,
+          }}
+        >
+          <h1
+            style={{
+              margin: 0,
+              color: "#17365d",
+              fontSize: 25,
+            }}
+          >
+            Academics Management
+          </h1>
+
+          <p
+            style={{
+              margin:
+                "6px 0 0",
+              color: "#64748b",
+              fontSize: 13,
+            }}
+          >
+            Manage the academic master data used
+            by SmartTimetable Pro without changing
+            timetable or solver business logic.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "minmax(0, 1fr) 350px",
+            gap: 20,
+            alignItems: "start",
+          }}
+        >
+
+          <section
+            style={{
+              background: "#fff",
+              border:
+                "1px solid #dbe2ec",
+              borderRadius: 12,
+              overflow: "hidden",
+            }}
+          >
+
+            <div
+              style={{
+                display: "flex",
+                borderBottom:
+                  "1px solid #e5eaf1",
+                padding: "0 12px",
+              }}
+            >
+
+              {tabs.map(
+                (item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() =>
+                      changeTab(
+                        item.key,
+                      )
+                    }
+                    style={{
+                      border: 0,
+                      background:
+                        "transparent",
+                      padding:
+                        "14px 16px",
+                      cursor:
+                        "pointer",
+                      fontWeight:
+                        item.key === tab
+                          ? 700
+                          : 500,
+                      color:
+                        item.key === tab
+                          ? "#2459a6"
+                          : "#64748b",
+                      borderBottom:
+                        item.key === tab
+                          ? "2px solid #2459a6"
+                          : "2px solid transparent",
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ),
+              )}
+
+            </div>
+
+            <div
+              style={{
+                padding: 18,
+              }}
+            >
+
+              <h2
+                style={{
+                  margin:
+                    "0 0 14px",
+                  fontSize: 17,
+                  color: "#17365d",
+                }}
+              >
+                {title}
+              </h2>
+
+              {loading ? (
+
+                <div
+                  style={{
+                    padding: 30,
+                    color: "#64748b",
+                  }}
+                >
+                  Loading...
+                </div>
+
+              ) : (
+
+                <div
+                  style={{
+                    overflowX:
+                      "auto",
+                  }}
+                >
+
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse:
+                        "collapse",
+                      fontSize: 13,
+                    }}
+                  >
+
+                    <thead>
+                      <tr
+                        style={{
+                          background:
+                            "#f8fafc",
+                        }}
+                      >
+
+                        {tab === "groups" && (
+                          <>
+                            <th style={th}>
+                              Code
+                            </th>
+
+                            <th style={th}>
+                              Teaching Group
+                            </th>
+
+                            <th style={th}>
+                              Grade / Stream
+                            </th>
+
+                            <th style={th}>
+                              Learners
+                            </th>
+                          </>
+                        )}
+
+                        {tab === "teachers" && (
+                          <>
+                            <th style={th}>
+                              Code
+                            </th>
+
+                            <th style={th}>
+                              Teacher
+                            </th>
+                          </>
+                        )}
+
+                        {tab === "subjects" && (
+                          <>
+                            <th style={th}>
+                              Code
+                            </th>
+
+                            <th style={th}>
+                              Subject
+                            </th>
+                          </>
+                        )}
+
+                        {tab === "rooms" && (
+                          <>
+                            <th style={th}>
+                              Code
+                            </th>
+
+                            <th style={th}>
+                              Room
+                            </th>
+
+                            <th style={th}>
+                              Capacity
+                            </th>
+                          </>
+                        )}
+
+                        <th style={th}>
+                          Status
+                        </th>
+
+                        <th style={th}>
+                          Actions
+                        </th>
+
+                      </tr>
+                    </thead>
+
+                    <tbody>
+
+                      {rows.map(
+                        (item) => (
+                          <tr key={item.id}>
+
+                            {tab === "groups" && (
+                              <>
+                                <td style={td}>
+                                  <strong>
+                                    {item.code}
+                                  </strong>
+                                </td>
+
+                                <td style={td}>
+                                  {item.name}
+                                </td>
+
+                                <td style={td}>
+                                  {item.grade ??
+                                    "â€”"}
+
+                                  <div
+                                    style={{
+                                      color:
+                                        "#77849a",
+                                    }}
+                                  >
+                                    {item.stream ??
+                                      "â€”"}
+                                  </div>
+                                </td>
+
+                                <td style={td}>
+                                  {item.learner_count ??
+                                    "â€”"}
+                                </td>
+                              </>
+                            )}
+
+                            {tab === "teachers" && (
+                              <>
+                                <td style={td}>
+                                  <strong>
+                                    {
+                                      item.employee_code
+                                    }
+                                  </strong>
+                                </td>
+
+                                <td style={td}>
+                                  {
+                                    item.first_name
+                                  }{" "}
+                                  {
+                                    item.last_name
+                                  }
+                                </td>
+                              </>
+                            )}
+
+                            {tab === "subjects" && (
+                              <>
+                                <td style={td}>
+                                  <strong>
+                                    {item.code}
+                                  </strong>
+                                </td>
+
+                                <td style={td}>
+                                  {item.name}
+                                </td>
+                              </>
+                            )}
+
+                            {tab === "rooms" && (
+                              <>
+                                <td style={td}>
+                                  <strong>
+                                    {item.code}
+                                  </strong>
+                                </td>
+
+                                <td style={td}>
+                                  {item.name}
+                                </td>
+
+                                <td style={td}>
+                                  {item.capacity}
+                                </td>
+                              </>
+                            )}
+
+                            <td style={td}>
+                              {item.is_active
+                                ? "Active"
+                                : "Inactive"}
+                            </td>
+
+                            <td style={td}>
+
+                              <div
+                                style={{
+                                  display:
+                                    "flex",
+                                  gap: 6,
+                                }}
+                              >
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    beginEdit(
+                                      item,
+                                    )
+                                  }
+                                  style={
+                                    smallButton
+                                  }
+                                >
+                                  Edit
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void remove(
+                                      item.id,
+                                    )
+                                  }
+                                  style={{
+                                    ...smallButton,
+                                    color:
+                                      "#b42318",
+                                  }}
+                                >
+                                  Deactivate
+                                </button>
+
+                              </div>
+
+                            </td>
+
+                          </tr>
+                        ),
+                      )}
+
+                      {rows.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            style={{
+                              padding: 35,
+                              textAlign:
+                                "center",
+                              color:
+                                "#77849a",
+                            }}
+                          >
+                            No records found.
+                          </td>
+                        </tr>
+                      )}
+
+                    </tbody>
+
+                  </table>
+
+                </div>
+              )}
+
+            </div>
+
+          </section>
+
+          <form
+            onSubmit={save}
+            style={{
+              background: "#fff",
+              border:
+                "1px solid #dbe2ec",
+              borderRadius: 12,
+              padding: 20,
+              position: "sticky",
+              top: 18,
+            }}
+          >
+
+            <h2
+              style={{
+                margin:
+                  "0 0 4px",
+                fontSize: 17,
+                color: "#17365d",
+              }}
+            >
+              {editingId
+                ? "Edit Record"
+                : `Add ${title}`}
+            </h2>
+
+            <p
+              style={{
+                margin:
+                  "0 0 18px",
+                color: "#64748b",
+                fontSize: 12,
+              }}
+            >
+              Changes are saved to the live
+              academic master-data database.
+            </p>
+
+            {tab === "groups" && (
+              <>
+                <Field
+                  label="Grade"
+                  value={
+                    form.grade_name
+                  }
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      grade_name:
+                        value,
+                    })
+                  }
+                  placeholder="Grade 10"
+                />
+
+                <Field
+                  label="Grade Code"
+                  value={
+                    form.grade_code
+                  }
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      grade_code:
+                        value.toUpperCase(),
+                    })
+                  }
+                  placeholder="G10"
+                />
+
+                <Field
+                  label="Stream"
+                  value={
+                    form.stream_name
+                  }
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      stream_name:
+                        value,
+                    })
+                  }
+                  placeholder="East"
+                />
+
+                <Field
+                  label="Stream Code"
+                  value={
+                    form.stream_code
+                  }
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      stream_code:
+                        value.toUpperCase(),
+                    })
+                  }
+                  placeholder="E"
+                />
+
+                <Field
+                  label="Teaching Group"
+                  value={form.name}
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      name: value,
+                    })
+                  }
+                  placeholder="Grade 10 East"
+                />
+
+                <Field
+                  label="Group Code"
+                  value={form.code}
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      code:
+                        value.toUpperCase(),
+                    })
+                  }
+                  placeholder="G10E"
+                />
+
+                <Field
+                  label="Learners"
+                  value={
+                    form.learner_count
+                  }
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      learner_count:
+                        value,
+                    })
+                  }
+                  type="number"
+                />
+              </>
+            )}
+
+            {tab === "teachers" && (
+              <>
+                <Field
+                  label="Employee Code"
+                  value={
+                    form.employee_code
+                  }
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      employee_code:
+                        value.toUpperCase(),
+                    })
+                  }
+                  placeholder="T021"
+                />
+
+                <Field
+                  label="First Name / Title"
+                  value={
+                    form.first_name
+                  }
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      first_name:
+                        value,
+                    })
+                  }
+                  placeholder="Teacher"
+                />
+
+                <Field
+                  label="Last Name"
+                  value={
+                    form.last_name
+                  }
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      last_name:
+                        value,
+                    })
+                  }
+                  placeholder="Name"
+                />
+              </>
+            )}
+
+            {tab === "subjects" && (
+              <>
+                <Field
+                  label="Subject Code"
+                  value={form.code}
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      code:
+                        value.toUpperCase(),
+                    })
+                  }
+                  placeholder="BIO"
+                />
+
+                <Field
+                  label="Subject Name"
+                  value={form.name}
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      name: value,
+                    })
+                  }
+                  placeholder="Biology"
+                />
+              </>
+            )}
+
+            {tab === "rooms" && (
+              <>
+                <Field
+                  label="Room Code"
+                  value={form.code}
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      code:
+                        value.toUpperCase(),
+                    })
+                  }
+                  placeholder="PHYS-LAB"
+                />
+
+                <Field
+                  label="Room Name"
+                  value={form.name}
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      name: value,
+                    })
+                  }
+                  placeholder="Physics Laboratory"
+                />
+
+                <Field
+                  label="Capacity"
+                  value={form.capacity}
+                  onChange={(value) =>
+                    setForm({
+                      ...form,
+                      capacity: value,
+                    })
+                  }
+                  type="number"
+                />
+              </>
+            )}
+
+            <label
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems:
+                  "center",
+                margin:
+                  "14px 0 18px",
+                fontSize: 13,
+              }}
+            >
+
+              <input
+                type="checkbox"
+                checked={
+                  form.is_active
+                }
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    is_active:
+                      event.target
+                        .checked,
+                  })
+                }
+              />
+
+              Active
+
+            </label>
+
+            {message && (
+              <div
+                style={{
+                  background:
+                    "#ecfdf3",
+                  border:
+                    "1px solid #abefc6",
+                  color:
+                    "#067647",
+                  padding: 10,
+                  borderRadius: 7,
+                  marginBottom: 12,
+                  fontSize: 12,
+                }}
+              >
+                {message}
+              </div>
+            )}
+
+            {error && (
+              <div
+                style={{
+                  background:
+                    "#fef3f2",
+                  border:
+                    "1px solid #fecdca",
+                  color:
+                    "#b42318",
+                  padding: 10,
+                  borderRadius: 7,
+                  marginBottom: 12,
+                  fontSize: 12,
+                  wordBreak:
+                    "break-word",
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+              }}
+            >
+
+              <button
+                type="submit"
+                disabled={saving}
+                style={{
+                  flex: 1,
+                  border: 0,
+                  background:
+                    "#2459a6",
+                  color: "#fff",
+                  borderRadius: 7,
+                  padding:
+                    "10px 14px",
+                  cursor: saving
+                    ? "default"
+                    : "pointer",
+                  fontWeight: 700,
+                }}
+              >
+                {saving
+                  ? "Saving..."
+                  : editingId
+                    ? "Save Changes"
+                    : "Add Record"}
+              </button>
+
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={
+                    resetForm
+                  }
+                  style={
+                    smallButton
+                  }
+                >
+                  Cancel
+                </button>
+              )}
+
+            </div>
+
+          </form>
+
+        </div>
+
+      </div>
+    </main>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+
+  return (
+    <label
+      style={{
+        display: "block",
+        marginBottom: 12,
+        fontSize: 12,
+        fontWeight: 700,
+        color: "#526078",
+      }}
+    >
+
+      {label}
+
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) =>
+          onChange(
+            event.target.value,
+          )
+        }
+        style={{
+          display: "block",
+          width: "100%",
+          boxSizing:
+            "border-box",
+          marginTop: 5,
+          border:
+            "1px solid #cbd5e1",
+          borderRadius: 7,
+          padding:
+            "9px 10px",
+          fontSize: 13,
+          fontWeight: 400,
+        }}
+      />
+
+    </label>
+  );
+}
+
+const th: React.CSSProperties = {
+  textAlign: "left",
+  padding:
+    "10px 12px",
+  borderBottom:
+    "1px solid #e5eaf1",
+  color: "#65748b",
+  fontSize: 11,
+  textTransform:
+    "uppercase",
+  letterSpacing: 0.5,
+  whiteSpace:
+    "nowrap",
+};
+
+const td: React.CSSProperties = {
+  padding:
+    "11px 12px",
+  borderBottom:
+    "1px solid #edf1f6",
+  verticalAlign:
+    "middle",
+};
+
+const smallButton:
+  React.CSSProperties = {
+    border:
+      "1px solid #cbd5e1",
+    background: "#fff",
+    borderRadius: 6,
+    padding:
+      "6px 9px",
+    cursor:
+      "pointer",
+    fontSize: 12,
+  };

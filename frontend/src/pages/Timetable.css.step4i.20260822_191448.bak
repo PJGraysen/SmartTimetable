@@ -1,0 +1,337 @@
+﻿.timetable-page {
+  width: 100%;
+  min-width: 0;
+}
+
+.timetable-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.timetable-toolbar h1 {
+  margin: 0.15rem 0 0.25rem;
+}
+
+.timetable-toolbar p {
+  margin: 0;
+}
+
+.timetable-refresh {
+  flex-shrink: 0;
+}
+
+.timetable-error {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 0.88rem;
+}
+
+.timetable-state {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #64748b;
+  text-align: center;
+}
+
+.timetable-heading-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #dbe2ea;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.timetable-heading-card > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.timetable-heading-card strong {
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.timetable-heading-card span {
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.timetable-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem 0.75rem;
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+.timetable-meta span {
+  white-space: nowrap;
+  letter-spacing: normal;
+}
+
+.timetable-card {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.timetable-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.whole-school-timetable {
+  width: 100%;
+  min-width: 1120px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.68rem;
+}
+
+.whole-school-timetable .day-column {
+  width: 54px;
+}
+
+.whole-school-timetable .period-column {
+  width: 78px;
+}
+
+.whole-school-timetable .special-column {
+  width: 82px;
+}
+
+.whole-school-timetable th,
+.whole-school-timetable td {
+  border: 1px solid #cbd5e1;
+}
+
+.days-header {
+  width: 54px;
+  padding: 0.45rem 0.2rem;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.timetable-header {
+  height: 52px;
+  padding: 0.25rem 0.15rem;
+  background: #e2e8f0;
+  color: #0f172a;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.timetable-header span {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.timetable-header small {
+  display: block;
+  margin-top: 0.2rem;
+  color: #475569;
+  font-size: 0.55rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.timetable-header.break,
+.timetable-header.activity {
+  background: #f1f5f9;
+}
+
+.day-label {
+  width: 54px;
+  padding: 0.25rem;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.lesson-cell {
+  height: 70px;
+  padding: 0.18rem;
+  background: #ffffff;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.lesson-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.14rem;
+}
+
+.lesson-entry {
+  min-width: 0;
+  padding: 0.18rem 0.12rem;
+  border-radius: 4px;
+  background: #f8fafc;
+  line-height: 1.05;
+}
+
+.lesson-entry strong {
+  display: block;
+  color: #0f172a;
+  font-size: 0.65rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lesson-entry small {
+  display: block;
+  margin-top: 0.12rem;
+  color: #64748b;
+  font-size: 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.empty-slot {
+  color: #cbd5e1;
+  font-size: 0.72rem;
+}
+
+.special-cell {
+  padding: 0.25rem 0.12rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.special-cell.break {
+  background: #fffbeb;
+}
+
+.special-cell.activity {
+  background: #f1f5f9;
+}
+
+.special-cell strong {
+  display: block;
+  color: #334155;
+  font-size: 0.59rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.special-cell small {
+  display: block;
+  margin-top: 0.22rem;
+  color: #64748b;
+  font-size: 0.5rem;
+  font-weight: 600;
+}
+
+.timetable-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.75rem;
+  border-top: 1px solid #cbd5e1;
+  color: #64748b;
+  font-size: 0.68rem;
+}
+
+.timetable-legend strong {
+  color: #334155;
+}
+
+@media (max-width: 900px) {
+  .timetable-toolbar,
+  .timetable-heading-card {
+    flex-direction: column;
+  }
+
+  .timetable-meta {
+    justify-content: flex-start;
+  }
+
+  .timetable-legend {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}
+
+@media print {
+  .timetable-toolbar,
+  .timetable-error,
+  .timetable-legend {
+    display: none !important;
+  }
+
+  .timetable-heading-card {
+    margin-bottom: 0.35rem;
+    padding: 0.3rem 0.5rem;
+    border: 0;
+  }
+
+  .timetable-card {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .timetable-scroll {
+    overflow: visible;
+  }
+
+  .whole-school-timetable {
+    min-width: 0;
+    width: 100%;
+    font-size: 0.56rem;
+  }
+
+  .whole-school-timetable .period-column {
+    width: auto;
+  }
+
+  .whole-school-timetable .special-column {
+    width: auto;
+  }
+
+  .lesson-cell {
+    height: 54px;
+  }
+
+  @page {
+    size: landscape;
+    margin: 8mm;
+  }
+}

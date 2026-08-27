@@ -26,10 +26,9 @@ from apps.scheduling.engine.solver.variables import AssignmentVariable
 # ------------------------------------------------------------------
 
 GRADE10_SYNCHRONIZED_BLOCKS: tuple[frozenset[str], ...] = (
-    frozenset({"AGR", "BUS"}),
-    frozenset({"BIO", "MUS", "FRE"}),
-    frozenset({"CHEM", "PHY", "LITENG"}),
-    frozenset({"GEO", "HISTGOV", "COMP"}),
+    frozenset({"BIO", "MUSIC", "FRE"}),
+    frozenset({"CHEM", "PHY", "LIT"}),
+    frozenset({"GEO", "HIS", "COMP"}),
     frozenset({"EC", "CM", "EM"}),
 )
 
@@ -73,10 +72,9 @@ def _synchronized_block_for_subject(
 # ------------------------------------------------------------------
 
 GRADE10_OPTION_BLOCKS: tuple[frozenset[str], ...] = (
-    frozenset({"AGR", "BUS"}),
-    frozenset({"BIO", "MUS", "FRE"}),
-    frozenset({"CHEM", "PHY", "LITENG"}),
-    frozenset({"GEO", "HISTGOV", "COMP"}),
+    frozenset({"BIO", "MUSIC", "FRE"}),
+    frozenset({"CHEM", "PHY", "LIT"}),
+    frozenset({"GEO", "HIS", "COMP"}),
 )
 
 
@@ -115,10 +113,9 @@ def option_block_for_subject(
 # ============================================================================
 
 SIMULTANEOUS_SUBJECT_GROUPS: tuple[frozenset[str], ...] = (
-    frozenset({"AGR", "BUS"}),
-    frozenset({"BIO", "MUS", "FRE"}),
-    frozenset({"CHEM", "PHY", "LITENG"}),
-    frozenset({"GEO", "HISTGOV", "COMP"}),
+    frozenset({"BIO", "MUSIC", "FRE"}),
+    frozenset({"CHEM", "PHY", "LIT"}),
+    frozenset({"GEO", "HIS", "COMP"}),
 )
 
 
@@ -431,6 +428,17 @@ class SolverModelBuilder:
                     f"{required_count}."
                 )
 
+            if not requirement_variables:
+                if required_count != 0:
+                    raise ValueError(
+                        "Active lesson requirement "
+                        f"{requirement.id} requires "
+                        f"{required_count} lesson(s), but the solver "
+                        "created no assignment variables for it."
+                    )
+
+                continue
+
             model.add(
                 sum(requirement_variables) == required_count
             )
@@ -658,7 +666,7 @@ class SolverModelBuilder:
 
             option_variables[
                 (
-                    variable.instructional_group_id,
+                    variable.teaching_group_id,
                     variable.day,
                     variable.period_id,
                     block,
@@ -702,7 +710,7 @@ class SolverModelBuilder:
             ] = defaultdict(list)
 
             for variable in variables:
-                if variable.instructional_group_id != teaching_group_id:
+                if variable.teaching_group_id != teaching_group_id:
                     continue
 
                 if variable.day != day:
@@ -1136,4 +1144,3 @@ class SolverModelBuilder:
                 model.add(
                     variable.variable == 0
                 )
-

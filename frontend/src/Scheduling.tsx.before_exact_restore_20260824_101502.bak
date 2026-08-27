@@ -1,0 +1,5 @@
+﻿import Timetable from "./pages/Timetable";
+
+export default function Scheduling() {
+  return <Timetable />;
+}

@@ -27,6 +27,7 @@ class PersistenceResult:
     scheduling_run: SchedulingRun
     entries_created: int
 
+
 class TimetablePersistenceService:
     """
     Persist a successful solver result as a timetable version.
@@ -77,21 +78,11 @@ class TimetablePersistenceService:
 
         # --------------------------------------------------------------
         # Create the timetable version.
-        #
-        # _resolve_version_details() has already guaranteed that both
-        # the name and number are unique within the term.
         # --------------------------------------------------------------
-
-        TimetableVersion.objects.filter(
-            term=scheduling_run.term,
-            is_active=True,
-        ).update(
-            is_active=False,
-        )
 
         timetable_version = TimetableVersion.objects.create(
             term=scheduling_run.term,
-            name=version_name,
+            name=version_name.strip(),
             version_number=version_number,
             is_published=False,
             is_active=True,
@@ -408,11 +399,7 @@ class TimetablePersistenceService:
         return [
             TimetableEntry(
                 timetable_version=timetable_version,
-                day=(
-                    assignment.day.value
-                    if hasattr(assignment.day, "value")
-                    else str(assignment.day)
-                ),
+                day=assignment.day.value,
                 period_id=assignment.period_id,
                 instructional_group_id=assignment.instructional_group_id,
                 teacher_id=assignment.teacher_id,
@@ -520,6 +507,3 @@ class TimetablePersistenceService:
             "Unsupported solver status for persistence: "
             f"{status!r}"
         )
-
-
-

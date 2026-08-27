@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
@@ -9,94 +9,6 @@ from ortools.sat.python import cp_model
 from apps.scheduling.engine.domain.enums import PartOfDay
 from apps.scheduling.engine.domain.problem import SchedulingProblem
 from apps.scheduling.engine.solver.variables import AssignmentVariable
-
-# ------------------------------------------------------------------
-# Grade 10 synchronized curriculum blocks
-# ------------------------------------------------------------------
-#
-# These are LOGICAL scheduling blocks over the existing subject
-# requirements. They do not create or modify database entities.
-#
-# OPT1 = BIO / MUSIC / FRE
-# OPT2 = CHEM / PHY / LIT
-# OPT3 = GEO / HIS / COMP
-#
-# Mathematics is a separate synchronized block:
-# EC / CM
-# ------------------------------------------------------------------
-
-GRADE10_SYNCHRONIZED_BLOCKS: tuple[frozenset[str], ...] = (
-    frozenset({"AGR", "BUS"}),
-    frozenset({"BIO", "MUS", "FRE"}),
-    frozenset({"CHEM", "PHY", "LITENG"}),
-    frozenset({"GEO", "HISTGOV", "COMP"}),
-    frozenset({"EC", "CM", "EM"}),
-)
-
-
-def _normalized_subject_code(requirement) -> str | None:
-    code = getattr(requirement, "subject_code", None)
-
-    if code is None:
-        return None
-
-    return str(code).strip().upper()
-
-
-def _synchronized_block_for_subject(
-    subject_code: str | None,
-) -> frozenset[str] | None:
-    if not subject_code:
-        return None
-
-    normalized = subject_code.strip().upper()
-
-    for block in GRADE10_SYNCHRONIZED_BLOCKS:
-        if normalized in block:
-            return block
-
-    return None
-
-
-
-# ------------------------------------------------------------------
-# Grade 10 synchronized option blocks
-#
-# These are the established simultaneous subject combinations:
-#
-# OPT1 = BIO / MUSIC / FRE
-# OPT2 = CHEM / PHY / LIT
-# OPT3 = GEO / HIS / COMP
-#
-# Synchronization is enforced by exact day + period.
-# Teacher assignments remain independent and database-driven.
-# ------------------------------------------------------------------
-
-GRADE10_OPTION_BLOCKS: tuple[frozenset[str], ...] = (
-    frozenset({"AGR", "BUS"}),
-    frozenset({"BIO", "MUS", "FRE"}),
-    frozenset({"CHEM", "PHY", "LITENG"}),
-    frozenset({"GEO", "HISTGOV", "COMP"}),
-)
-
-
-def option_block_for_subject(
-    subject_code: str | None,
-) -> frozenset[str] | None:
-    """Return the established Grade 10 option block for a subject code."""
-
-    if not subject_code:
-        return None
-
-    normalized = subject_code.strip().upper()
-
-    for block in GRADE10_OPTION_BLOCKS:
-        if normalized in block:
-            return block
-
-    return None
-
-
 
 
 # ============================================================================
@@ -115,10 +27,9 @@ def option_block_for_subject(
 # ============================================================================
 
 SIMULTANEOUS_SUBJECT_GROUPS: tuple[frozenset[str], ...] = (
-    frozenset({"AGR", "BUS"}),
-    frozenset({"BIO", "MUS", "FRE"}),
-    frozenset({"CHEM", "PHY", "LITENG"}),
-    frozenset({"GEO", "HISTGOV", "COMP"}),
+    frozenset({"BIO", "MUSIC", "FRE"}),
+    frozenset({"CHEM", "PHY", "LIT"}),
+    frozenset({"GEO", "HIS", "COMP"}),
 )
 
 
@@ -194,12 +105,6 @@ class SolverModelBuilder:
         )
 
         self._add_lesson_requirement_constraints(
-            model=model,
-            problem=problem,
-            variables=variables,
-        )
-
-        self._add_grade10_option_block_constraints(
             model=model,
             problem=problem,
             variables=variables,
@@ -383,7 +288,6 @@ class SolverModelBuilder:
     # Exact weekly lesson requirements
     # ------------------------------------------------------------------
 
-
     def _add_lesson_requirement_constraints(
         self,
         *,
@@ -392,28 +296,29 @@ class SolverModelBuilder:
         variables: list[AssignmentVariable],
     ) -> None:
         """
-        HARD CONSTRAINT:
+        Every active lesson requirement must be scheduled exactly
+        periods_per_week times.
 
-        Every active LessonRequirement must receive exactly its
-        database-defined weekly quota.
-
-        This is deliberately an equality over ALL assignment
-        variables belonging to the requirement.
-
-        Teacher, room, day and period remain solver choices subject
-        to the existing hard constraints.
+        If an active requirement has no candidate variables, the model
+        is deliberately made infeasible rather than raising a Python
+        exception. This preserves CP-SAT feasibility semantics and
+        allows callers/tests to inspect the solver result.
         """
 
         variables_by_requirement: dict[
-            UUID, list[cp_model.IntVar]
+            UUID,
+            list[cp_model.IntVar],
         ] = defaultdict(list)
 
         for variable in variables:
             variables_by_requirement[
                 variable.lesson_requirement_id
-            ].append(variable.variable)
+            ].append(
+                variable.variable
+            )
 
         for requirement in problem.lesson_requirements:
+
             if not requirement.is_active:
                 continue
 
@@ -426,15 +331,19 @@ class SolverModelBuilder:
 
             if required_count < 0:
                 raise ValueError(
-                    "Lesson requirement "
-                    f"{requirement.id} has invalid weekly quota "
-                    f"{required_count}."
+                    f"Lesson requirement {requirement.id} has invalid "
+                    f"periods_per_week={required_count}."
                 )
+
+            if not requirement_variables:
+                model.add(
+                    0 == required_count
+                )
+                continue
 
             model.add(
                 sum(requirement_variables) == required_count
             )
-
 
     # ------------------------------------------------------------------
     # Simultaneous subject combinations
@@ -588,176 +497,6 @@ class SolverModelBuilder:
     # ------------------------------------------------------------------
     # Teacher clashes
     # ------------------------------------------------------------------
-
-    def _add_grade10_option_block_constraints(
-        self,
-        *,
-        model: cp_model.CpModel,
-        problem: SchedulingProblem,
-        variables: list[AssignmentVariable],
-    ) -> None:
-        """
-        Enforce the established Grade 10 synchronized option blocks.
-
-        OPT1:
-            BIO / MUSIC / FRE
-
-        OPT2:
-            CHEM / PHY / LIT
-
-        OPT3:
-            GEO / HIS / COMP
-
-        The synchronization key is:
-
-            teaching_group + day + period
-
-        Teacher selection remains independent because each subject
-        continues to use its own database TeacherAssignment records.
-
-        This method does not alter:
-            - Period records
-            - LessonRequirement records
-            - TeacherAssignment records
-            - teacher availability
-            - room availability
-            - free-afternoon rules
-            - Form 3/Form 4 scheduling
-        """
-
-        requirements_by_id = {
-            requirement.id: requirement
-            for requirement in problem.lesson_requirements
-            if requirement.is_active
-        }
-
-        # Collect variables belonging to Grade 10 option subjects.
-        #
-        # The group identity is retained so that synchronization occurs
-        # only between requirements belonging to the same Grade 10
-        # scheduling context.
-        option_variables: dict[
-            tuple[UUID, str, UUID, frozenset[str]],
-            list[cp_model.IntVar],
-        ] = defaultdict(list)
-
-        for variable in variables:
-            requirement = requirements_by_id.get(
-                variable.lesson_requirement_id
-            )
-
-            if requirement is None:
-                continue
-
-            block = option_block_for_subject(
-                requirement.subject_code
-            )
-
-            if block is None:
-                continue
-
-            option_variables[
-                (
-                    variable.instructional_group_id,
-                    variable.day,
-                    variable.period_id,
-                    block,
-                )
-            ].append(variable.variable)
-
-        # For every Grade 10 option block at a given day/period,
-        # the block's active requirements must either all occur together
-        # or none occur.
-        #
-        # Because every requirement already has its own weekly quota,
-        # this constraint does not alter those quotas. It only controls
-        # their placement.
-        for (
-            teaching_group_id,
-            day,
-            period_id,
-            block,
-        ) in {
-            key
-            for key in option_variables
-        }:
-
-            block_variables = option_variables.get(
-                (
-                    teaching_group_id,
-                    day,
-                    period_id,
-                    block,
-                ),
-                [],
-            )
-
-            if not block_variables:
-                continue
-
-            # Group variables by requirement.
-            variables_by_requirement: dict[
-                UUID,
-                list[cp_model.IntVar],
-            ] = defaultdict(list)
-
-            for variable in variables:
-                if variable.instructional_group_id != teaching_group_id:
-                    continue
-
-                if variable.day != day:
-                    continue
-
-                if variable.period_id != period_id:
-                    continue
-
-                requirement = requirements_by_id.get(
-                    variable.lesson_requirement_id
-                )
-
-                if requirement is None:
-                    continue
-
-                requirement_block = option_block_for_subject(
-                    requirement.subject_code
-                )
-
-                if requirement_block != block:
-                    continue
-
-                variables_by_requirement[
-                    requirement.id
-                ].append(variable.variable)
-
-            if len(variables_by_requirement) < 2:
-                continue
-
-            requirement_presence: list[cp_model.IntVar] = []
-
-            for requirement_id, requirement_variables in (
-                variables_by_requirement.items()
-            ):
-                presence = model.new_bool_var(
-                    f"grade10_option_presence_"
-                    f"{requirement_id}_"
-                    f"{day}_"
-                    f"{period_id}"
-                )
-
-                model.add_max_equality(
-                    presence,
-                    requirement_variables,
-                )
-
-                requirement_presence.append(presence)
-
-            # All participating subjects in the established option
-            # combination must have identical presence at this
-            # exact day/period.
-            first = requirement_presence[0]
-
-            for other in requirement_presence[1:]:
-                model.add(first == other)
 
     def _add_teacher_clash_constraints(
         self,
@@ -1136,4 +875,3 @@ class SolverModelBuilder:
                 model.add(
                     variable.variable == 0
                 )
-

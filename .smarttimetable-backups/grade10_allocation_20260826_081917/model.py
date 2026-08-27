@@ -11,55 +11,6 @@ from apps.scheduling.engine.domain.problem import SchedulingProblem
 from apps.scheduling.engine.solver.variables import AssignmentVariable
 
 # ------------------------------------------------------------------
-# Grade 10 synchronized curriculum blocks
-# ------------------------------------------------------------------
-#
-# These are LOGICAL scheduling blocks over the existing subject
-# requirements. They do not create or modify database entities.
-#
-# OPT1 = BIO / MUSIC / FRE
-# OPT2 = CHEM / PHY / LIT
-# OPT3 = GEO / HIS / COMP
-#
-# Mathematics is a separate synchronized block:
-# EC / CM
-# ------------------------------------------------------------------
-
-GRADE10_SYNCHRONIZED_BLOCKS: tuple[frozenset[str], ...] = (
-    frozenset({"AGR", "BUS"}),
-    frozenset({"BIO", "MUS", "FRE"}),
-    frozenset({"CHEM", "PHY", "LITENG"}),
-    frozenset({"GEO", "HISTGOV", "COMP"}),
-    frozenset({"EC", "CM", "EM"}),
-)
-
-
-def _normalized_subject_code(requirement) -> str | None:
-    code = getattr(requirement, "subject_code", None)
-
-    if code is None:
-        return None
-
-    return str(code).strip().upper()
-
-
-def _synchronized_block_for_subject(
-    subject_code: str | None,
-) -> frozenset[str] | None:
-    if not subject_code:
-        return None
-
-    normalized = subject_code.strip().upper()
-
-    for block in GRADE10_SYNCHRONIZED_BLOCKS:
-        if normalized in block:
-            return block
-
-    return None
-
-
-
-# ------------------------------------------------------------------
 # Grade 10 synchronized option blocks
 #
 # These are the established simultaneous subject combinations:
@@ -73,10 +24,9 @@ def _synchronized_block_for_subject(
 # ------------------------------------------------------------------
 
 GRADE10_OPTION_BLOCKS: tuple[frozenset[str], ...] = (
-    frozenset({"AGR", "BUS"}),
-    frozenset({"BIO", "MUS", "FRE"}),
-    frozenset({"CHEM", "PHY", "LITENG"}),
-    frozenset({"GEO", "HISTGOV", "COMP"}),
+    frozenset({"BIO", "MUSIC", "FRE"}),
+    frozenset({"CHEM", "PHY", "LIT"}),
+    frozenset({"GEO", "HIS", "COMP"}),
 )
 
 
@@ -115,10 +65,9 @@ def option_block_for_subject(
 # ============================================================================
 
 SIMULTANEOUS_SUBJECT_GROUPS: tuple[frozenset[str], ...] = (
-    frozenset({"AGR", "BUS"}),
-    frozenset({"BIO", "MUS", "FRE"}),
-    frozenset({"CHEM", "PHY", "LITENG"}),
-    frozenset({"GEO", "HISTGOV", "COMP"}),
+    frozenset({"BIO", "MUSIC", "FRE"}),
+    frozenset({"CHEM", "PHY", "LIT"}),
+    frozenset({"GEO", "HIS", "COMP"}),
 )
 
 
@@ -383,7 +332,6 @@ class SolverModelBuilder:
     # Exact weekly lesson requirements
     # ------------------------------------------------------------------
 
-
     def _add_lesson_requirement_constraints(
         self,
         *,
@@ -392,28 +340,29 @@ class SolverModelBuilder:
         variables: list[AssignmentVariable],
     ) -> None:
         """
-        HARD CONSTRAINT:
+        Every active lesson requirement must be scheduled exactly
+        periods_per_week times.
 
-        Every active LessonRequirement must receive exactly its
-        database-defined weekly quota.
-
-        This is deliberately an equality over ALL assignment
-        variables belonging to the requirement.
-
-        Teacher, room, day and period remain solver choices subject
-        to the existing hard constraints.
+        If an active requirement has no candidate variables, the model
+        is deliberately made infeasible rather than raising a Python
+        exception. This preserves CP-SAT feasibility semantics and
+        allows callers/tests to inspect the solver result.
         """
 
         variables_by_requirement: dict[
-            UUID, list[cp_model.IntVar]
+            UUID,
+            list[cp_model.IntVar],
         ] = defaultdict(list)
 
         for variable in variables:
             variables_by_requirement[
                 variable.lesson_requirement_id
-            ].append(variable.variable)
+            ].append(
+                variable.variable
+            )
 
         for requirement in problem.lesson_requirements:
+
             if not requirement.is_active:
                 continue
 
@@ -426,15 +375,19 @@ class SolverModelBuilder:
 
             if required_count < 0:
                 raise ValueError(
-                    "Lesson requirement "
-                    f"{requirement.id} has invalid weekly quota "
-                    f"{required_count}."
+                    f"Lesson requirement {requirement.id} has invalid "
+                    f"periods_per_week={required_count}."
                 )
+
+            if not requirement_variables:
+                model.add(
+                    0 == required_count
+                )
+                continue
 
             model.add(
                 sum(requirement_variables) == required_count
             )
-
 
     # ------------------------------------------------------------------
     # Simultaneous subject combinations
@@ -658,7 +611,7 @@ class SolverModelBuilder:
 
             option_variables[
                 (
-                    variable.instructional_group_id,
+                    variable.teaching_group_id,
                     variable.day,
                     variable.period_id,
                     block,
@@ -702,7 +655,7 @@ class SolverModelBuilder:
             ] = defaultdict(list)
 
             for variable in variables:
-                if variable.instructional_group_id != teaching_group_id:
+                if variable.teaching_group_id != teaching_group_id:
                     continue
 
                 if variable.day != day:
@@ -1136,4 +1089,3 @@ class SolverModelBuilder:
                 model.add(
                     variable.variable == 0
                 )
-

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
@@ -20,12 +20,59 @@ from apps.scheduling.models import (
 
 
 @dataclass(frozen=True, slots=True)
+
+def _get_unique_version_name(*, term, base_name: str) -> str:
+    """
+    Return a TimetableVersion name that is unique within a term.
+
+    Examples:
+        Generated Timetable
+        Generated Timetable 2
+        Generated Timetable 3
+
+    Historical versions are never overwritten or deleted.
+    """
+    if not base_name:
+        base_name = "Generated Timetable"
+
+    existing_names = set(
+        TimetableVersion.objects
+        .filter(term=term)
+        .values_list("name", flat=True)
+    )
+
+    if base_name not in existing_names:
+        return base_name
+
+    suffix = 2
+
+    while f"{base_name} {suffix}" in existing_names:
+        suffix += 1
+
+    return f"{base_name} {suffix}"
+
+
+def _get_next_version_number(*, term, requested_number: int) -> int:
+    """
+    Return a version number unique within a term.
+    """
+    existing_numbers = set(
+        TimetableVersion.objects
+        .filter(term=term)
+        .values_list("version_number", flat=True)
+    )
+
+    if requested_number not in existing_numbers:
+        return requested_number
+
+    return max(existing_numbers, default=0) + 1
 class PersistenceResult:
     """Result of persisting a generated timetable."""
 
     timetable_version: TimetableVersion
     scheduling_run: SchedulingRun
     entries_created: int
+
 
 class TimetablePersistenceService:
     """
@@ -61,14 +108,14 @@ class TimetablePersistenceService:
         self._validate_scheduling_run(scheduling_run)
 
         self._validate_version_details(
-            version_name=version_name,
+            version_name=unique_version_name,
             version_number=version_number,
         )
 
         version_number, version_name = self._resolve_version_details(
             term=scheduling_run.term,
             requested_version_number=version_number,
-            requested_version_name=version_name,
+            requested_version_name=unique_version_name,
         )
 
         assignments = tuple(solver_result.assignments)
@@ -77,21 +124,20 @@ class TimetablePersistenceService:
 
         # --------------------------------------------------------------
         # Create the timetable version.
-        #
-        # _resolve_version_details() has already guaranteed that both
-        # the name and number are unique within the term.
         # --------------------------------------------------------------
 
-        TimetableVersion.objects.filter(
+        unique_version_name = _get_unique_version_name(
             term=scheduling_run.term,
-            is_active=True,
-        ).update(
-            is_active=False,
+            base_name=version_name,
         )
 
+        version_number = _get_next_version_number(
+            term=scheduling_run.term,
+            requested_number=version_number,
+        )
         timetable_version = TimetableVersion.objects.create(
             term=scheduling_run.term,
-            name=version_name,
+            name=unique_version_name.strip(),
             version_number=version_number,
             is_published=False,
             is_active=True,
@@ -408,11 +454,7 @@ class TimetablePersistenceService:
         return [
             TimetableEntry(
                 timetable_version=timetable_version,
-                day=(
-                    assignment.day.value
-                    if hasattr(assignment.day, "value")
-                    else str(assignment.day)
-                ),
+                day=assignment.day.value,
                 period_id=assignment.period_id,
                 instructional_group_id=assignment.instructional_group_id,
                 teacher_id=assignment.teacher_id,
@@ -520,6 +562,5 @@ class TimetablePersistenceService:
             "Unsupported solver status for persistence: "
             f"{status!r}"
         )
-
 
 

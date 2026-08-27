@@ -1,0 +1,53 @@
+"""
+URL configuration for SmartTimetable Pro.
+"""
+
+from django.contrib import admin
+from django.urls import include, path
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
+)
+
+
+urlpatterns = [
+    path("admin/", admin.site.urls),
+
+    # API documentation
+    path(
+        "api/schema/",
+        SpectacularAPIView.as_view(),
+        name="schema",
+    ),
+    path(
+        "api/docs/",
+        SpectacularSwaggerView.as_view(
+            url_name="schema",
+        ),
+        name="swagger-ui",
+    ),
+    path(
+        "api/redoc/",
+        SpectacularRedocView.as_view(
+            url_name="schema",
+        ),
+        name="redoc",
+    ),
+    # Core API
+    path(
+        "api/core/",
+        include("apps.core.api.urls"),
+    ),
+
+    # Scheduling API
+    path(
+        "api/scheduling/",
+        include("apps.scheduling.api.urls"),
+    ),
+            # Academics API
+    path(
+        "api/academics/",
+        include("apps.academics.api.urls"),
+    ),
+]

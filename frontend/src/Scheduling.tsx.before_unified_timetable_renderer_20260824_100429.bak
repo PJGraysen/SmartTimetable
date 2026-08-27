@@ -1,0 +1,932 @@
+﻿import { useEffect, useMemo, useState } from "react";
+import {
+    AlertCircle,
+    CheckCircle2,
+    Clock,
+    PlayCircle,
+    RefreshCw,
+} from "lucide-react";
+
+import {
+    createSchedulingRun,
+    executeSchedulingRun,
+    getSchedulingRunResults,
+    getSchedulingRuns,
+    type SchedulingRun,
+} from "./services/scheduling";
+
+import {
+    getAcademicTerms,
+    type AcademicTerm,
+} from "./services/core";
+
+type TimetableEntry = {
+    id: string;
+    day: string;
+    day_display?: string;
+
+    period: string;
+    period_number: number;
+    period_name: string;
+    period_start_time: string;
+    period_end_time: string;
+
+    teaching_group: string;
+    teaching_group_name: string;
+
+    teacher: string;
+    teacher_name: string;
+
+    lesson_requirement: string;
+    lesson_requirement_name: string;
+
+    room?: string | null;
+    room_name?: string | null;
+};
+
+type TimetableVersion = {
+    id: string;
+    term: string;
+    term_name: string;
+    name: string;
+    version_number: number;
+    is_published: boolean;
+    is_active: boolean;
+    entries_count: number;
+    entries: TimetableEntry[];
+};
+
+type SchedulingRunResult = {
+    id: string;
+    term: string;
+    timetable_version: TimetableVersion | null;
+    status: string;
+    solver_status: string | null;
+    completed_at: string | null;
+    error_message: string;
+};
+
+const DAYS = [
+    { key: "MON", label: "Monday" },
+    { key: "TUE", label: "Tuesday" },
+    { key: "WED", label: "Wednesday" },
+    { key: "THU", label: "Thur" },
+    { key: "FRI", label: "Friday" },
+];
+
+const PERIODS = Array.from(
+    { length: 15 },
+    (_, index) => index + 1,
+);
+
+function normalizeDay(value: string): string {
+    const day = String(value)
+        .trim()
+        .toUpperCase();
+
+    if (day === "MONDAY") return "MON";
+    if (day === "TUESDAY") return "TUE";
+    if (day === "WEDNESDAY") return "WED";
+    if (day === "THURSDAY") return "THU";
+    if (day === "FRIDAY") return "FRI";
+
+    return day;
+}
+
+function formatTime(
+    value: string | null | undefined,
+): string {
+    return value
+        ? String(value).slice(0, 5)
+        : "";
+}
+
+function subjectCode(
+    entry: TimetableEntry,
+): string {
+    return (
+        String(
+            entry.lesson_requirement_name ??
+                "",
+        ).trim() || "—"
+    );
+}
+
+function teacherCode(
+    entry: TimetableEntry,
+): string {
+    return (
+        String(
+            entry.teacher_name ?? "",
+        ).trim() || "—"
+    );
+}
+
+function groupName(
+    entry: TimetableEntry,
+): string {
+    return (
+        String(
+            entry.teaching_group_name ?? "",
+        ).trim() || "—"
+    );
+}
+
+function periodName(
+    period: number,
+    entries: TimetableEntry[],
+): string {
+    return (
+        entries.find(
+            (entry) =>
+                Number(
+                    entry.period_number,
+                ) === period,
+        )?.period_name ??
+        `Period ${period}`
+    );
+}
+
+function periodTime(
+    period: number,
+    entries: TimetableEntry[],
+): string {
+    const entry = entries.find(
+        (item) =>
+            Number(item.period_number) ===
+            period,
+    );
+
+    if (!entry) return "";
+
+    const start = formatTime(
+        entry.period_start_time,
+    );
+
+    const end = formatTime(
+        entry.period_end_time,
+    );
+
+    return start && end
+        ? `${start} – ${end}`
+        : "";
+}
+
+function Scheduling() {
+    const [terms, setTerms] =
+        useState<AcademicTerm[]>([]);
+
+    const [selectedTerm, setSelectedTerm] =
+        useState("");
+
+    const [runs, setRuns] =
+        useState<SchedulingRun[]>([]);
+
+    const [result, setResult] =
+        useState<SchedulingRunResult | null>(
+            null,
+        );
+
+    const [loading, setLoading] =
+        useState(true);
+
+    const [generating, setGenerating] =
+        useState(false);
+
+    const [error, setError] =
+        useState("");
+
+    const [message, setMessage] =
+        useState("");
+
+    async function loadData() {
+        setLoading(true);
+        setError("");
+
+        try {
+            const [
+                termsData,
+                runsData,
+            ] = await Promise.all([
+                getAcademicTerms(),
+                getSchedulingRuns(),
+            ]);
+
+            setTerms(termsData);
+            setRuns(runsData);
+
+            const activeTerm =
+                termsData.find(
+                    (term) => term.is_active,
+                );
+
+            if (
+                activeTerm &&
+                !selectedTerm
+            ) {
+                setSelectedTerm(
+                    activeTerm.id,
+                );
+            }
+
+            const completedRuns =
+                runsData
+                    .filter(
+                        (run) =>
+                            run.status.toUpperCase() ===
+                                "COMPLETED" &&
+                            Boolean(
+                                run.timetable_version,
+                            ) &&
+                            Boolean(
+                                run.completed_at,
+                            ),
+                    )
+                    .sort((a, b) => {
+                        const aTime =
+                            a.completed_at
+                                ? new Date(
+                                      a.completed_at,
+                                  ).getTime()
+                                : 0;
+
+                        const bTime =
+                            b.completed_at
+                                ? new Date(
+                                      b.completed_at,
+                                  ).getTime()
+                                : 0;
+
+                        return (
+                            bTime - aTime
+                        );
+                    });
+
+            if (
+                completedRuns.length
+            ) {
+                const latestRun =
+                    completedRuns[0];
+
+                const latestResult =
+                    (await getSchedulingRunResults(
+                        latestRun.id,
+                    )) as SchedulingRunResult;
+
+                setResult(
+                    latestResult,
+                );
+            } else {
+                setResult(null);
+            }
+        } catch (err: any) {
+            setError(
+                err?.response?.data
+                    ?.detail ??
+                    err?.response?.data
+                        ?.error ??
+                    err?.message ??
+                    "Unable to load scheduling data.",
+            );
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function generateTimetable() {
+        if (!selectedTerm) {
+            setError(
+                "Select an academic term before generating a timetable.",
+            );
+            return;
+        }
+
+        setGenerating(true);
+        setError("");
+        setMessage("");
+
+        try {
+            const run =
+                await createSchedulingRun({
+                    term: selectedTerm,
+                });
+
+            const generated =
+                (await executeSchedulingRun(
+                    run.id,
+                    {
+                        version_name:
+                            "Generated Timetable",
+                    },
+                )) as unknown as SchedulingRunResult;
+
+            /*
+             * The execute response is already a complete
+             * SchedulingRunResult, but we immediately retrieve
+             * the authoritative result endpoint as well.
+             */
+            const liveResult =
+                (await getSchedulingRunResults(
+                    run.id,
+                )) as SchedulingRunResult;
+
+            setResult(liveResult);
+
+            setMessage(
+                "Timetable generated successfully. The live timetable below has been refreshed.",
+            );
+
+            await loadData();
+
+            /*
+             * Preserve the just-generated result even if the
+             * run list has not yet refreshed in the browser.
+             */
+            setResult(
+                liveResult ??
+                    generated,
+            );
+        } catch (err: any) {
+            setError(
+                err?.response?.data
+                    ?.detail ??
+                    err?.response?.data
+                        ?.error ??
+                    err?.message ??
+                    "Timetable generation failed.",
+            );
+        } finally {
+            setGenerating(false);
+        }
+    }
+
+    useEffect(() => {
+        void loadData();
+    }, []);
+
+    const timetable =
+        result?.timetable_version ??
+        null;
+
+    const entries =
+        timetable?.entries ?? [];
+
+    const groupedEntries =
+        useMemo(() => {
+            const map = new Map<
+                string,
+                TimetableEntry[]
+            >();
+
+            for (const entry of entries) {
+                const day =
+                    normalizeDay(
+                        entry.day,
+                    );
+
+                const period =
+                    Number(
+                        entry.period_number,
+                    );
+
+                if (
+                    !day ||
+                    !Number.isFinite(
+                        period,
+                    )
+                ) {
+                    continue;
+                }
+
+                const key =
+                    `${day}:${period}`;
+
+                const existing =
+                    map.get(key) ?? [];
+
+                existing.push(entry);
+
+                map.set(
+                    key,
+                    existing,
+                );
+            }
+
+            return map;
+        }, [entries]);
+
+    return (
+        <>
+            <div className="page-header">
+                <div>
+                    <span className="eyebrow">
+                        SCHEDULING ENGINE
+                    </span>
+
+                    <h1>
+                        Scheduling
+                    </h1>
+
+                    <p>
+                        Generate and monitor
+                        automated timetable
+                        generation.
+                    </p>
+                </div>
+
+                <div className="page-actions">
+                    <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() =>
+                            void loadData()
+                        }
+                        disabled={
+                            loading ||
+                            generating
+                        }
+                    >
+                        <RefreshCw
+                            size={17}
+                            className={
+                                loading
+                                    ? "spin"
+                                    : undefined
+                            }
+                        />
+
+                        Refresh
+                    </button>
+
+                    <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() =>
+                            void generateTimetable()
+                        }
+                        disabled={
+                            generating ||
+                            loading ||
+                            !selectedTerm
+                        }
+                    >
+                        <PlayCircle
+                            size={18}
+                        />
+
+                        {generating
+                            ? "Generating..."
+                            : "Generate Timetable"}
+                    </button>
+                </div>
+            </div>
+
+            {error && (
+                <div className="alert error">
+                    <AlertCircle
+                        size={19}
+                    />
+
+                    <div>
+                        <strong>
+                            Scheduling error
+                        </strong>
+
+                        <span>
+                            {error}
+                        </span>
+                    </div>
+                </div>
+            )}
+
+            {message && (
+                <div className="alert success">
+                    <CheckCircle2
+                        size={19}
+                    />
+
+                    <div>
+                        <strong>
+                            Timetable generated
+                        </strong>
+
+                        <span>
+                            {message}
+                        </span>
+                    </div>
+                </div>
+            )}
+
+            <section className="panel scheduling-panel">
+                <div className="panel-header">
+                    <div>
+                        <h2>
+                            Generate Timetable
+                        </h2>
+
+                        <p>
+                            Select the academic
+                            term for timetable
+                            generation.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="scheduling-form">
+                    <div className="form-group">
+                        <label htmlFor="academic-term">
+                            Academic Term
+                        </label>
+
+                        <select
+                            id="academic-term"
+                            value={
+                                selectedTerm
+                            }
+                            onChange={(
+                                event,
+                            ) =>
+                                setSelectedTerm(
+                                    event.target
+                                        .value,
+                                )
+                            }
+                            disabled={
+                                loading ||
+                                generating
+                            }
+                        >
+                            <option value="">
+                                {loading
+                                    ? "Loading academic terms..."
+                                    : "Select an academic term"}
+                            </option>
+
+                            {terms.map(
+                                (term) => (
+                                    <option
+                                        key={
+                                            term.id
+                                        }
+                                        value={
+                                            term.id
+                                        }
+                                    >
+                                        {term.name}{" "}
+                                        --{" "}
+                                        {
+                                            term.academic_year
+                                        }
+                                    </option>
+                                ),
+                            )}
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <section className="section-card">
+                <div className="section-card-header">
+                    <div>
+                        <span className="eyebrow">
+                            LIVE TIMETABLE
+                        </span>
+
+                        <h2>
+                            Weekly Timetable
+                        </h2>
+
+                        <p>
+                            {timetable
+                                ? `${timetable.name} • ${entries.length} lesson(s)`
+                                : "No completed timetable loaded."}
+                        </p>
+                    </div>
+
+                    {timetable && (
+                        <span className="timetable-created">
+                            <CheckCircle2
+                                size={15}
+                            />
+
+                            Generated
+                        </span>
+                    )}
+                </div>
+
+                {!timetable ||
+                entries.length === 0 ? (
+                    <div className="empty-state">
+                        <Clock
+                            size={38}
+                        />
+
+                        <h3>
+                            No timetable
+                            published
+                        </h3>
+
+                        <p>
+                            Generate a timetable
+                            first. The completed
+                            timetable will appear
+                            here for review.
+                        </p>
+                    </div>
+                ) : (
+                    <div
+                        style={{
+                            overflowX:
+                                "auto",
+                        }}
+                    >
+                        <table className="data-table timetable-live-grid">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        Day
+                                    </th>
+
+                                    {PERIODS.map(
+                                        (
+                                            period,
+                                        ) => (
+                                            <th
+                                                key={
+                                                    period
+                                                }
+                                            >
+                                                <div>
+                                                    {
+                                                        periodName(
+                                                            period,
+                                                            entries,
+                                                        )
+                                                    }
+                                                </div>
+
+                                                <small>
+                                                    {
+                                                        periodTime(
+                                                            period,
+                                                            entries,
+                                                        )
+                                                    }
+                                                </small>
+                                            </th>
+                                        ),
+                                    )}
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {DAYS.map(
+                                    (
+                                        day,
+                                    ) => (
+                                        <tr
+                                            key={
+                                                day.key
+                                            }
+                                        >
+                                            <th>
+                                                {
+                                                    day.label
+                                                }
+                                            </th>
+
+                                            {PERIODS.map(
+                                                (
+                                                    period,
+                                                ) => {
+                                                    const cell =
+                                                        groupedEntries.get(
+                                                            `${day.key}:${period}`,
+                                                        ) ??
+                                                        [];
+
+                                                    return (
+                                                        <td
+                                                            key={
+                                                                period
+                                                            }
+                                                        >
+                                                            {cell.length ===
+                                                            0 ? (
+                                                                <span>
+                                                                    —
+                                                                </span>
+                                                            ) : (
+                                                                cell.map(
+                                                                    (
+                                                                        entry,
+                                                                    ) => (
+                                                                        <div
+                                                                            key={
+                                                                                entry.id
+                                                                            }
+                                                                        >
+                                                                            <strong>
+                                                                                {subjectCode(
+                                                                                    entry,
+                                                                                )}
+                                                                            </strong>
+
+                                                                            <br />
+
+                                                                            <small>
+                                                                                {teacherCode(
+                                                                                    entry,
+                                                                                )}
+                                                                            </small>
+
+                                                                            <br />
+
+                                                                            <small>
+                                                                                {groupName(
+                                                                                    entry,
+                                                                                )}
+                                                                            </small>
+                                                                        </div>
+                                                                    ),
+                                                                )
+                                                            )}
+                                                        </td>
+                                                    );
+                                                },
+                                            )}
+                                        </tr>
+                                    ),
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </section>
+
+            <section className="section-card">
+                <div className="section-card-header">
+                    <div>
+                        <span className="eyebrow">
+                            RUN HISTORY
+                        </span>
+
+                        <h2>
+                            Scheduling Runs
+                        </h2>
+                    </div>
+                </div>
+
+                {runs.length === 0 ? (
+                    <div className="empty-state">
+                        <Clock
+                            size={28}
+                        />
+
+                        <h3>
+                            No scheduling runs
+                        </h3>
+                    </div>
+                ) : (
+                    <div
+                        style={{
+                            overflowX:
+                                "auto",
+                        }}
+                    >
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        Term
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
+
+                                    <th>
+                                        Solver
+                                    </th>
+
+                                    <th>
+                                        Objective
+                                    </th>
+
+                                    <th>
+                                        Created
+                                    </th>
+
+                                    <th>
+                                        Timetable
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {runs.map(
+                                    (
+                                        run,
+                                    ) => (
+                                        <tr
+                                            key={
+                                                run.id
+                                            }
+                                        >
+                                            <td>
+                                                <strong>
+                                                    {
+                                                        run.term_name
+                                                    }
+                                                </strong>
+                                            </td>
+
+                                            <td>
+                                                {run.status.toUpperCase() ===
+                                                "COMPLETED" ? (
+                                                    <span className="status-success">
+                                                        <CheckCircle2
+                                                            size={
+                                                                15
+                                                            }
+                                                        />
+
+                                                        {
+                                                            run.status_display
+                                                        }
+                                                    </span>
+                                                ) : run.status.toUpperCase() ===
+                                                  "FAILED" ? (
+                                                    <span className="status-error">
+                                                        <AlertCircle
+                                                            size={
+                                                                15
+                                                            }
+                                                        />
+
+                                                        {
+                                                            run.status_display
+                                                        }
+                                                    </span>
+                                                ) : (
+                                                    <span className="status-running">
+                                                        <Clock
+                                                            size={
+                                                                15
+                                                            }
+                                                        />
+
+                                                        {
+                                                            run.status_display
+                                                        }
+                                                    </span>
+                                                )}
+                                            </td>
+
+                                            <td>
+                                                {run.solver_status_display ??
+                                                    run.solver_status ??
+                                                    "--"}
+                                            </td>
+
+                                            <td>
+                                                {run.objective_value ??
+                                                    "--"}
+                                            </td>
+
+                                            <td>
+                                                {run.created_at
+                                                    ? new Date(
+                                                          run.created_at,
+                                                      ).toLocaleString()
+                                                    : "--"}
+                                            </td>
+
+                                            <td>
+                                                {run.timetable_version ? (
+                                                    <span className="timetable-created">
+                                                        <CheckCircle2
+                                                            size={
+                                                                15
+                                                            }
+                                                        />
+
+                                                        Available
+                                                    </span>
+                                                ) : (
+                                                    "--"
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ),
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </section>
+        </>
+    );
+}
+
+export default Scheduling;

@@ -1,0 +1,318 @@
+from __future__ import annotations
+
+from typing import Iterable
+
+from apps.academics.models import (
+    InstructionalGroup,
+    LessonRequirement,
+    TeachingGroup,
+)
+
+from apps.scheduling.models import (
+    Period,
+    Room,
+    RoomAvailability,
+    TeacherAssignment,
+    TeacherAvailability,
+    TeacherFreeAfternoon,
+)
+
+from apps.users.models import Teacher
+from apps.scheduling.engine.domain.problem import SchedulingProblem
+
+from apps.scheduling.engine.domain.entities import (
+    InstructionalGroupEntity,
+    LessonRequirementEntity,
+    PeriodEntity,
+    RoomAvailabilityEntity,
+    RoomEntity,
+    TeacherAssignmentEntity,
+    TeacherAvailabilityEntity,
+    TeacherEntity,
+    TeacherFreeAfternoonEntity,
+)
+
+
+class DjangoSchedulingLoader:
+    """
+    Converts Django scheduling records into the scheduling-engine domain model.
+
+    The loader is intentionally kept as the infrastructure boundary:
+    Django ORM objects stay here and the solver receives only domain entities.
+    """
+
+    def load_problem(self, *, term) -> SchedulingProblem:
+        teaching_groups = TeachingGroup.objects.filter(
+            stream__grade__academic_year=term.academic_year,
+            is_active=True,
+        ).select_related(
+            "stream",
+            "stream__grade",
+        )
+
+        instructional_groups = InstructionalGroup.objects.filter(
+            teaching_group__stream__grade__academic_year=term.academic_year,
+            is_active=True,
+        ).select_related(
+            "teaching_group",
+            "teaching_group__stream",
+            "teaching_group__stream__grade",
+        )
+
+        lesson_requirements = LessonRequirement.objects.filter(
+            term=term,
+            is_active=True,
+        ).select_related(
+            "instructional_group",
+            "instructional_group__teaching_group",
+            "subject",
+        )
+
+        teachers = Teacher.objects.filter(
+            is_active=True,
+        )
+
+        teacher_assignments = TeacherAssignment.objects.filter(
+            lesson_requirement__term=term,
+            is_active=True,
+            teacher__is_active=True,
+            lesson_requirement__is_active=True,
+        ).select_related(
+            "teacher",
+            "lesson_requirement",
+        )
+
+        teacher_free_afternoons = TeacherFreeAfternoon.objects.filter(
+            term=term,
+            is_active=True,
+            teacher__is_active=True,
+        ).select_related("teacher")
+
+        teacher_availability = TeacherAvailability.objects.filter(
+            term=term,
+            is_active=True,
+            teacher__is_active=True,
+        ).select_related("teacher", "period")
+
+        rooms = Room.objects.filter(
+            is_active=True,
+        )
+
+        periods = Period.objects.filter(
+            is_active=True,
+        ).order_by("number", "id")
+
+        room_availability = RoomAvailability.objects.filter(
+            term=term,
+            is_active=True,
+            room__is_active=True,
+            period__is_active=True,
+        ).select_related(
+            "room",
+            "period",
+        )
+
+        return SchedulingProblem(
+            periods=load_periods(periods),
+            teachers=load_teachers(teachers),
+            instructional_groups=load_instructional_groups(
+                instructional_groups
+            ),
+            rooms=load_rooms(rooms),
+            lesson_requirements=load_lesson_requirements(
+                lesson_requirements
+            ),
+            teacher_assignments=load_teacher_assignments(
+                teacher_assignments
+            ),
+            teacher_free_afternoons=load_teacher_free_afternoons(
+                teacher_free_afternoons
+            ),
+            teacher_availability=load_teacher_availability(
+                teacher_availability
+            ),
+            room_availability=load_room_availability(
+                room_availability
+            ),
+        )
+
+
+def load_periods(
+    periods: Iterable[Period],
+) -> list[PeriodEntity]:
+    return [
+        PeriodEntity(
+            id=period.id,
+            number=period.number,
+            name=period.name,
+            start_time=period.start_time,
+            end_time=period.end_time,
+            is_teaching_period=period.is_teaching_period,
+            part_of_day=period.part_of_day,
+        )
+        for period in periods
+    ]
+
+
+def load_teachers(
+    teachers: Iterable[Teacher],
+) -> list[TeacherEntity]:
+    result: list[TeacherEntity] = []
+
+    for teacher in teachers:
+        first_name = (teacher.first_name or "").strip()
+        last_name = (teacher.last_name or "").strip()
+
+        name = " ".join(
+            part for part in (first_name, last_name) if part
+        ).strip()
+
+        if not name:
+            name = teacher.employee_code
+
+        result.append(
+            TeacherEntity(
+                id=teacher.id,
+                name=name,
+                code=teacher.employee_code,
+                is_active=teacher.is_active,
+            )
+        )
+
+    return result
+
+
+def load_instructional_groups(
+    groups: Iterable[InstructionalGroup | TeachingGroup],
+) -> list[InstructionalGroupEntity]:
+    result: list[InstructionalGroupEntity] = []
+
+    for group in groups:
+        teaching_group = getattr(group, "teaching_group", None)
+
+        if teaching_group is not None:
+            entity_id = group.id
+            code = group.code
+            learner_count = group.learner_count
+            is_active = group.is_active
+
+            # InstructionalGroup is an engine-facing representation of a
+            # TeachingGroup. Preserve the TeachingGroup's canonical display
+            # identity rather than its database `name` field.
+            name = str(teaching_group)
+
+        else:
+            entity_id = group.id
+            code = group.code
+            learner_count = group.learner_count
+            is_active = group.is_active
+
+            # When the loader is explicitly given TeachingGroup records,
+            # preserve their canonical __str__() representation exactly.
+            name = str(group)
+
+        result.append(
+            InstructionalGroupEntity(
+                id=entity_id,
+                name=name,
+                code=code,
+                learner_count=learner_count,
+                is_active=is_active,
+            )
+        )
+
+    return result
+
+
+def load_rooms(
+    rooms: Iterable[Room],
+) -> list[RoomEntity]:
+    return [
+        RoomEntity(
+            id=room.id,
+            name=room.name,
+            code=room.code,
+            capacity=room.capacity,
+            is_active=room.is_active,
+        )
+        for room in rooms
+    ]
+
+
+def load_lesson_requirements(
+    requirements: Iterable[LessonRequirement],
+) -> list[LessonRequirementEntity]:
+    return [
+        LessonRequirementEntity(
+            id=requirement.id,
+            term_id=requirement.term_id,
+            instructional_group_id=requirement.instructional_group_id,
+            subject_id=requirement.subject_id,
+            lessons_per_week=requirement.lessons_per_week,
+            is_active=requirement.is_active,
+        )
+        for requirement in requirements
+    ]
+
+
+def load_teacher_assignments(
+    assignments: Iterable[TeacherAssignment],
+) -> list[TeacherAssignmentEntity]:
+    return [
+        TeacherAssignmentEntity(
+            id=assignment.id,
+            teacher_id=assignment.teacher_id,
+            lesson_requirement_id=assignment.lesson_requirement_id,
+            is_active=assignment.is_active,
+        )
+        for assignment in assignments
+    ]
+
+
+def load_teacher_free_afternoons(
+    entries: Iterable[TeacherFreeAfternoon],
+) -> list[TeacherFreeAfternoonEntity]:
+    return [
+        TeacherFreeAfternoonEntity(
+            id=entry.id,
+            term_id=entry.term_id,
+            teacher_id=entry.teacher_id,
+            day=entry.day,
+            is_active=entry.is_active,
+        )
+        for entry in entries
+    ]
+
+
+def load_teacher_availability(
+    entries: Iterable[TeacherAvailability],
+) -> list[TeacherAvailabilityEntity]:
+    return [
+        TeacherAvailabilityEntity(
+            id=entry.id,
+            term_id=entry.term_id,
+            teacher_id=entry.teacher_id,
+            day=entry.day,
+            period_id=entry.period_id,
+            is_available=entry.is_available,
+            is_active=entry.is_active,
+        )
+        for entry in entries
+    ]
+
+
+def load_room_availability(
+    entries: Iterable[RoomAvailability],
+) -> list[RoomAvailabilityEntity]:
+    return [
+        RoomAvailabilityEntity(
+            id=entry.id,
+            term_id=entry.term_id,
+            room_id=entry.room_id,
+            day=entry.day,
+            period_id=entry.period_id,
+            is_available=entry.is_available,
+            is_active=entry.is_active,
+        )
+        for entry in entries
+    ]

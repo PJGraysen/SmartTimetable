@@ -1,0 +1,495 @@
+﻿from __future__ import annotations
+
+from django.db import transaction
+from django.utils import timezone
+
+from apps.scheduling.engine.application.scheduler import (
+    create_default_scheduler,
+)
+from apps.scheduling.engine.infrastructure.django_loader import (
+    DjangoSchedulingLoader,
+)
+from apps.scheduling.models import (
+    SchedulingRun,
+    SchedulingRunStatus,
+    TimetableEntry,
+    TimetableVersion,
+)
+
+
+def load_scheduling_problem(*, term):
+    """
+    Compatibility boundary for the application-layer scheduling loader.
+
+    Kept as a module-level function so the application service remains
+    independently patchable by the application-layer test contract.
+    """
+    loader = DjangoSchedulingLoader()
+    return loader.load_problem(term=term)
+
+
+class SchedulingExecutionResult:
+    """Result returned by the scheduling application service."""
+
+    def __init__(self, scheduling_run, solver_result=None, persistence_result=None):
+        self.scheduling_run = scheduling_run
+        self.solver_result = solver_result
+        self.persistence_result = persistence_result
+
+
+class SchedulingApplicationService:
+    """
+    Application-layer orchestration for timetable generation.
+
+    The application service coordinates:
+        SchedulingRun state
+        Django -> domain loading
+        scheduler execution
+        timetable persistence
+
+    Historical SchedulingRun and TimetableVersion records are preserved.
+    """
+
+    def __init__(
+        self,
+        scheduler=None,
+        persistence=None,
+        loader=None,
+    ):
+        self.scheduler = scheduler or create_default_scheduler()
+        self.persistence = persistence
+        self.loader = loader or DjangoSchedulingLoader()
+
+    def execute(
+        self,
+        scheduling_run: SchedulingRun,
+        *,
+        version_name: str = "Generated Timetable",
+        version_number: int = 1,
+    ) -> SchedulingExecutionResult:
+
+        if scheduling_run.status not in (
+            SchedulingRunStatus.PENDING,
+            SchedulingRunStatus.RUNNING,
+        ):
+            raise ValueError(
+                "Scheduling run must be PENDING or RUNNING "
+                "before execution."
+            )
+
+        self._mark_running(scheduling_run)
+
+        try:
+            problem = load_scheduling_problem(
+                term=scheduling_run.term,
+            )
+
+            result = self.scheduler.generate(problem)
+
+            scheduling_run.solver_result = result
+
+            if not result.is_successful:
+                message = self._failure_message(result)
+
+                self._mark_failed(
+                    scheduling_run,
+                    message,
+                )
+
+                return SchedulingExecutionResult(
+                    scheduling_run=scheduling_run,
+                    solver_result=result,
+                    persistence_result=None,
+                )
+
+            with transaction.atomic():
+
+                if self.persistence is not None:
+                    persistence_result = self.persistence.persist(
+                        scheduling_run=scheduling_run,
+                        solver_result=result,
+                        version_name=version_name,
+                        version_number=version_number,
+                    )
+
+                    if persistence_result is not None:
+                        scheduling_run.persistence_result = persistence_result
+
+                    entry_count = self._persistence_entry_count(
+                        persistence_result,
+                        result,
+                    )
+
+                else:
+                    version = self._create_timetable_version(
+                        scheduling_run=scheduling_run,
+                        version_name=version_name,
+                        version_number=version_number,
+                    )
+
+                    entries = self._persist_entries(
+                        version=version,
+                        result=result,
+                    )
+
+                    entry_count = len(entries)
+
+                    self._mark_completed(
+                        scheduling_run=scheduling_run,
+                        result=result,
+                        entry_count=entry_count,
+                    )
+
+            return SchedulingExecutionResult(
+                scheduling_run=scheduling_run,
+                solver_result=result,
+                persistence_result=getattr(
+                    scheduling_run,
+                    "persistence_result",
+                    None,
+                ),
+            )
+
+        except ValueError:
+            raise
+
+        except Exception as exc:
+            self._mark_failed(
+                scheduling_run,
+                str(exc),
+            )
+            raise
+
+    # ------------------------------------------------------------------
+    # RUN STATE
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _mark_running(
+        scheduling_run: SchedulingRun,
+    ) -> None:
+        scheduling_run.status = SchedulingRunStatus.RUNNING
+        scheduling_run.started_at = timezone.now()
+        scheduling_run.error_message = ""
+
+        scheduling_run.save(
+            update_fields=[
+                "status",
+                "started_at",
+                "error_message",
+                "updated_at",
+            ]
+        )
+
+    @staticmethod
+    def _mark_completed(
+        scheduling_run: SchedulingRun,
+        result,
+        entry_count: int,
+    ) -> None:
+        scheduling_run.status = SchedulingRunStatus.COMPLETED
+        scheduling_run.completed_at = timezone.now()
+        scheduling_run.error_message = ""
+
+        solver_status = getattr(
+            result,
+            "status",
+            None,
+        )
+
+        if solver_status is not None:
+            scheduling_run.solver_status = (
+                solver_status.value
+                if hasattr(solver_status, "value")
+                else str(solver_status)
+            )
+
+        objective_value = getattr(
+            result,
+            "objective_value",
+            None,
+        )
+
+        if objective_value is None:
+            statistics = getattr(
+                result,
+                "statistics",
+                None,
+            )
+
+            if statistics is not None:
+                objective_value = getattr(
+                    statistics,
+                    "objective_value",
+                    None,
+                )
+
+        if objective_value is not None:
+            scheduling_run.objective_value = objective_value
+
+        statistics = getattr(
+            result,
+            "statistics",
+            None,
+        )
+
+        if statistics is None:
+            statistics = {}
+
+        elif hasattr(statistics, "__dict__"):
+            statistics = dict(vars(statistics))
+
+        else:
+            try:
+                statistics = dict(statistics)
+            except (TypeError, ValueError):
+                statistics = {}
+
+        statistics["generated_entries"] = entry_count
+
+        scheduling_run.statistics = statistics
+
+        scheduling_run.save(
+            update_fields=[
+                "status",
+                "completed_at",
+                "error_message",
+                "solver_status",
+                "objective_value",
+                "statistics",
+                "updated_at",
+            ]
+        )
+
+    @staticmethod
+    def _mark_failed(
+        scheduling_run: SchedulingRun,
+        message: str,
+    ) -> None:
+        scheduling_run.status = SchedulingRunStatus.FAILED
+        scheduling_run.completed_at = timezone.now()
+        scheduling_run.error_message = str(message)
+
+        scheduling_run.save(
+            update_fields=[
+                "status",
+                "completed_at",
+                "error_message",
+                "updated_at",
+            ]
+        )
+
+    # ------------------------------------------------------------------
+    # PERSISTENCE ADAPTER
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _persistence_entry_count(
+        persistence_result,
+        result,
+    ) -> int:
+
+        if persistence_result is not None:
+            entries = getattr(
+                persistence_result,
+                "entries",
+                None,
+            )
+
+            if entries is not None:
+                try:
+                    return len(entries)
+                except TypeError:
+                    pass
+
+            entry_count = getattr(
+                persistence_result,
+                "entry_count",
+                None,
+            )
+
+            if entry_count is not None:
+                return int(entry_count)
+
+        assignments = getattr(
+            result,
+            "assignments",
+            (),
+        )
+
+        try:
+            return len(assignments)
+        except TypeError:
+            return 0
+
+    # ------------------------------------------------------------------
+    # TIMETABLE VERSION
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _create_timetable_version(
+        scheduling_run: SchedulingRun,
+        version_name: str,
+        version_number: int,
+    ) -> TimetableVersion:
+        """
+        Create a new historical timetable version.
+
+        Names are unique within the term and version numbers are
+        automatically advanced when the requested number already exists.
+        """
+
+        if not version_name:
+            version_name = "Generated Timetable"
+
+        existing_names = set(
+            TimetableVersion.objects
+            .filter(term=scheduling_run.term)
+            .values_list("name", flat=True)
+        )
+
+        if version_name in existing_names:
+            base_name = version_name
+            suffix = 2
+
+            while f"{base_name} {suffix}" in existing_names:
+                suffix += 1
+
+            version_name = f"{base_name} {suffix}"
+
+        existing_numbers = set(
+            TimetableVersion.objects
+            .filter(term=scheduling_run.term)
+            .values_list("version_number", flat=True)
+        )
+
+        if version_number in existing_numbers:
+            version_number = max(
+                existing_numbers,
+                default=0,
+            ) + 1
+
+        TimetableVersion.objects.filter(
+            term=scheduling_run.term,
+            is_active=True,
+        ).update(
+            is_active=False,
+        )
+
+        version = TimetableVersion.objects.create(
+            term=scheduling_run.term,
+            name=version_name,
+            version_number=version_number,
+            is_published=False,
+            is_active=True,
+        )
+
+        scheduling_run.timetable_version = version
+
+        scheduling_run.save(
+            update_fields=[
+                "timetable_version",
+                "updated_at",
+            ]
+        )
+
+        return version
+    # ------------------------------------------------------------------
+    # TIMETABLE ENTRY PERSISTENCE
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _persist_entries(
+        version: TimetableVersion,
+        result,
+    ) -> list[TimetableEntry]:
+
+        assignments = list(
+            getattr(
+                result,
+                "assignments",
+                (),
+            )
+        )
+
+        if not assignments:
+            raise ValueError(
+                "The scheduler returned a successful result but "
+                "contained no timetable assignments."
+            )
+
+        entries = []
+
+        for assignment in assignments:
+
+            requirement_id = assignment.lesson_requirement_id
+            teacher_id = assignment.teacher_id
+            period_id = assignment.period_id
+            room_id = assignment.room_id
+
+            day = assignment.day
+
+            if hasattr(day, "value"):
+                day = day.value
+
+            entry = TimetableEntry.objects.create(
+                timetable_version=version,
+                day=day,
+                period_id=period_id,
+                instructional_group_id=(
+                    assignment.instructional_group_id
+                ),
+                teacher_id=teacher_id,
+                lesson_requirement_id=requirement_id,
+                room_id=room_id,
+            )
+
+            entries.append(entry)
+
+        return entries
+
+    # ------------------------------------------------------------------
+    # ERROR REPORTING
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _failure_message(result) -> str:
+
+        message = getattr(
+            result,
+            "message",
+            None,
+        )
+
+        if message:
+            return str(message)
+
+        message = getattr(
+            result,
+            "error_message",
+            None,
+        )
+
+        if message:
+            return str(message)
+
+        status = getattr(
+            result,
+            "status",
+            None,
+        )
+
+        if status is not None:
+            status = (
+                status.value
+                if hasattr(status, "value")
+                else str(status)
+            )
+
+            return (
+                "Scheduling solver finished with status "
+                f"{status}."
+            )
+
+        return "Scheduling solver finished unsuccessfully."
+

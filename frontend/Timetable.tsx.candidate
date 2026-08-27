@@ -1,0 +1,1912 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Printer, RefreshCw } from "lucide-react";
+
+import {
+  getSchedulingRuns,
+  getSchedulingRunResults,
+  type SchedulingRun,
+} from "../services/scheduling";
+
+type JsonRecord = Record<string, unknown>;
+
+type TimetableEntry = {
+  id?: string;
+
+  day?: string;
+  day_display?: string;
+
+  period?: string;
+  period_number?: number | string;
+  period_name?: string;
+  period_start_time?: string;
+  period_end_time?: string;
+
+  teaching_group?: string;
+  teaching_group_name?: string;
+
+  instructional_group?: string;
+  instructional_group_name?: string;
+
+  teacher?: string;
+  teacher_name?: string;
+  teacher_code?: string;
+  employee_code?: string;
+
+  subject?: string;
+  subject_name?: string;
+  subject_code?: string;
+
+  lesson_requirement?: string;
+  lesson_requirement_name?: string;
+
+  room?: string;
+  room_name?: string;
+
+  subject_combination?: string;
+  subject_combination_name?: string;
+  combination?: string;
+  combination_name?: string;
+
+  [key: string]: unknown;
+};
+
+type TimetableVersion = {
+  id?: string;
+  term?: string;
+  term_name?: string;
+  name?: string;
+  version_number?: number | string;
+  is_published?: boolean;
+  is_active?: boolean;
+  entries_count?: number | string;
+  entries?: TimetableEntry[];
+  created_at?: string;
+  updated_at?: string;
+
+  [key: string]: unknown;
+};
+
+type SchoolClass = {
+  key: string;
+  label: string;
+};
+
+type LessonSlot = {
+  key: string;
+  title: string;
+  time: string;
+  periodNumber: number;
+  kind: "lesson";
+};
+
+type SpecialSlot = {
+  key: string;
+  title: string;
+  time: string;
+  periodNumber: null;
+  kind: "tea" | "lunch" | "prayer" | "activity";
+};
+
+type TimetableSlot = LessonSlot | SpecialSlot;
+
+type FormattedEntry = {
+  title: string;
+  subtitle: string;
+  subject: string;
+  teacher: string;
+  combination: string;
+};
+
+const DAYS = [
+  { code: "MON", label: "Mon" },
+  { code: "TUE", label: "Tue" },
+  { code: "WED", label: "Wed" },
+  { code: "THU", label: "Thur" },
+  { code: "FRI", label: "Fri" },
+] as const;
+
+const CLASSES: SchoolClass[] = [
+  {
+    key: "F4_WEST",
+    label: "F4 West",
+  },
+  {
+    key: "F4_EAST",
+    label: "F4 East",
+  },
+  {
+    key: "F3_WEST",
+    label: "F3 West",
+  },
+  {
+    key: "F3_EAST",
+    label: "F3 East",
+  },
+  {
+    key: "GRADE_10",
+    label: "Grade 10",
+  },
+];
+
+function asRecord(value: unknown): JsonRecord {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  ) {
+    return value as JsonRecord;
+  }
+
+  return {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim() !== "") {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function firstNumber(...values: unknown[]): number | null {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (
+      typeof value === "string" &&
+      value.trim() !== "" &&
+      Number.isFinite(Number(value))
+    ) {
+      return Number(value);
+    }
+  }
+
+  return null;
+}
+
+function getRunDate(run: SchedulingRun): string {
+  return (
+    run.completed_at ||
+    run.started_at ||
+    run.created_at ||
+    run.updated_at ||
+    ""
+  );
+}
+
+function isCompletedRun(run: SchedulingRun): boolean {
+  return String(run.status || "").toUpperCase() === "COMPLETED";
+}
+
+function hasTimetable(run: SchedulingRun): boolean {
+  if (run.timetable_version) {
+    return true;
+  }
+
+  const statistics = asRecord(run.statistics);
+
+  const entriesCreated = firstNumber(
+    statistics.entries_created,
+    statistics.timetable_entries,
+    statistics.entries_count,
+  );
+
+  return entriesCreated !== null && entriesCreated > 0;
+}
+
+function normalizeDay(value: unknown): string {
+  const text = String(value ?? "")
+    .trim()
+    .toUpperCase();
+
+  if (text === "MON" || text === "MONDAY") {
+    return "MON";
+  }
+
+  if (text === "TUE" || text === "TUESDAY") {
+    return "TUE";
+  }
+
+  if (text === "WED" || text === "WEDNESDAY") {
+    return "WED";
+  }
+
+  if (
+    text === "THU" ||
+    text === "THUR" ||
+    text === "THURS" ||
+    text === "THURSDAY"
+  ) {
+    return "THU";
+  }
+
+  if (text === "FRI" || text === "FRIDAY") {
+    return "FRI";
+  }
+
+  return text;
+}
+
+function normalizeClassText(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function getEntryClassText(entry: TimetableEntry): string {
+  return normalizeClassText(
+    firstString(
+      entry.instructional_group_name,
+      entry.teaching_group_name,
+      entry.lesson_requirement_name,
+      entry.instructional_group,
+      entry.teaching_group,
+      entry.lesson_requirement,
+    ) || "",
+  );
+}
+
+function classMatches(
+  entry: TimetableEntry,
+  schoolClass: SchoolClass,
+): boolean {
+  const name = getEntryClassText(entry);
+
+  switch (schoolClass.key) {
+    case "F4_WEST":
+      return (
+        name.includes("F4 WEST") ||
+        name.includes("FORM 4 WEST") ||
+        name.includes("FORM4 WEST") ||
+        name.includes("F4W")
+      );
+
+    case "F4_EAST":
+      return (
+        name.includes("F4 EAST") ||
+        name.includes("FORM 4 EAST") ||
+        name.includes("FORM4 EAST") ||
+        name.includes("F4E")
+      );
+
+    case "F3_WEST":
+      return (
+        name.includes("F3 WEST") ||
+        name.includes("FORM 3 WEST") ||
+        name.includes("FORM3 WEST") ||
+        name.includes("F3W")
+      );
+
+    case "F3_EAST":
+      return (
+        name.includes("F3 EAST") ||
+        name.includes("FORM 3 EAST") ||
+        name.includes("FORM3 EAST") ||
+        name.includes("F3E")
+      );
+
+    case "GRADE_10":
+      return (
+        name.includes("GRADE 10") ||
+        name.includes("GRADE10") ||
+        name.includes("FORM 1 GRADE 10")
+      );
+
+    default:
+      return false;
+  }
+}
+
+function entryMatches(
+  entry: TimetableEntry,
+  dayCode: string,
+  schoolClass: SchoolClass,
+  periodNumber: number,
+): boolean {
+  const entryPeriod = firstNumber(entry.period_number);
+
+  if (entryPeriod === null || entryPeriod !== periodNumber) {
+    return false;
+  }
+
+  if (normalizeDay(entry.day) !== normalizeDay(dayCode)) {
+    return false;
+  }
+
+  return classMatches(entry, schoolClass);
+}
+
+function findEntries(
+  entries: TimetableEntry[],
+  dayCode: string,
+  schoolClass: SchoolClass,
+  periodNumber: number,
+): TimetableEntry[] {
+  return entries.filter((entry) =>
+    entryMatches(
+      entry,
+      dayCode,
+      schoolClass,
+      periodNumber,
+    ),
+  );
+}
+
+/*
+ * AUTHORITATIVE PERIOD RESOLUTION
+ *
+ * The frontend does NOT define the lesson periods.
+ *
+ * Every lesson column is created from a real period_number returned
+ * by the backend timetable result.
+ *
+ * This means:
+ *
+ * backend entry.period_number
+ *        ↓
+ * unique period numbers
+ *        ↓
+ * sorted period numbers
+ *        ↓
+ * timetable columns
+ *
+ * There is deliberately no frontend-generated:
+ *
+ * Array.from({ length: 10 })
+ * index + 1
+ * hard-coded P1/P2/P3...
+ */
+function getAuthoritativePeriodNumbers(
+  entries: TimetableEntry[],
+): number[] {
+  const numbers = new Set<number>();
+
+  for (const entry of entries) {
+    const periodNumber = firstNumber(
+      entry.period_number,
+    );
+
+    if (
+      periodNumber !== null &&
+      Number.isFinite(periodNumber) &&
+      periodNumber > 0
+    ) {
+      numbers.add(periodNumber);
+    }
+  }
+
+  return Array.from(numbers).sort(
+    (a, b) => a - b,
+  );
+}
+
+function formatTimeValue(
+  value: unknown,
+): string | null {
+  const text = firstString(value);
+
+  if (!text) {
+    return null;
+  }
+
+  const cleaned = text.trim();
+
+  if (/^\d{1,2}:\d{2}:\d{2}$/.test(cleaned)) {
+    return cleaned.slice(0, 5);
+  }
+
+  return cleaned;
+}
+
+function getPeriodTime(
+  entry: TimetableEntry,
+): string {
+  const start = formatTimeValue(
+    entry.period_start_time,
+  );
+
+  const end = formatTimeValue(
+    entry.period_end_time,
+  );
+
+  if (start && end) {
+    return `${start}–${end}`;
+  }
+
+  if (start) {
+    return start;
+  }
+
+  if (end) {
+    return end;
+  }
+
+  return "";
+}
+
+function getPeriodTitle(
+  entry: TimetableEntry,
+  periodNumber: number,
+): string {
+  const explicitName = firstString(
+    entry.period_name,
+    entry.period,
+  );
+
+  if (explicitName) {
+    const match = explicitName.match(
+      /Period\s+(\d+)/i,
+    );
+
+    if (match) {
+      return `Pd ${match[1]}`;
+    }
+
+    return explicitName;
+  }
+
+  return `Pd ${periodNumber}`;
+}
+
+function getRepresentativeEntry(
+  entries: TimetableEntry[],
+  periodNumber: number,
+): TimetableEntry | null {
+  return (
+    entries.find(
+      (entry) =>
+        firstNumber(entry.period_number) ===
+        periodNumber,
+    ) || null
+  );
+}
+
+function buildLessonSlots(
+  entries: TimetableEntry[],
+): LessonSlot[] {
+  const periodNumbers =
+    getAuthoritativePeriodNumbers(entries);
+
+  return periodNumbers.map(
+    (periodNumber): LessonSlot => {
+      const representative =
+        getRepresentativeEntry(
+          entries,
+          periodNumber,
+        );
+
+      return {
+        key: `PERIOD-${periodNumber}`,
+        title: representative
+          ? getPeriodTitle(
+              representative,
+              periodNumber,
+            )
+          : `Pd ${periodNumber}`,
+        time: representative
+          ? getPeriodTime(representative)
+          : "",
+        periodNumber,
+        kind: "lesson",
+      };
+    },
+  );
+}
+
+function buildSlots(
+  entries: TimetableEntry[],
+): TimetableSlot[] {
+  const lessonSlots =
+    buildLessonSlots(entries);
+
+  const slots: TimetableSlot[] = [];
+
+  for (const lessonSlot of lessonSlots) {
+    slots.push(lessonSlot);
+
+    /*
+     * These are presentation breaks only.
+     *
+     * They do NOT create lesson periods.
+     *
+     * If the backend does not return period 4, 8 or 12,
+     * no corresponding lesson column is invented.
+     */
+    if (lessonSlot.periodNumber === 4) {
+      slots.push({
+        key: "TEA",
+        title: "Tea",
+        time: "10:40–11:00",
+        periodNumber: null,
+        kind: "tea",
+      });
+    }
+
+    if (lessonSlot.periodNumber === 8) {
+      slots.push({
+        key: "LUNCH",
+        title: "Lunch",
+        time: "1:00–2:00",
+        periodNumber: null,
+        kind: "lunch",
+      });
+    }
+
+    if (lessonSlot.periodNumber === 12) {
+      slots.push({
+        key: "PRAYER",
+        title: "Prayer",
+        time: "4:00–4:30",
+        periodNumber: null,
+        kind: "prayer",
+      });
+
+      slots.push({
+        key: "ACTIVITY",
+        title: "Activity",
+        time: "4:30–5:45",
+        periodNumber: null,
+        kind: "activity",
+      });
+    }
+  }
+
+  return slots;
+}
+
+function extractEntriesFromCandidate(
+  candidate: unknown,
+): TimetableEntry[] {
+  const record = asRecord(candidate);
+
+  const directEntries = asArray(
+    record.entries,
+  );
+
+  if (directEntries.length > 0) {
+    return directEntries
+      .map(
+        (entry) =>
+          asRecord(entry) as TimetableEntry,
+      )
+      .filter(
+        (entry) =>
+          Object.keys(entry).length > 0,
+      );
+  }
+
+  const nestedCandidates = [
+    record.results,
+    record.data,
+    record.result,
+    record.timetable,
+    record.timetable_version,
+  ];
+
+  for (const nested of nestedCandidates) {
+    const nestedRecord =
+      asRecord(nested);
+
+    const nestedEntries = asArray(
+      nestedRecord.entries,
+    );
+
+    if (nestedEntries.length > 0) {
+      return nestedEntries
+        .map(
+          (entry) =>
+            asRecord(entry) as TimetableEntry,
+        )
+        .filter(
+          (entry) =>
+            Object.keys(entry).length > 0,
+        );
+    }
+  }
+
+  return [];
+}
+
+function normalizeVersion(
+  candidate: unknown,
+  fallback?: JsonRecord,
+): TimetableVersion | null {
+  const direct = asRecord(candidate);
+  const backup = fallback || {};
+
+  const entries =
+    extractEntriesFromCandidate(direct);
+
+  const fallbackEntries =
+    entries.length > 0
+      ? entries
+      : extractEntriesFromCandidate(backup);
+
+  if (fallbackEntries.length === 0) {
+    return null;
+  }
+
+  return {
+    ...backup,
+    ...direct,
+    entries: fallbackEntries,
+    entries_count:
+      firstNumber(
+        direct.entries_count,
+        backup.entries_count,
+        fallbackEntries.length,
+      ) ?? fallbackEntries.length,
+  };
+}
+
+function extractTimetableVersion(
+  payload: unknown,
+): TimetableVersion | null {
+  const root = asRecord(payload);
+
+  const candidates: unknown[] = [
+    root.timetable_version,
+    root.version,
+    root.result,
+    root.data,
+    root.timetable,
+    root,
+  ];
+
+  for (const candidate of candidates) {
+    const candidateRecord =
+      asRecord(candidate);
+
+    const direct =
+      normalizeVersion(
+        candidateRecord,
+        root,
+      );
+
+    if (direct) {
+      return direct;
+    }
+
+    const nested =
+      normalizeVersion(
+        candidateRecord.timetable_version,
+        root,
+      );
+
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
+}
+
+function formatGeneratedDate(
+  value: string | null,
+): string {
+  if (!value) {
+    return "Generated";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString(
+    undefined,
+    {
+      dateStyle: "medium",
+      timeStyle: "short",
+    },
+  );
+}
+
+function cleanSubjectName(
+  value: string,
+): string {
+  return value
+    .replace(
+      /\s*\(\d+\s*\/\s*week\)\s*$/i,
+      "",
+    )
+    .trim();
+}
+
+function extractSubjectName(
+  entry: TimetableEntry,
+): string {
+  const direct = firstString(
+    entry.subject_name,
+    entry.subject,
+  );
+
+  if (direct) {
+    return cleanSubjectName(direct);
+  }
+
+  const lesson =
+    firstString(
+      entry.lesson_requirement_name,
+      entry.lesson_requirement,
+    );
+
+  if (lesson) {
+    const parts = lesson
+      .split(" - ")
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    if (parts.length > 0) {
+      return cleanSubjectName(
+        parts[parts.length - 1],
+      );
+    }
+
+    return cleanSubjectName(lesson);
+  }
+
+  return "";
+}
+
+function extractSubjectCode(
+  entry: TimetableEntry,
+): string {
+  return (
+    firstString(
+      entry.subject_code,
+    ) || ""
+  );
+}
+
+function extractTeacherCode(
+  entry: TimetableEntry,
+): string {
+  return (
+    firstString(
+      entry.employee_code,
+      entry.teacher_code,
+    ) || ""
+  );
+}
+
+function extractTeacherName(
+  entry: TimetableEntry,
+): string {
+  return (
+    firstString(
+      entry.teacher_name,
+    ) || ""
+  );
+}
+
+function extractCombination(
+  entry: TimetableEntry,
+): string {
+  return (
+    firstString(
+      entry.subject_combination_name,
+      entry.subject_combination,
+      entry.combination_name,
+      entry.combination,
+    ) || ""
+  );
+}
+
+function formatEntry(
+  entry: TimetableEntry,
+): FormattedEntry {
+  const subjectName =
+    extractSubjectName(entry);
+
+  const subjectCode =
+    extractSubjectCode(entry);
+
+  const teacherCode =
+    extractTeacherCode(entry);
+
+  const teacherName =
+    extractTeacherName(entry);
+
+  const combination =
+    extractCombination(entry);
+
+  /*
+   * Subject code is intentionally preferred.
+   *
+   * Example:
+   *
+   * CS
+   * EMP001
+   *
+   * rather than:
+   *
+   * Computer Science
+   * Teacher Name
+   */
+  const title =
+    subjectCode ||
+    subjectName ||
+    "LESSON";
+
+  const subtitle =
+    teacherCode ||
+    teacherName ||
+    "";
+
+  return {
+    title,
+    subtitle,
+    subject:
+      subjectName ||
+      subjectCode ||
+      "",
+    teacher:
+      teacherName ||
+      teacherCode ||
+      "",
+    combination,
+  };
+}
+
+function activityLabel(
+  dayCode: string,
+): string {
+  switch (dayCode) {
+    case "MON":
+      return "MON ACTIVITY";
+
+    case "TUE":
+      return "TUE ACTIVITY";
+
+    case "WED":
+      return "WED ACTIVITY";
+
+    case "THU":
+      return "THUR ACTIVITY";
+
+    case "FRI":
+      return "FRI ACTIVITY";
+
+    default:
+      return "ACTIVITY";
+  }
+}
+
+function Timetable() {
+  const [run, setRun] =
+    useState<SchedulingRun | null>(
+      null,
+    );
+
+  const [version, setVersion] =
+    useState<TimetableVersion | null>(
+      null,
+    );
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const loadTimetable =
+    useCallback(async () => {
+      setError("");
+
+      try {
+        const runs =
+          await getSchedulingRuns();
+
+        const completedRuns =
+          Array.isArray(runs)
+            ? runs
+                .filter(isCompletedRun)
+                .filter(hasTimetable)
+                .sort(
+                  (a, b) => {
+                    const aTime =
+                      new Date(
+                        getRunDate(a),
+                      ).getTime();
+
+                    const bTime =
+                      new Date(
+                        getRunDate(b),
+                      ).getTime();
+
+                    if (
+                      bTime !== aTime
+                    ) {
+                      return (
+                        bTime - aTime
+                      );
+                    }
+
+                    const aId =
+                      firstString(
+                        a.id,
+                      ) || "";
+
+                    const bId =
+                      firstString(
+                        b.id,
+                      ) || "";
+
+                    return bId.localeCompare(
+                      aId,
+                    );
+                  },
+                )
+            : [];
+
+        const latestRun =
+          completedRuns[0];
+
+        if (!latestRun) {
+          setRun(null);
+          setVersion(null);
+          return;
+        }
+
+        /*
+         * AUTHORITATIVE RUN RESULT
+         *
+         * The timetable page does not independently select
+         * a timetable version from a separate endpoint.
+         *
+         * It first selects the newest completed scheduling run,
+         * then requests that run's result.
+         */
+        const resultsPayload =
+          await getSchedulingRunResults(
+            String(latestRun.id),
+          );
+
+        const resolvedVersion =
+          extractTimetableVersion(
+            resultsPayload,
+          );
+
+        if (!resolvedVersion) {
+          throw new Error(
+            "The latest completed scheduling run did not return timetable entries.",
+          );
+        }
+
+        if (
+          !resolvedVersion.entries ||
+          resolvedVersion.entries.length ===
+            0
+        ) {
+          throw new Error(
+            "The latest completed scheduling run returned an empty timetable.",
+          );
+        }
+
+        setRun(latestRun);
+        setVersion(
+          resolvedVersion,
+        );
+      } catch (
+        requestError: unknown
+      ) {
+        const record =
+          asRecord(
+            requestError,
+          );
+
+        const response =
+          asRecord(
+            record.response,
+          );
+
+        const responseData =
+          asRecord(
+            response.data,
+          );
+
+        const message =
+          firstString(
+            responseData.detail,
+            responseData.error,
+            record.message,
+          ) ||
+          "Unable to load the generated timetable. Make sure the Django API is running.";
+
+        setError(message);
+        setRun(null);
+        setVersion(null);
+      }
+    }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function initialLoad() {
+      setLoading(true);
+
+      try {
+        await loadTimetable();
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void initialLoad();
+
+    return () => {
+      mounted = false;
+    };
+  }, [loadTimetable]);
+
+  async function refresh() {
+    setRefreshing(true);
+
+    try {
+      await loadTimetable();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  const entries = useMemo(
+    () =>
+      version?.entries || [],
+    [version],
+  );
+
+  /*
+   * THIS IS THE IMPORTANT GRID RULE.
+   *
+   * slots is constructed exclusively from entries.
+   *
+   * Therefore the frontend cannot manufacture a different
+   * period structure from the backend timetable.
+   */
+  const slots = useMemo(
+    () =>
+      buildSlots(entries),
+    [entries],
+  );
+
+  const authoritativePeriods =
+    useMemo(
+      () =>
+        getAuthoritativePeriodNumbers(
+          entries,
+        ),
+      [entries],
+    );
+
+  const versionName =
+    firstString(
+      version?.name,
+      "Generated Timetable",
+    ) ||
+    "Generated Timetable";
+
+  const versionNumber =
+    firstNumber(
+      version?.version_number,
+    );
+
+  const termName =
+    firstString(
+      version?.term_name,
+      run?.term_name,
+      "Term 1",
+    ) || "Term 1";
+
+  const generatedAt =
+    formatGeneratedDate(
+      firstString(
+        version?.created_at,
+        run
+          ? getRunDate(run)
+          : "",
+      ),
+    );
+
+  const scheduledEntries =
+    firstNumber(
+      version?.entries_count,
+      entries.length,
+    ) ?? entries.length;
+
+  return (
+    <>
+      <style>{`
+        .whole-school-page {
+          min-height: 100%;
+          box-sizing: border-box;
+          background: #f7f9fc;
+          padding: 14px 18px 18px;
+          color: #172033;
+        }
+
+        .whole-school-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 18px;
+          margin-bottom: 8px;
+        }
+
+        .whole-school-title {
+          margin: 0;
+          font-size: 18px;
+          line-height: 1.1;
+          font-weight: 800;
+          letter-spacing: .02em;
+          color: #14213d;
+        }
+
+        .whole-school-subtitle {
+          margin: 3px 0 0;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: .11em;
+          color: #5d6b82;
+          text-transform: uppercase;
+        }
+
+        .whole-school-actions {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .whole-school-button {
+          border: 1px solid #cbd5e1;
+          background: #ffffff;
+          color: #24324a;
+          border-radius: 5px;
+          padding: 5px 9px;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 10px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .whole-school-button:hover {
+          background: #f1f5f9;
+        }
+
+        .whole-school-button:disabled {
+          opacity: .6;
+          cursor: wait;
+        }
+
+        .whole-school-meta {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+          gap: 5px;
+          margin-bottom: 7px;
+          flex-wrap: wrap;
+        }
+
+        .whole-school-badge {
+          border: 1px solid #d7deea;
+          background: #ffffff;
+          border-radius: 4px;
+          padding: 4px 8px;
+          font-size: 9px;
+          color: #334155;
+          white-space: nowrap;
+        }
+
+        .whole-school-authority {
+          border: 1px solid #c5d5e8;
+          background: #eef5fc;
+          color: #24496f;
+        }
+
+        .whole-school-table-wrap {
+          width: 100%;
+          overflow-x: auto;
+          overflow-y: hidden;
+          background: #ffffff;
+          border: 1px solid #b9c8dc;
+        }
+
+        .whole-school-table {
+          width: 100%;
+          min-width: 900px;
+          border-collapse: collapse;
+          table-layout: fixed;
+          font-size: 8px;
+        }
+
+        .whole-school-table th,
+        .whole-school-table td {
+          border: 1px solid #bfd0e4;
+          padding: 0;
+          text-align: center;
+          vertical-align: middle;
+        }
+
+        .whole-school-table thead th {
+          height: 42px;
+          background: #e8eef6;
+          color: #1e3555;
+          font-weight: 800;
+        }
+
+        .whole-school-table .day-head {
+          width: 48px;
+        }
+
+        .whole-school-table .class-head {
+          width: 72px;
+        }
+
+        .whole-school-table .slot-head {
+          width: 82px;
+        }
+
+        .whole-school-table .head-title {
+          display: block;
+          font-size: 9px;
+          line-height: 1.1;
+        }
+
+        .whole-school-table .head-time {
+          display: block;
+          margin-top: 2px;
+          font-size: 6px;
+          font-weight: 600;
+          color: #687b94;
+          line-height: 1;
+        }
+
+        .whole-school-table tbody tr {
+          height: 43px;
+        }
+
+        .whole-school-table .day-cell {
+          background: #f4f7fb;
+          font-weight: 800;
+          font-size: 9px;
+          color: #1e3555;
+          width: 48px;
+        }
+
+        .whole-school-table .class-cell {
+          background: #f8fafc;
+          text-align: left;
+          padding-left: 7px;
+          font-weight: 800;
+          color: #233752;
+          white-space: nowrap;
+        }
+
+        .whole-school-table .lesson-cell {
+          background: #ffffff;
+          min-width: 82px;
+        }
+
+        .whole-school-table .break-cell {
+          background: #f2f5f9;
+        }
+
+        .whole-school-table .special-cell {
+          background: #f5f7fa;
+        }
+
+        .whole-school-table .assembly-cell {
+          background: #f8fafc;
+        }
+
+        .whole-school-table .empty-mark {
+          color: #a9b7c9;
+          font-size: 10px;
+        }
+
+        .cell-subject {
+          display: block;
+          color: #17345b;
+          font-size: 8px;
+          font-weight: 800;
+          line-height: 1.15;
+          word-break: break-word;
+        }
+
+        .cell-teacher {
+          display: block;
+          margin-top: 2px;
+          color: #70819a;
+          font-size: 6px;
+          font-weight: 700;
+          line-height: 1;
+        }
+
+        .cell-combination {
+          display: block;
+          margin-top: 2px;
+          color: #526b88;
+          font-size: 6px;
+          font-weight: 700;
+          line-height: 1.05;
+          word-break: break-word;
+        }
+
+        .special-title {
+          display: block;
+          color: #203858;
+          font-size: 7px;
+          font-weight: 900;
+          letter-spacing: .04em;
+        }
+
+        .special-time {
+          display: block;
+          margin-top: 2px;
+          color: #71839a;
+          font-size: 6px;
+        }
+
+        .assembly-title {
+          display: inline-block;
+          border: 1px solid #c5d2e2;
+          border-radius: 3px;
+          padding: 5px 4px;
+          color: #23466e;
+          background: #f6f9fc;
+          font-size: 7px;
+          font-weight: 900;
+        }
+
+        .whole-school-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-top: 5px;
+          font-size: 8px;
+          color: #718096;
+          gap: 10px;
+        }
+
+        .whole-school-footer-periods {
+          text-align: right;
+        }
+
+        .whole-school-error {
+          border: 1px solid #e5b8b8;
+          background: #fff5f5;
+          color: #9b2c2c;
+          padding: 10px 12px;
+          margin-bottom: 10px;
+          font-size: 11px;
+        }
+
+        .whole-school-loading {
+          padding: 35px;
+          text-align: center;
+          color: #64748b;
+          font-size: 12px;
+          background: #ffffff;
+          border: 1px solid #cbd5e1;
+        }
+
+        .whole-school-loading-inner {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+        }
+
+        .whole-school-spin {
+          animation: whole-school-spin 1s linear infinite;
+        }
+
+        @keyframes whole-school-spin {
+          from {
+            transform: rotate(0deg);
+          }
+
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 5mm;
+          }
+
+          .whole-school-page {
+            padding: 0;
+            background: #ffffff;
+          }
+
+          .whole-school-actions {
+            display: none !important;
+          }
+
+          .whole-school-meta {
+            margin-top: 4px;
+          }
+
+          .whole-school-table-wrap {
+            overflow: visible;
+            border: 1px solid #9aaabd;
+          }
+
+          .whole-school-table {
+            min-width: 0;
+            font-size: 7px;
+          }
+
+          .whole-school-table thead th {
+            height: 35px;
+          }
+
+          .whole-school-table tbody tr {
+            height: 38px;
+          }
+        }
+      `}</style>
+
+      <main className="whole-school-page">
+        <header className="whole-school-header">
+          <div>
+            <h1 className="whole-school-title">
+              QUEEN OF APOSTLE SEMINARY
+            </h1>
+
+            <p className="whole-school-subtitle">
+              WHOLE-SCHOOL TIMETABLE
+            </p>
+          </div>
+
+          <div className="whole-school-actions">
+            <button
+              type="button"
+              className="whole-school-button"
+              onClick={() =>
+                window.print()
+              }
+              title="Print timetable"
+              aria-label="Print timetable"
+            >
+              <Printer size={12} />
+              Print
+            </button>
+
+            <button
+              type="button"
+              className="whole-school-button"
+              onClick={() =>
+                void refresh()
+              }
+              disabled={refreshing}
+              title="Refresh timetable"
+              aria-label="Refresh timetable"
+            >
+              <RefreshCw
+                size={12}
+                className={
+                  refreshing
+                    ? "whole-school-spin"
+                    : ""
+                }
+              />
+
+              Refresh
+            </button>
+          </div>
+        </header>
+
+        <div className="whole-school-meta">
+          <span className="whole-school-badge">
+            {termName}
+          </span>
+
+          <span className="whole-school-badge">
+            {versionName}
+          </span>
+
+          <span className="whole-school-badge">
+            Version{" "}
+            {versionNumber ?? "—"}
+          </span>
+
+          <span className="whole-school-badge">
+            {generatedAt}
+          </span>
+
+          <span className="whole-school-badge whole-school-authority">
+            {authoritativePeriods.length} backend periods
+          </span>
+        </div>
+
+        {error ? (
+          <div className="whole-school-error">
+            {error}
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="whole-school-loading">
+            <span className="whole-school-loading-inner">
+              <RefreshCw
+                size={16}
+                className="whole-school-spin"
+              />
+
+              Loading generated timetable...
+            </span>
+          </div>
+        ) : !version ? (
+          <div className="whole-school-loading">
+            No completed timetable is currently available.
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="whole-school-loading">
+            The latest completed scheduling run returned no timetable entries.
+          </div>
+        ) : slots.length === 0 ? (
+          <div className="whole-school-loading">
+            The latest timetable contains entries but no valid backend period_number values.
+          </div>
+        ) : (
+          <>
+            <div className="whole-school-table-wrap">
+              <table className="whole-school-table">
+                <thead>
+                  <tr>
+                    <th className="day-head">
+                      DAYS
+                    </th>
+
+                    <th className="class-head">
+                      CLASS
+                    </th>
+
+                    {slots.map(
+                      (slot) => (
+                        <th
+                          key={slot.key}
+                          className="slot-head"
+                        >
+                          <span className="head-title">
+                            {slot.title}
+                          </span>
+
+                          <span className="head-time">
+                            {slot.time}
+                          </span>
+                        </th>
+                      ),
+                    )}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {DAYS.map(
+                    (day) =>
+                      CLASSES.map(
+                        (
+                          schoolClass,
+                          classIndex,
+                        ) => (
+                          <tr
+                            key={`${day.code}-${schoolClass.key}`}
+                          >
+                            {classIndex ===
+                            0 ? (
+                              <td
+                                className="day-cell"
+                                rowSpan={
+                                  CLASSES.length
+                                }
+                              >
+                                {
+                                  day.label
+                                }
+                              </td>
+                            ) : null}
+
+                            <td className="class-cell">
+                              {
+                                schoolClass.label
+                              }
+                            </td>
+
+                            {slots.map(
+                              (slot) => {
+                                /*
+                                 * Monday Period 1 remains the
+                                 * whole-school assembly presentation
+                                 * when Period 1 actually exists in
+                                 * the backend result.
+                                 */
+                                if (
+                                  day.code ===
+                                    "MON" &&
+                                  slot.periodNumber ===
+                                    1
+                                ) {
+                                  return (
+                                    <td
+                                      key={
+                                        slot.key
+                                      }
+                                      className="lesson-cell assembly-cell"
+                                    >
+                                      <span className="assembly-title">
+                                        ASSEMBLY
+                                      </span>
+                                    </td>
+                                  );
+                                }
+
+                                if (
+                                  slot.kind ===
+                                  "tea"
+                                ) {
+                                  return (
+                                    <td
+                                      key={
+                                        slot.key
+                                      }
+                                      className="break-cell"
+                                    >
+                                      <span className="special-title">
+                                        TEA
+                                      </span>
+
+                                      <span className="special-time">
+                                        {
+                                          slot.time
+                                        }
+                                      </span>
+                                    </td>
+                                  );
+                                }
+
+                                if (
+                                  slot.kind ===
+                                  "lunch"
+                                ) {
+                                  return (
+                                    <td
+                                      key={
+                                        slot.key
+                                      }
+                                      className="break-cell"
+                                    >
+                                      <span className="special-title">
+                                        LUNCH
+                                      </span>
+
+                                      <span className="special-time">
+                                        {
+                                          slot.time
+                                        }
+                                      </span>
+                                    </td>
+                                  );
+                                }
+
+                                if (
+                                  slot.kind ===
+                                  "prayer"
+                                ) {
+                                  return (
+                                    <td
+                                      key={
+                                        slot.key
+                                      }
+                                      className="special-cell"
+                                    >
+                                      <span className="special-title">
+                                        PRAYER
+                                      </span>
+
+                                      <span className="special-time">
+                                        {
+                                          slot.time
+                                        }
+                                      </span>
+                                    </td>
+                                  );
+                                }
+
+                                if (
+                                  slot.kind ===
+                                  "activity"
+                                ) {
+                                  return (
+                                    <td
+                                      key={
+                                        slot.key
+                                      }
+                                      className="special-cell"
+                                    >
+                                      <span className="special-title">
+                                        {activityLabel(
+                                          day.code,
+                                        )}
+                                      </span>
+
+                                      <span className="special-time">
+                                        {
+                                          slot.time
+                                        }
+                                      </span>
+                                    </td>
+                                  );
+                                }
+
+                                const periodNumber =
+                                  slot.periodNumber;
+
+                                const slotEntries =
+                                  findEntries(
+                                    entries,
+                                    day.code,
+                                    schoolClass,
+                                    periodNumber,
+                                  );
+
+                                if (
+                                  slotEntries.length ===
+                                  0
+                                ) {
+                                  return (
+                                    <td
+                                      key={
+                                        slot.key
+                                      }
+                                      className="lesson-cell"
+                                    >
+                                      <span className="empty-mark">
+                                        —
+                                      </span>
+                                    </td>
+                                  );
+                                }
+
+                                const formattedEntries =
+                                  slotEntries.map(
+                                    (
+                                      entry,
+                                    ) =>
+                                      formatEntry(
+                                        entry,
+                                      ),
+                                  );
+
+                                const tooltip =
+                                  formattedEntries
+                                    .map(
+                                      (
+                                        formatted,
+                                      ) =>
+                                        [
+                                          formatted.subject ||
+                                            formatted.title,
+                                          formatted.teacher ||
+                                            formatted.subtitle,
+                                          formatted.combination,
+                                        ]
+                                          .filter(
+                                            Boolean,
+                                          )
+                                          .join(
+                                            " • ",
+                                          ),
+                                    )
+                                    .filter(
+                                      Boolean,
+                                    )
+                                    .join(
+                                      " | ",
+                                    );
+
+                                return (
+                                  <td
+                                    key={
+                                      slot.key
+                                    }
+                                    className="lesson-cell"
+                                    title={
+                                      tooltip
+                                    }
+                                  >
+                                    {formattedEntries.map(
+                                      (
+                                        formatted,
+                                        index,
+                                      ) => (
+                                        <div
+                                          key={[
+                                            formatted.title,
+                                            formatted.subtitle,
+                                            formatted.combination,
+                                            index,
+                                          ].join(
+                                            "-",
+                                          )}
+                                        >
+                                          <span className="cell-subject">
+                                            {
+                                              formatted.title
+                                            }
+                                          </span>
+
+                                          {formatted.subtitle ? (
+                                            <span className="cell-teacher">
+                                              {
+                                                formatted.subtitle
+                                              }
+                                            </span>
+                                          ) : null}
+
+                                          {formatted.combination ? (
+                                            <span className="cell-combination">
+                                              {
+                                                formatted.combination
+                                              }
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      ),
+                                    )}
+                                  </td>
+                                );
+                              },
+                            )}
+                          </tr>
+                        ),
+                      ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <footer className="whole-school-footer">
+              <span>
+                Subject • Teacher No.
+              </span>
+
+              <span>
+                ✓ {scheduledEntries} scheduled entries
+              </span>
+
+              <span className="whole-school-footer-periods">
+                Backend periods:{" "}
+                {authoritativePeriods.join(
+                  ", ",
+                )}
+              </span>
+            </footer>
+          </>
+        )}
+      </main>
+    </>
+  );
+}
+
+export default Timetable;

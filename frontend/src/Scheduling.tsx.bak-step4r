@@ -1,0 +1,719 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  PlayCircle,
+  Printer,
+  RefreshCw,
+} from "lucide-react";
+import {
+  createSchedulingRun,
+  executeSchedulingRun,
+  getSchedulingRunResults,
+  getSchedulingRuns,
+  type SchedulingRun,
+} from "./services/scheduling";
+import {
+  getAcademicTerms,
+  type AcademicTerm,
+} from "./services/core";
+
+type TimetableEntry = {
+  id: string;
+  day: string;
+  period: {
+    id?: string;
+    number: number;
+    name?: string;
+    start_time?: string;
+    end_time?: string;
+    start?: string;
+    end?: string;
+  };
+  teacher?: {
+    id?: string;
+    name?: string;
+    code?: string;
+    number?: string | number;
+  } | null;
+  instructional_group?: {
+    id?: string;
+    name?: string;
+    code?: string;
+  } | null;
+  teaching_group?: {
+    id?: string;
+    name?: string;
+    code?: string;
+  } | null;
+  lesson_requirement?: {
+    id?: string;
+    name?: string;
+    subject_name?: string;
+    subject_code?: string;
+  } | null;
+  room?: {
+    id?: string;
+    name?: string;
+    code?: string;
+  } | null;
+};
+
+type SchedulingResult = SchedulingRun & {
+  timetable_version?: {
+    id?: string;
+    version_name?: string;
+    version_number?: number;
+    entries?: TimetableEntry[];
+  } | null;
+  entries?: TimetableEntry[];
+};
+
+const DAYS = [
+  { key: "MONDAY", label: "Monday", short: "MON" },
+  { key: "TUESDAY", label: "Tuesday", short: "TUE" },
+  { key: "WEDNESDAY", label: "Wednesday", short: "WED" },
+  { key: "THURSDAY", label: "Thursday", short: "THU" },
+  { key: "FRIDAY", label: "Friday", short: "FRI" },
+];
+
+const PERIODS = [
+  { number: 1, start: "8:00", end: "8:40" },
+  { number: 2, start: "8:40", end: "9:20" },
+  { number: 3, start: "9:20", end: "10:00" },
+  { number: 4, start: "10:00", end: "10:40" },
+  { number: 5, start: "11:00", end: "11:40" },
+  { number: 6, start: "11:40", end: "12:20" },
+  { number: 7, start: "12:20", end: "1:00" },
+  { number: 8, start: "2:00", end: "2:40" },
+  { number: 9, start: "2:40", end: "3:20" },
+  { number: 10, start: "3:20", end: "4:00" },
+];
+
+const AFTER_SCHOOL: Record<string, string> = {
+  MONDAY: "MEETINGS",
+  TUESDAY: "GAMES",
+  WEDNESDAY: "CLUBS",
+  THURSDAY: "GAMES",
+  FRIDAY: "CLEANING",
+};
+
+function normaliseDay(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+}
+
+function getTeacherCode(entry: TimetableEntry): string {
+  const teacher = entry.teacher;
+
+  if (!teacher) {
+    return "";
+  }
+
+  return String(
+    teacher.code ??
+      teacher.number ??
+      teacher.name ??
+      "",
+  ).trim();
+}
+
+function getGroupName(entry: TimetableEntry): string {
+  const group = entry.instructional_group ?? entry.teaching_group;
+
+  return String(
+    group?.code ??
+      group?.name ??
+      "",
+  ).trim();
+}
+
+function getSubjectName(entry: TimetableEntry): string {
+  const lesson = entry.lesson_requirement;
+
+  return String(
+    lesson?.subject_code ??
+      lesson?.subject_name ??
+      lesson?.name ??
+      "",
+  ).trim();
+}
+
+function getLessonLabel(entry: TimetableEntry): string {
+  const subject = getSubjectName(entry);
+  const group = getGroupName(entry);
+
+  if (subject && group) {
+    return `${subject} ${group}`;
+  }
+
+  return subject || group || "Lesson";
+}
+
+function getEntryKey(entry: TimetableEntry): string {
+  return [
+    normaliseDay(entry.day),
+    entry.period?.number,
+    entry.id,
+  ].join("-");
+}
+
+function TimetableCell({
+  entries,
+}: {
+  entries: TimetableEntry[];
+}) {
+  if (entries.length === 0) {
+    return <div className="whole-timetable-empty">—</div>;
+  }
+
+  return (
+    <div className="whole-timetable-lessons">
+      {entries.map((entry) => (
+        <div
+          className="whole-timetable-lesson"
+          key={getEntryKey(entry)}
+        >
+          <div className="whole-timetable-lesson-main">
+            {getLessonLabel(entry)}
+          </div>
+
+          {getTeacherCode(entry) && (
+            <div className="whole-timetable-teacher">
+              {getTeacherCode(entry)}
+            </div>
+          )}
+
+          {entry.room?.name && (
+            <div className="whole-timetable-room">
+              {entry.room.name}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Scheduling() {
+  const [terms, setTerms] = useState<AcademicTerm[]>([]);
+  const [selectedTerm, setSelectedTerm] = useState("");
+  const [runs, setRuns] = useState<SchedulingRun[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState<string>("");
+  const [result, setResult] = useState<SchedulingResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingResult, setLoadingResult] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState("");
+
+  async function loadData() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const [termsData, runsData] = await Promise.all([
+        getAcademicTerms(),
+        getSchedulingRuns(),
+      ]);
+
+      setTerms(termsData);
+      setRuns(runsData);
+
+      const activeTerm = termsData.find((term) => term.is_active);
+
+      if (activeTerm && !selectedTerm) {
+        setSelectedTerm(activeTerm.id);
+      }
+
+      const completedRun = runsData.find(
+        (run) =>
+          run.status.toUpperCase() === "COMPLETED" &&
+          run.timetable_version,
+      );
+
+      if (completedRun && !selectedRunId) {
+        setSelectedRunId(completedRun.id);
+      }
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.detail ||
+          err?.response?.data?.error ||
+          "Unable to load scheduling data. Make sure the Django API is running.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadResult(runId: string) {
+    if (!runId) {
+      setResult(null);
+      return;
+    }
+
+    setLoadingResult(true);
+    setError("");
+
+    try {
+      const data = await getSchedulingRunResults(runId);
+      setResult(data as SchedulingResult);
+    } catch (err: any) {
+      setResult(null);
+      setError(
+        err?.response?.data?.detail ||
+          err?.response?.data?.error ||
+          "Unable to load the timetable result.",
+      );
+    } finally {
+      setLoadingResult(false);
+    }
+  }
+
+  async function generateTimetable() {
+    if (!selectedTerm) {
+      setError("Select an academic term before generating a timetable.");
+      return;
+    }
+
+    setGenerating(true);
+    setError("");
+
+    try {
+      const run = await createSchedulingRun({
+        term: selectedTerm,
+      });
+
+      const completed = await executeSchedulingRun(run.id, {
+        version_name: "Generated Timetable",
+      });
+
+      await loadData();
+
+      const runId = completed?.id || run.id;
+      setSelectedRunId(runId);
+      await loadResult(runId);
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.detail ||
+          err?.response?.data?.error ||
+          err?.detail ||
+          err?.error ||
+          "Timetable generation failed.",
+      );
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  useEffect(() => {
+    if (selectedRunId) {
+      void loadResult(selectedRunId);
+    }
+  }, [selectedRunId]);
+
+  const entries = useMemo(() => {
+    return (
+      result?.timetable_version?.entries ??
+      result?.entries ??
+      []
+    );
+  }, [result]);
+
+  const entriesBySlot = useMemo(() => {
+    const map = new Map<string, TimetableEntry[]>();
+
+    for (const entry of entries) {
+      const day = normaliseDay(entry.day);
+      const period = Number(entry.period?.number);
+
+      if (!day || !period) {
+        continue;
+      }
+
+      const key = `${day}-${period}`;
+      const existing = map.get(key) ?? [];
+      existing.push(entry);
+      map.set(key, existing);
+    }
+
+    return map;
+  }, [entries]);
+
+  function printTimetable() {
+    window.print();
+  }
+
+  return (
+    <>
+      <div className="page-header timetable-page-header">
+        <div>
+          <h1>Whole-School Timetable</h1>
+          <p>
+            Complete Monday–Friday timetable generated by SmartTimetable.
+          </p>
+        </div>
+
+        <div className="page-actions no-print">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void loadData()}
+            disabled={loading || generating}
+          >
+            <RefreshCw
+              size={17}
+              className={loading ? "spin" : ""}
+            />
+            Refresh
+          </button>
+
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => void generateTimetable()}
+            disabled={generating || loading || !selectedTerm}
+          >
+            <PlayCircle size={18} />
+            {generating ? "Generating..." : "Generate Timetable"}
+          </button>
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={printTimetable}
+            disabled={!result || loadingResult}
+          >
+            <Printer size={17} />
+            Print
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="alert error no-print">
+          <AlertCircle size={19} />
+
+          <div>
+            <strong>Scheduling error</strong>
+            <span>{error}</span>
+          </div>
+        </div>
+      )}
+
+      <section className="panel scheduling-panel no-print">
+        <div className="panel-header">
+          <div>
+            <h2>Timetable Result</h2>
+            <p>
+              Select the academic term and generated timetable version.
+            </p>
+          </div>
+        </div>
+
+        <div className="scheduling-form timetable-result-controls">
+          <div className="form-group">
+            <label htmlFor="academic-term">Academic Term</label>
+            <select
+              id="academic-term"
+              value={selectedTerm}
+              onChange={(event) =>
+                setSelectedTerm(event.target.value)
+              }
+              disabled={loading || generating}
+            >
+              <option value="">
+                {loading
+                  ? "Loading academic terms..."
+                  : "Select academic term"}
+              </option>
+
+              {terms.map((term) => (
+                <option key={term.id} value={term.id}>
+                  {term.academic_year_name} — {term.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="timetable-run">Generated Timetable</label>
+            <select
+              id="timetable-run"
+              value={selectedRunId}
+              onChange={(event) =>
+                setSelectedRunId(event.target.value)
+              }
+              disabled={loading || generating || runs.length === 0}
+            >
+              <option value="">
+                {runs.length === 0
+                  ? "No generated timetables"
+                  : "Select timetable"}
+              </option>
+
+              {runs.map((run) => (
+                <option key={run.id} value={run.id}>
+                  {run.term_name} — {run.status_display}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
+      {loadingResult ? (
+        <section className="panel timetable-loading">
+          <RefreshCw size={22} className="spin" />
+          Loading timetable result...
+        </section>
+      ) : result ? (
+        <section className="whole-timetable-panel">
+          <div className="whole-timetable-heading">
+            <div>
+              <div className="whole-timetable-school">
+                QUEEN OF APOSTLE SEMINARY
+              </div>
+
+              <h2>
+                WHOLE-SCHOOL TIMETABLE
+              </h2>
+
+              <p>
+                {result.term_name ||
+                  result.term ||
+                  "Academic Term"}
+                {" • "}
+                {result.timetable_version?.version_name ||
+                  "Generated Timetable"}
+              </p>
+            </div>
+
+            <div className="whole-timetable-status">
+              <CheckCircle2 size={17} />
+              {result.status_display || "Completed"}
+            </div>
+          </div>
+
+          <div className="whole-timetable-scroll">
+            <table className="whole-timetable">
+              <thead>
+                <tr>
+                  <th className="whole-timetable-day-header">
+                    <span>DAYS</span>
+                  </th>
+
+                  {PERIODS.slice(0, 4).map((period) => (
+                    <th key={period.number}>
+                      <strong>Pd {period.number}</strong>
+                      <span>
+                        {period.start}–{period.end}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+
+              <tbody>
+                {DAYS.map((day) => (
+                  <tr key={`morning-${day.key}`}>
+                    <th className="whole-timetable-day">
+                      <strong>{day.label}</strong>
+                      <span>{day.short}</span>
+                    </th>
+
+                    {PERIODS.slice(0, 4).map((period) => (
+                      <td key={`${day.key}-${period.number}`}>
+                        <TimetableCell
+                          entries={
+                            entriesBySlot.get(
+                              `${day.key}-${period.number}`,
+                            ) ?? []
+                          }
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+
+                <tr className="whole-timetable-break">
+                  <td colSpan={5}>
+                    <strong>TEA BREAK</strong>
+                    <span>10:40–11:00</span>
+                  </td>
+                </tr>
+
+                {DAYS.map((day) => (
+                  <tr key={`midday-${day.key}`}>
+                    <th className="whole-timetable-day">
+                      <strong>{day.label}</strong>
+                      <span>{day.short}</span>
+                    </th>
+
+                    {PERIODS.slice(4, 7).map((period) => (
+                      <td key={`${day.key}-${period.number}`}>
+                        <TimetableCell
+                          entries={
+                            entriesBySlot.get(
+                              `${day.key}-${period.number}`,
+                            ) ?? []
+                          }
+                        />
+                      </td>
+                    ))}
+
+                    <td className="whole-timetable-spacer" />
+                  </tr>
+                ))}
+
+                <tr className="whole-timetable-break">
+                  <td colSpan={5}>
+                    <strong>LUNCH BREAK</strong>
+                    <span>1:00–2:00</span>
+                  </td>
+                </tr>
+
+                {DAYS.map((day) => (
+                  <tr key={`afternoon-${day.key}`}>
+                    <th className="whole-timetable-day">
+                      <strong>{day.label}</strong>
+                      <span>{day.short}</span>
+                    </th>
+
+                    {PERIODS.slice(7, 10).map((period) => (
+                      <td key={`${day.key}-${period.number}`}>
+                        <TimetableCell
+                          entries={
+                            entriesBySlot.get(
+                              `${day.key}-${period.number}`,
+                            ) ?? []
+                          }
+                        />
+                      </td>
+                    ))}
+
+                    <td className="whole-timetable-spacer" />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="whole-timetable-afterschool">
+            <div className="whole-timetable-after-title">
+              <strong>AFTER-SCHOOL PROGRAMME</strong>
+              <span>4:00–5:45 PM</span>
+            </div>
+
+            <div className="whole-timetable-prayer">
+              <strong>4:00–4:40</strong>
+              <span>WHOLE-SCHOOL PRAYER</span>
+            </div>
+
+            <div className="whole-timetable-activities">
+              {DAYS.map((day) => (
+                <div
+                  className="whole-timetable-activity"
+                  key={day.key}
+                >
+                  <strong>{day.short}</strong>
+                  <span>{AFTER_SCHOOL[day.key]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className="panel timetable-empty no-print">
+          <Clock size={34} />
+          <h3>No timetable result selected</h3>
+          <p>
+            Generate a timetable or select a completed scheduling run
+            to display the whole-school timetable.
+          </p>
+        </section>
+      )}
+
+      <section className="panel scheduling-panel no-print">
+        <div className="panel-header">
+          <div>
+            <h2>Scheduling Runs</h2>
+            <p>Previous timetable generation runs.</p>
+          </div>
+        </div>
+
+        {runs.length === 0 ? (
+          <div className="table-state">
+            No scheduling runs recorded.
+          </div>
+        ) : (
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Term</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Timetable Version</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {runs.map((run) => (
+                  <tr key={run.id}>
+                    <td>
+                      <strong>{run.term_name || run.term}</strong>
+                    </td>
+
+                    <td>
+                      <span
+                        className={`status-badge ${run.status.toLowerCase()}`}
+                      >
+                        {run.status.toUpperCase() === "COMPLETED" ? (
+                          <CheckCircle2 size={15} />
+                        ) : run.status.toUpperCase() === "FAILED" ? (
+                          <AlertCircle size={15} />
+                        ) : (
+                          <Clock size={15} />
+                        )}
+
+                        {run.status_display}
+                      </span>
+                    </td>
+
+                    <td>
+                      {run.created_at
+                        ? new Date(
+                            run.created_at,
+                          ).toLocaleString()
+                        : "--"}
+                    </td>
+
+                    <td>
+                      {run.timetable_version ? (
+                        <span className="timetable-created">
+                          <CheckCircle2 size={15} />
+                          Available
+                        </span>
+                      ) : (
+                        "--"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+export default Scheduling;
