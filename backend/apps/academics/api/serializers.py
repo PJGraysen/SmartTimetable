@@ -6,6 +6,7 @@ from apps.academics.models import (
     Grade,
     Stream,
     TeachingGroup,
+    InstructionalGroup,
     Subject,
     LessonRequirement,
 )
@@ -82,6 +83,55 @@ class TeachingGroupSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "id",
+            "stream_name",
+            "created_at",
+            "updated_at",
+        )
+
+
+class InstructionalGroupSerializer(serializers.ModelSerializer):
+    """
+    Read-facing representation of an instructional group.
+
+    This is the entity TimetableEntry actually foreign-keys to, and is
+    the canonical class/stream identity that the timetable frontend
+    must use for matching entries (see SmartTimetable Pro Rule 37).
+    """
+
+    teaching_group_name = serializers.CharField(
+        source="teaching_group.__str__",
+        read_only=True,
+    )
+
+    grade_name = serializers.CharField(
+        source="teaching_group.stream.grade.name",
+        read_only=True,
+    )
+
+    stream_name = serializers.CharField(
+        source="teaching_group.stream.name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = InstructionalGroup
+        fields = (
+            "id",
+            "teaching_group",
+            "teaching_group_name",
+            "grade_name",
+            "stream_name",
+            "name",
+            "code",
+            "learner_count",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "teaching_group_name",
+            "grade_name",
             "stream_name",
             "created_at",
             "updated_at",

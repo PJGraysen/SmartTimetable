@@ -19,6 +19,36 @@ def api_client():
 
 
 # ---------------------------------------------------------------------------
+# Instructional group API
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_list_instructional_groups(api_client, instructional_group):
+    response = api_client.get("/api/academics/instructional-groups/")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.data) == 1
+
+    result = response.data[0]
+    assert result["id"] == str(instructional_group.id)
+    assert result["name"] == instructional_group.name
+    assert str(result["teaching_group"]) == str(
+        instructional_group.teaching_group_id
+    )
+    assert result["teaching_group_name"] == str(
+        instructional_group.teaching_group
+    )
+
+    create_response = api_client.post(
+        "/api/academics/instructional-groups/",
+        {},
+        format="json",
+    )
+    assert create_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+
+
+# ---------------------------------------------------------------------------
 # Grade API
 # ---------------------------------------------------------------------------
 

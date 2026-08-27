@@ -6,6 +6,7 @@ from rest_framework import generics
 
 from apps.academics.models import (
     Grade,
+    InstructionalGroup,
     Stream,
     TeachingGroup,
     Subject,
@@ -14,6 +15,7 @@ from apps.academics.models import (
 
 from .serializers import (
     GradeSerializer,
+    InstructionalGroupSerializer,
     StreamSerializer,
     TeachingGroupSerializer,
     SubjectSerializer,
@@ -42,6 +44,17 @@ class GradeDetailView(generics.RetrieveUpdateDestroyAPIView):
         "academic_year",
     ).all()
     serializer_class = GradeSerializer
+
+
+class InstructionalGroupListView(generics.ListAPIView):
+    """List the canonical schedulable learner cohorts."""
+
+    queryset = InstructionalGroup.objects.select_related(
+        "teaching_group",
+        "teaching_group__stream",
+        "teaching_group__stream__grade",
+    ).all()
+    serializer_class = InstructionalGroupSerializer
 
 
 class StreamListCreateView(generics.ListCreateAPIView):

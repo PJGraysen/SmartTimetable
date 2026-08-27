@@ -9,6 +9,10 @@ import {
   getSchedulingRunResults,
   type SchedulingRun,
 } from "../services/scheduling";
+import {
+  getInstructionalGroups,
+  type InstructionalGroup,
+} from "../services/core";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -63,7 +67,7 @@ type TimetableVersion = {
 };
 
 type SchoolClass = {
-  key: string;
+  id: string;
   label: string;
 };
 
@@ -91,28 +95,6 @@ const DAYS = [
   { code: "FRI", label: "Fri" },
 ] as const;
 
-const CLASSES: SchoolClass[] = [
-  {
-    key: "F4_WEST",
-    label: "F4 West",
-  },
-  {
-    key: "F4_EAST",
-    label: "F4 East",
-  },
-  {
-    key: "F3_WEST",
-    label: "F3 West",
-  },
-  {
-    key: "F3_EAST",
-    label: "F3 East",
-  },
-  {
-    key: "GRADE_10",
-    label: "Grade 10",
-  },
-];
 
 const SLOTS: TimetableSlot[] = [
   {
@@ -305,71 +287,6 @@ function normalizeDay(value: unknown): string {
   return text;
 }
 
-function normalizeClassText(value: unknown): string {
-  return String(value ?? "")
-    .trim()
-    .toUpperCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ");
-}
-
-function classMatches(
-  entry: TimetableEntry,
-  schoolClass: SchoolClass,
-): boolean {
-  const rawName =
-    firstString(
-      entry.teaching_group_name,
-      entry.instructional_group_name,
-      entry.lesson_requirement_name,
-    ) || "";
-
-  const name = normalizeClassText(rawName);
-
-  switch (schoolClass.key) {
-    case "F4_WEST":
-      return (
-        name.includes("F4 WEST") ||
-        name.includes("FORM 4 WEST") ||
-        name.includes("FORM4 WEST") ||
-        name.includes("F4W")
-      );
-
-    case "F4_EAST":
-      return (
-        name.includes("F4 EAST") ||
-        name.includes("FORM 4 EAST") ||
-        name.includes("FORM4 EAST") ||
-        name.includes("F4E")
-      );
-
-    case "F3_WEST":
-      return (
-        name.includes("F3 WEST") ||
-        name.includes("FORM 3 WEST") ||
-        name.includes("FORM3 WEST") ||
-        name.includes("F3W")
-      );
-
-    case "F3_EAST":
-      return (
-        name.includes("F3 EAST") ||
-        name.includes("FORM 3 EAST") ||
-        name.includes("FORM3 EAST") ||
-        name.includes("F3E")
-      );
-
-    case "GRADE_10":
-      return (
-        name.includes("GRADE 10") ||
-        name.includes("GRADE10") ||
-        name.includes("FORM 1 GRADE 10")
-      );
-
-    default:
-      return false;
-  }
-}
 
 function extractEntriesFromCandidate(
   candidate: unknown,
@@ -482,7 +399,7 @@ function entryMatches(
     return false;
   }
 
-  return classMatches(entry, schoolClass);
+  return String(entry.instructional_group ?? "") === schoolClass.id;
 }
 
 function findEntries(
@@ -564,6 +481,7 @@ function activityLabel(dayCode: string): string {
 function Timetable() {
   const [run, setRun] = useState<SchedulingRun | null>(null);
   const [version, setVersion] = useState<TimetableVersion | null>(null);
+  const [schoolClasses, setSchoolClasses] = useState<SchoolClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -572,7 +490,19 @@ function Timetable() {
     setError("");
 
     try {
-      const runs = await getSchedulingRuns();
+      const [runs, instructionalGroups] = await Promise.all([
+        getSchedulingRuns(),
+        getInstructionalGroups(),
+      ]);
+
+      setSchoolClasses(
+        instructionalGroups
+          .filter((group: InstructionalGroup) => group.is_active)
+          .map((group: InstructionalGroup) => ({
+            id: group.id,
+            label: group.name,
+          })),
+      );
 
       const completedRuns = Array.isArray(runs)
         ? runs
@@ -631,6 +561,7 @@ function Timetable() {
       setError(message);
       setRun(null);
       setVersion(null);
+      setSchoolClasses([]);
     }
   }, []);
 
@@ -1098,6 +1029,10 @@ function Timetable() {
           <div className="whole-school-loading">
             No completed timetable is currently available.
           </div>
+        ) : schoolClasses.length === 0 ? (
+          <div className="whole-school-loading">
+            No active instructional groups are configured.
+          </div>
         ) : (
           <>
             <div className="whole-school-table-wrap">
@@ -1131,15 +1066,15 @@ function Timetable() {
 
                 <tbody>
                   {DAYS.map((day) =>
-                    CLASSES.map(
+                    schoolClasses.map(
                       (schoolClass, classIndex) => (
                         <tr
-                          key={`${day.code}-${schoolClass.key}`}
+                          key={`${day.code}-${schoolClass.id}`}
                         >
                           {classIndex === 0 ? (
                             <td
                               className="day-cell"
-                              rowSpan={CLASSES.length}
+                              rowSpan={schoolClasses.length}
                             >
                               {day.label}
                             </td>

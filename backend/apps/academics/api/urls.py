@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     GradeDetailView,
     GradeListCreateView,
+    InstructionalGroupListView,
     LessonRequirementDetailView,
     LessonRequirementListCreateView,
     StreamDetailView,
@@ -24,6 +25,12 @@ urlpatterns = [
         "grades/<uuid:pk>/",
         GradeDetailView.as_view(),
         name="grade-detail",
+    ),
+
+    path(
+        "instructional-groups/",
+        InstructionalGroupListView.as_view(),
+        name="instructional-group-list",
     ),
 
     path(
