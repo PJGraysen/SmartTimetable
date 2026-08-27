@@ -6,11 +6,15 @@ import React, {
 
 import api from "../api";
 
-type Tab =
+export type AcademicManagementTab =
   | "groups"
   | "teachers"
   | "subjects"
   | "rooms";
+
+export type AcademicsManagementProps = {
+  initialTab?: AcademicManagementTab;
+};
 
 type RecordItem = {
   id: string;
@@ -80,7 +84,7 @@ const emptyForm: FormState = {
 };
 
 const tabs: {
-  key: Tab;
+  key: AcademicManagementTab;
   label: string;
 }[] = [
   {
@@ -101,7 +105,7 @@ const tabs: {
   },
 ];
 
-const endpoints: Record<Tab, string> = {
+const endpoints: Record<AcademicManagementTab, string> = {
   groups:
     "/academics/management/teaching-groups/",
   teachers:
@@ -112,7 +116,7 @@ const endpoints: Record<Tab, string> = {
     "/academics/management/rooms/",
 };
 
-const titleMap: Record<Tab, string> = {
+const titleMap: Record<AcademicManagementTab, string> = {
   groups: "Teaching Groups",
   teachers: "Teachers",
   subjects: "Subjects",
@@ -121,10 +125,12 @@ const titleMap: Record<Tab, string> = {
 
 
 
-export default function AcademicsManagement() {
+export default function AcademicsManagement({
+  initialTab = "groups",
+}: AcademicsManagementProps) {
 
   const [tab, setTab] =
-    useState<Tab>("groups");
+    useState<AcademicManagementTab>(initialTab);
 
   const [rows, setRows] =
     useState<RecordItem[]>([]);
@@ -151,6 +157,41 @@ export default function AcademicsManagement() {
       () => titleMap[tab],
       [tab],
     );
+
+  const summary = useMemo(() => {
+    const total = rows.length;
+    const active = rows.filter((item) => item.is_active !== false).length;
+
+    if (tab === "groups") {
+      return {
+        label: "Teaching groups",
+        total,
+        active,
+      };
+    }
+
+    if (tab === "teachers") {
+      return {
+        label: "Teachers",
+        total,
+        active,
+      };
+    }
+
+    if (tab === "subjects") {
+      return {
+        label: "Subjects",
+        total,
+        active,
+      };
+    }
+
+    return {
+      label: "Rooms",
+      total,
+      active,
+    };
+  }, [rows, tab]);
 
   async function load() {
 
@@ -195,10 +236,15 @@ export default function AcademicsManagement() {
     setError("");
   }
 
-  function changeTab(next: Tab) {
+  function changeTab(next: AcademicManagementTab) {
     setTab(next);
     resetForm();
   }
+
+  useEffect(() => {
+    setTab(initialTab);
+    resetForm();
+  }, [initialTab]);
 
   function beginEdit(item: RecordItem) {
 
@@ -544,16 +590,39 @@ export default function AcademicsManagement() {
               }}
             >
 
-              <h2
+              <div
                 style={{
-                  margin:
-                    "0 0 14px",
-                  fontSize: 17,
-                  color: "#17365d",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  marginBottom: 14,
+                  flexWrap: "wrap",
                 }}
               >
-                {title}
-              </h2>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: 17,
+                    color: "#17365d",
+                  }}
+                >
+                  {title}
+                </h2>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span style={statusPill}>Total: {summary.total}</span>
+                  <span style={{ ...statusPill, background: "#ecfdf3", color: "#067647" }}>
+                    Active: {summary.active}
+                  </span>
+                </div>
+              </div>
 
               {loading ? (
 
@@ -603,7 +672,11 @@ export default function AcademicsManagement() {
                             </th>
 
                             <th style={th}>
-                              Grade / Stream
+                              Grade
+                            </th>
+
+                            <th style={th}>
+                              Stream
                             </th>
 
                             <th style={th}>
@@ -673,32 +746,24 @@ export default function AcademicsManagement() {
                               <>
                                 <td style={td}>
                                   <strong>
-                                    {item.code}
+                                    {item.code || "—"}
                                   </strong>
                                 </td>
 
                                 <td style={td}>
-                                  {item.name}
+                                  {item.name || "—"}
                                 </td>
 
                                 <td style={td}>
-                                  {item.grade ??
-                                    "Ã¢â‚¬â€"}
-
-                                  <div
-                                    style={{
-                                      color:
-                                        "#77849a",
-                                    }}
-                                  >
-                                    {item.stream ??
-                                      "Ã¢â‚¬â€"}
-                                  </div>
+                                  {item.grade || "—"}
                                 </td>
 
                                 <td style={td}>
-                                  {item.learner_count ??
-                                    "Ã¢â‚¬â€"}
+                                  {item.stream || "—"}
+                                </td>
+
+                                <td style={td}>
+                                  {item.learner_count ?? "—"}
                                 </td>
                               </>
                             )}
@@ -757,9 +822,15 @@ export default function AcademicsManagement() {
                             )}
 
                             <td style={td}>
-                              {item.is_active
-                                ? "Active"
-                                : "Inactive"}
+                              <span
+                                style={{
+                                  ...statusPill,
+                                  background: item.is_active ? "#ecfdf3" : "#fef3f2",
+                                  color: item.is_active ? "#067647" : "#b42318",
+                                }}
+                              >
+                                {item.is_active ? "Active" : "Inactive"}
+                              </span>
                             </td>
 
                             <td style={td}>
@@ -879,7 +950,7 @@ export default function AcademicsManagement() {
             {tab === "groups" && (
               <>
                 <Field
-                  label="Grade"
+                  label="Grade Name"
                   value={
                     form.grade_name
                   }
@@ -905,11 +976,11 @@ export default function AcademicsManagement() {
                         value.toUpperCase(),
                     })
                   }
-                  placeholder="G10"
+                  placeholder="10"
                 />
 
                 <Field
-                  label="Stream"
+                  label="Stream Name"
                   value={
                     form.stream_name
                   }
@@ -939,7 +1010,7 @@ export default function AcademicsManagement() {
                 />
 
                 <Field
-                  label="Teaching Group"
+                  label="Teaching Group Name"
                   value={form.name}
                   onChange={(value) =>
                     setForm({
@@ -947,7 +1018,7 @@ export default function AcademicsManagement() {
                       name: value,
                     })
                   }
-                  placeholder="Grade 10 East"
+                  placeholder="Grade 10E"
                 />
 
                 <Field
@@ -960,7 +1031,7 @@ export default function AcademicsManagement() {
                         value.toUpperCase(),
                     })
                   }
-                  placeholder="G10E"
+                  placeholder="10E"
                 />
 
                 <Field
@@ -1319,3 +1390,15 @@ const smallButton:
       "pointer",
     fontSize: 12,
   };
+
+const statusPill: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: 999,
+  padding: "5px 9px",
+  fontSize: 11,
+  fontWeight: 700,
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  border: "1px solid #bfdbfe",
+};

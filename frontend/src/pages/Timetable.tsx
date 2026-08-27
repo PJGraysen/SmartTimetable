@@ -456,8 +456,8 @@ function formatEntry(entry: TimetableEntry) {
   return {
     title,
     subtitle,
-    subject: subjectName || subjectCode || lessonName || "",
-    teacher: teacherName || teacherCode || "",
+    subject: subjectCode || subjectName || lessonName || "",
+    teacher: teacherCode || teacherName || "",
   };
 }
 
@@ -833,6 +833,23 @@ function Timetable() {
           font-size: 6px;
           font-weight: 700;
           line-height: 1;
+        }
+
+        .cell-entry-block {
+          background: #f8fbff;
+          border: 1px solid #dfeaf7;
+          border-radius: 4px;
+          padding: 4px 5px;
+          margin: 3px 0;
+          text-align: center;
+        }
+
+        .cell-entry-block:first-child {
+          margin-top: 0;
+        }
+
+        .cell-entry-block:last-child {
+          margin-bottom: 0;
         }
 
         .special-title {
@@ -1256,102 +1273,48 @@ function Timetable() {
 
 
                             return (
-
-
                               <td
-
-
                                 key={slot.key}
-
-
                                 className="lesson-cell"
-
-
                                 title={formattedEntries
-
-
                                   .map((formatted) =>
-
-
                                     [formatted.subject, formatted.teacher]
-
-
                                       .filter(Boolean)
-
-
                                       .join(" • ")
-
-
                                   )
-
-
                                   .filter(Boolean)
-
-
                                   .join(" | ")}
-
-
                               >
-
-
-                                {formattedEntries.map((formatted, index) => (
-
-
-                                  <div
-
-
-                                    key={[
-
-
-                                      formatted.subject,
-
-
-                                      formatted.teacher,
-
-
-                                      index,
-
-
-                                    ].join("-")}
-
-
-                                  >
-
-
-                                    <span className="cell-subject">
-
-
-                                      {formatted.title}
-
-
-                                    </span>
-
-
-
-                                    {formatted.subtitle ? (
-
-
-                                      <span className="cell-teacher">
-
-
-                                        {formatted.subtitle}
-
-
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "3px",
+                                    padding: "4px",
+                                  }}
+                                >
+                                  {formattedEntries.map((formatted, index) => (
+                                    <div
+                                      key={[
+                                        formatted.subject,
+                                        formatted.teacher,
+                                        index,
+                                      ].join("-")}
+                                      className="cell-entry-block"
+                                    >
+                                      <span className="cell-subject">
+                                        {formatted.title}
                                       </span>
 
-
-                                    ) : null}
-
-
-                                  </div>
-
-
-                                ))}
-
-
+                                      {formatted.subtitle ? (
+                                        <span className="cell-teacher">
+                                          {formatted.subtitle}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  ))}
+                                </div>
                               </td>
-
-
                             );
                           })}
                         </tr>

@@ -44,6 +44,22 @@ a {
   flex-direction: column;
   position: fixed;
   inset: 0 auto 0 0;
+  transition: width 0.3s ease, box-shadow 0.3s ease;
+  z-index: 1000;
+}
+
+.sidebar[data-collapsed="true"] {
+  width: 70px;
+}
+
+.sidebar[data-collapsed="true"] .brand {
+  justify-content: center;
+  padding: 18px 8px;
+}
+
+.sidebar[data-collapsed="true"] .nav-link {
+  justify-content: center;
+  padding: 12px 8px;
 }
 
 .brand {
@@ -138,6 +154,12 @@ a {
 .main-area {
   width: calc(100% - 250px);
   margin-left: 250px;
+  transition: width 0.3s ease, margin-left 0.3s ease;
+}
+
+.main-area[data-sidebar-open="false"] {
+  width: calc(100% - 70px);
+  margin-left: 70px;
 }
 
 .topbar {
@@ -148,6 +170,38 @@ a {
   align-items: center;
   justify-content: space-between;
   padding: 0 32px;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex: 1;
+}
+
+.sidebar-toggle {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #e6eaf0;
+  background: white;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #172033;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+  background: #f5f7fb;
+  border-color: #d1d5db;
+}
+
+.sidebar-toggle:active {
+  background: #eef2ff;
+  border-color: #315efb;
+  color: #315efb;
 }
 
 .school-name {
@@ -166,6 +220,29 @@ a {
   display: flex;
   align-items: center;
   gap: 22px;
+}
+
+.current-time {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  font-size: 12px;
+  background: #f5f7fb;
+  padding: 8px 14px;
+  border-radius: 8px;
+  min-width: 120px;
+}
+
+.time-display {
+  font-weight: 700;
+  color: #172033;
+  font-size: 13px;
+}
+
+.date-display {
+  color: #748095;
+  font-size: 11px;
+  margin-top: 2px;
 }
 
 .current-term {

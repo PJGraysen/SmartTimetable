@@ -10,13 +10,16 @@ import {
   BookOpen,
   DoorOpen,
   PlayCircle,
+  Menu,
 } from "lucide-react";
 import "./index.css";
+import api from "./api";
 import Scheduling from "./Scheduling";
+import AcademicsManagement from "./pages/AcademicsManagement";
 import Timetable from "./pages/Timetable";
 import { getAcademicTerms } from "./services/core";
 
-function Sidebar() {
+function Sidebar({ isOpen }: { isOpen: boolean }) {
   const links = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/timetables", label: "Timetables", icon: CalendarDays },
@@ -29,20 +32,22 @@ function Sidebar() {
   ];
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" data-collapsed={!isOpen}>
       <div className="brand">
         <div className="brand-mark">
           <CalendarDays size={24} />
         </div>
 
-        <div>
-          <div className="brand-title">SmartTimetable</div>
-          <div className="brand-subtitle">Pro</div>
-        </div>
+        {isOpen && (
+          <div>
+            <div className="brand-title">SmartTimetable</div>
+            <div className="brand-subtitle">Pro</div>
+          </div>
+        )}
       </div>
 
       <nav className="sidebar-nav">
-        <div className="nav-section-title">MAIN</div>
+        {isOpen && <div className="nav-section-title">MAIN</div>}
 
         {links.map(({ to, label, icon: Icon, end }) => (
           <NavLink
@@ -52,9 +57,10 @@ function Sidebar() {
             className={({ isActive }) =>
               `nav-link ${isActive ? "active" : ""}`
             }
+            title={isOpen ? undefined : label}
           >
             <Icon size={19} />
-            <span>{label}</span>
+            {isOpen && <span>{label}</span>}
           </NavLink>
         ))}
       </nav>
@@ -65,25 +71,36 @@ function Sidebar() {
           className={({ isActive }) =>
             `nav-link ${isActive ? "active" : ""}`
           }
+          title={isOpen ? undefined : "Settings"}
         >
           <Settings size={19} />
-          <span>Settings</span>
+          {isOpen && <span>Settings</span>}
         </NavLink>
 
         <div className="system-status">
           <span className="status-dot" />
-          <span>System Online</span>
+          {isOpen && <span>System Online</span>}
         </div>
       </div>
     </aside>
   );
 }
 
-function Header() {
+function Header({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const [activeTerm, setActiveTerm] = useState<{
     academic_year_name: string;
     name: string;
   } | null>(null);
+
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     getAcademicTerms()
@@ -106,15 +123,36 @@ function Header() {
 
   return (
     <header className="topbar">
-      <div>
-        <div className="school-name">
-          Queen of Apostles Seminary Senior School
-        </div>
+      <div className="topbar-left">
+        <button
+          type="button"
+          className="sidebar-toggle"
+          onClick={onToggleSidebar}
+          title="Toggle sidebar"
+          aria-label="Toggle sidebar"
+        >
+          <Menu size={20} />
+        </button>
 
-        <div className="school-context">SmartTimetable Pro</div>
+        <div>
+          <div className="school-name">
+            Queen of Apostles Seminary Senior School
+          </div>
+
+          <div className="school-context">SmartTimetable Pro</div>
+        </div>
       </div>
 
       <div className="header-actions">
+        <div className="current-time">
+          <span className="time-display">
+            {currentTime.toLocaleTimeString()}
+          </span>
+          <span className="date-display">
+            {currentTime.toLocaleDateString()}
+          </span>
+        </div>
+
         <div className="current-term">
           <span className="term-label">Current Term</span>
 
@@ -132,6 +170,44 @@ function Header() {
 }
 
 function Dashboard() {
+  const [counts, setCounts] = useState({
+    teachingGroups: 0,
+    teachers: 0,
+    subjects: 0,
+    rooms: 0,
+  });
+
+  useEffect(() => {
+    async function loadCounts() {
+      try {
+        const [teachingGroups, teachers, subjects, rooms] = await Promise.all([
+          api.get("/academics/management/teaching-groups/"),
+          api.get("/academics/management/teachers/"),
+          api.get("/academics/management/subjects/"),
+          api.get("/academics/management/rooms/"),
+        ]);
+
+        setCounts({
+          teachingGroups: Array.isArray(teachingGroups.data)
+            ? teachingGroups.data.length
+            : 0,
+          teachers: Array.isArray(teachers.data) ? teachers.data.length : 0,
+          subjects: Array.isArray(subjects.data) ? subjects.data.length : 0,
+          rooms: Array.isArray(rooms.data) ? rooms.data.length : 0,
+        });
+      } catch {
+        setCounts({
+          teachingGroups: 0,
+          teachers: 0,
+          subjects: 0,
+          rooms: 0,
+        });
+      }
+    }
+
+    void loadCounts();
+  }, []);
+
   return (
     <>
       <div className="page-header">
@@ -154,7 +230,7 @@ function Dashboard() {
 
           <div>
             <div className="stat-label">Teaching Groups</div>
-            <div className="stat-value">--</div>
+            <div className="stat-value">{counts.teachingGroups}</div>
             <div className="stat-note">From academic data</div>
           </div>
         </div>
@@ -166,7 +242,7 @@ function Dashboard() {
 
           <div>
             <div className="stat-label">Teachers</div>
-            <div className="stat-value">--</div>
+            <div className="stat-value">{counts.teachers}</div>
             <div className="stat-note">Teacher assignments</div>
           </div>
         </div>
@@ -178,7 +254,7 @@ function Dashboard() {
 
           <div>
             <div className="stat-label">Subjects</div>
-            <div className="stat-value">--</div>
+            <div className="stat-value">{counts.subjects}</div>
             <div className="stat-note">Active subjects</div>
           </div>
         </div>
@@ -190,7 +266,7 @@ function Dashboard() {
 
           <div>
             <div className="stat-label">Rooms</div>
-            <div className="stat-value">--</div>
+            <div className="stat-value">{counts.rooms}</div>
             <div className="stat-note">Available rooms</div>
           </div>
         </div>
@@ -299,12 +375,14 @@ function Placeholder({ title }: { title: string }) {
 }
 
 function App() {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} />
 
-      <div className="main-area">
-        <Header />
+      <div className="main-area" data-sidebar-open={sidebarOpen}>
+        <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
         <main className="content">
           <Routes>
@@ -316,22 +394,22 @@ function App() {
 
             <Route
               path="/academics"
-              element={<Placeholder title="Academics" />}
+              element={<AcademicsManagement initialTab="groups" />}
             />
 
             <Route
               path="/teachers"
-              element={<Placeholder title="Teachers" />}
+              element={<AcademicsManagement initialTab="teachers" />}
             />
 
             <Route
               path="/subjects"
-              element={<Placeholder title="Subjects" />}
+              element={<AcademicsManagement initialTab="subjects" />}
             />
 
             <Route
               path="/rooms"
-              element={<Placeholder title="Rooms" />}
+              element={<AcademicsManagement initialTab="rooms" />}
             />
 
             <Route

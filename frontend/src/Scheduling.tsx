@@ -36,6 +36,8 @@ function Scheduling() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   /*
    * Changing this value forces the authoritative Timetable component
@@ -56,6 +58,7 @@ function Scheduling() {
 
       setTerms(termsData);
       setRuns(runsData);
+      setLastSyncTime(new Date());
 
       const activeTerm = termsData.find((term) => term.is_active);
 
@@ -154,6 +157,22 @@ function Scheduling() {
     void loadData(true);
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void loadData(false);
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [selectedTerm]);
+
   return (
     <>
       <div className="page-header">
@@ -223,6 +242,117 @@ function Scheduling() {
           </div>
         </div>
       ) : null}
+
+      {runs.some((run) => run.status.toUpperCase() === "COMPLETED") && (
+        <div
+          className="section-card"
+          style={{
+            marginBottom: "1.5rem",
+            background: "linear-gradient(135deg, #f5f7fb 0%, #eef2ff 100%)",
+            borderColor: "#d1d5db",
+          }}
+        >
+          <div className="section-card-header">
+            <div>
+              <span className="eyebrow">LATEST RESULT</span>
+              <h2>Generated Timetable Status</h2>
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "1.25rem",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "1.5rem",
+            }}
+          >
+            {(() => {
+              const latestCompleted = runs.find(
+                (run) => run.status.toUpperCase() === "COMPLETED"
+              );
+
+              return (
+                <>
+                  <div>
+                    <div style={{ color: "#748095", fontSize: "11px", fontWeight: 700 }}>
+                      TIMETABLE VERSION
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "15px",
+                        fontWeight: 700,
+                        color: "#172033",
+                        marginTop: "6px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <CheckCircle2 size={18} style={{ color: "#22c55e" }} />
+                      Generated
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ color: "#748095", fontSize: "11px", fontWeight: 700 }}>
+                      CREATED AT
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "15px",
+                        fontWeight: 700,
+                        color: "#172033",
+                        marginTop: "6px",
+                      }}
+                    >
+                      {latestCompleted?.created_at
+                        ? new Date(latestCompleted.created_at).toLocaleTimeString()
+                        : "--"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ color: "#748095", fontSize: "11px", fontWeight: 700 }}>
+                      LAST SYNC
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "15px",
+                        fontWeight: 700,
+                        color: "#172033",
+                        marginTop: "6px",
+                      }}
+                    >
+                      {lastSyncTime ? lastSyncTime.toLocaleTimeString() : "--"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ color: "#748095", fontSize: "11px", fontWeight: 700 }}>
+                      CURRENT TIME
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "15px",
+                        fontWeight: 700,
+                        color: "#172033",
+                        marginTop: "6px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <Clock size={16} />
+                      {currentTime.toLocaleTimeString()}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       <div className="section-card">
         <div className="section-card-header">
