@@ -12,6 +12,8 @@ from drf_spectacular.views import (
 
 
 urlpatterns = [
+    path("api/ai/", include("apps.core.api.ai_urls")),
+
     path(
         "admin/",
         admin.site.urls,
