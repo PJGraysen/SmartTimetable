@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
+import AIAssistant from "./pages/AIAssistant";
 import {
   CalendarDays,
   ClipboardCheck,
@@ -386,6 +387,7 @@ function App() {
 
         <main className="content">
           <Routes>
+            <Route path="/ai" element={<AIAssistant />} />
             <Route path="/" element={<Dashboard />} />
 
             <Route path="/timetables" element={<Timetable />} />
@@ -429,3 +431,4 @@ function App() {
 }
 
 export default App;
+
