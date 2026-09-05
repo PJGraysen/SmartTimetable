@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
@@ -21,6 +21,8 @@ from apps.scheduling.models import (
     SchedulingRunStatus,
     TimetableEntry,
 )
+
+from .pagination import SchedulingRunPagination
 
 from .serializers import (
     SchedulingRunCreateSerializer,
@@ -285,3 +287,4 @@ class SchedulingRunResultView(APIView):
         )
 
         return Response(serializer.data)
+

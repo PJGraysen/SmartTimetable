@@ -5,9 +5,11 @@ from rest_framework.pagination import PageNumberPagination
 
 class SchedulingRunPagination(PageNumberPagination):
     """
-    Paginate scheduling runs to avoid memory exhaustion.
+    Paginate scheduling runs to prevent memory exhaustion.
     
-    Default: 50 runs per page. Configurable via ?page_size=100
+    Default: 50 runs per page
+    Configurable via query parameter: ?page_size=100
+    Max: 200 runs per page
     """
     
     page_size = 50
@@ -17,11 +19,13 @@ class SchedulingRunPagination(PageNumberPagination):
 
 class TimetableEntryPagination(PageNumberPagination):
     """
-    Paginate timetable entries when listing all versions.
+    Paginate timetable entries for large result sets.
     
-    Default: 100 entries per page.
+    Default: 100 entries per page
+    Configurable via query parameter: ?page_size=500
+    Max: 1000 entries per page
     """
     
     page_size = 100
     page_size_query_param = "page_size"
-    max_page_size = 500
+    max_page_size = 1000
