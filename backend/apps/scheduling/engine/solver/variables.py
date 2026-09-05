@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from uuid import UUID
@@ -11,12 +11,13 @@ class AssignmentVariable:
     """
     CP-SAT Boolean variable representing one possible lesson placement.
 
-    The variable is true when the lesson requirement is assigned to the
-    specified teacher, group, room and timetable slot.
+    The variable is true when the lesson requirement occupies the
+    specified group, room and timetable slot. teacher_id may be None
+    when teacher assignment is intentionally deferred.
     """
 
     lesson_requirement_id: UUID
-    teacher_id: UUID
+    teacher_id: UUID | None
     instructional_group_id: UUID
     period_id: UUID
     day: str

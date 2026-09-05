@@ -1,0 +1,50 @@
+{
+  "builder": {
+    "available_constraint_methods": [
+      "_add_institutional_reserved_period_constraints",
+      "_add_lesson_requirement_constraints",
+      "_add_grade10_option_block_constraints",
+      "_add_simultaneous_subject_constraints",
+      "_add_teacher_clash_constraints",
+      "_add_group_clash_constraints",
+      "_add_single_lesson_per_day_constraints",
+      "_add_room_clash_constraints",
+      "_add_teacher_availability_constraints",
+      "_add_teacher_free_afternoon_constraints",
+      "_add_room_availability_constraints"
+    ],
+    "build_signature": "(self, problem: 'SchedulingProblem') -> 'SolverModel'",
+    "constructor_signature": "(objective=None)",
+    "missing_constraint_methods": []
+  },
+  "constraint_method_set_matches_verified_profile": true,
+  "dimensions_match_verified_profile": true,
+  "problem_dimensions": {
+    "groups": 10,
+    "periods": 15,
+    "requirements": 40,
+    "rooms": 4,
+    "slots": 49,
+    "teachers": 20
+  },
+  "production_model": {
+    "constraints": 4069,
+    "has_objective": true,
+    "variables": 7840
+  },
+  "term": "2026 - Term 1",
+  "term_id": "8ba158ac-4526-41d6-bf40-cb30023e09eb",
+  "verified_profile": {
+    "_add_grade10_option_block_constraints": 392,
+    "_add_group_clash_constraints": 2058,
+    "_add_institutional_reserved_period_constraints": 160,
+    "_add_lesson_requirement_constraints": 26,
+    "_add_room_availability_constraints": 0,
+    "_add_room_clash_constraints": 196,
+    "_add_simultaneous_subject_constraints": 0,
+    "_add_single_lesson_per_day_constraints": 200,
+    "_add_teacher_availability_constraints": 0,
+    "_add_teacher_clash_constraints": 637,
+    "_add_teacher_free_afternoon_constraints": 400
+  }
+}

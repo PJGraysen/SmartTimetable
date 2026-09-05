@@ -35,22 +35,24 @@ def build_test_problem() -> SchedulingProblem:
     monday_period = uuid4()
     tuesday_period = uuid4()
 
+    # Monday P1 is reserved for Assembly.
+    # The integration fixture therefore uses Monday P2 and Tuesday P2.
     periods = (
         PeriodEntity(
             id=monday_period,
-            number=1,
-            name="Monday Period 1",
-            start_time=time(8, 0),
-            end_time=time(8, 40),
+            number=2,
+            name="Monday Period 2",
+            start_time=time(8, 40),
+            end_time=time(9, 20),
             part_of_day=PartOfDay.MORNING,
             is_teaching_period=True,
         ),
         PeriodEntity(
             id=tuesday_period,
-            number=2,
-            name="Tuesday Period 1",
-            start_time=time(8, 0),
-            end_time=time(8, 40),
+            number=3,
+            name="Tuesday Period 3",
+            start_time=time(9, 20),
+            end_time=time(10, 0),
             part_of_day=PartOfDay.MORNING,
             is_teaching_period=True,
         ),
@@ -127,13 +129,13 @@ def build_test_problem() -> SchedulingProblem:
         TimetableSlot(
             day=DayOfWeek.MONDAY,
             period_id=monday_period,
-            period_number=1,
+            period_number=2,
             part_of_day=PartOfDay.MORNING,
         ),
         TimetableSlot(
             day=DayOfWeek.TUESDAY,
             period_id=tuesday_period,
-            period_number=2,
+            period_number=3,
             part_of_day=PartOfDay.MORNING,
         ),
     )

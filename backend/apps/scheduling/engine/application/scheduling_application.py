@@ -96,6 +96,7 @@ class SchedulingApplicationService:
                 self._mark_failed(
                     scheduling_run,
                     message,
+                    solver_result=result,
                 )
 
                 return SchedulingExecutionResult(
@@ -240,16 +241,39 @@ class SchedulingApplicationService:
     def _mark_failed(
         scheduling_run: SchedulingRun,
         message: str,
+        solver_result=None,
     ) -> None:
         scheduling_run.status = SchedulingRunStatus.FAILED
         scheduling_run.completed_at = timezone.now()
         scheduling_run.error_message = str(message)
+
+        if solver_result is not None:
+            solver_status = getattr(solver_result, "status", None)
+
+            if solver_status is not None:
+                status_value = (
+                    solver_status.value
+                    if hasattr(solver_status, "value")
+                    else str(solver_status)
+                )
+
+                scheduling_run.solver_status = (
+                    status_value
+                    if status_value in {
+                        "FEASIBLE",
+                        "OPTIMAL",
+                        "INFEASIBLE",
+                        "UNKNOWN",
+                    }
+                    else "ERROR"
+                )
 
         scheduling_run.save(
             update_fields=[
                 "status",
                 "completed_at",
                 "error_message",
+                "solver_status",
                 "updated_at",
             ]
         )

@@ -1,0 +1,86 @@
+﻿[
+    {
+        "RelativePath":  "backend\\apps\\scheduling\\engine\\application\\grade10_parallel_blocks.py",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\backend\\apps\\scheduling\\engine\\application\\grade10_parallel_blocks.py",
+        "SHA256":  "73072253A558466DFAA09A1465C9498860AC93A765E9D8DAE14EA0B6422A1FDB",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "backend\\apps\\scheduling\\engine\\solver\\model.py",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\backend\\apps\\scheduling\\engine\\solver\\model.py",
+        "SHA256":  "8FCC7F689D93EDB627D5BF104E3167812CEB3448C9FA8CF25517D286EC3BBA7A",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "backend\\apps\\scheduling\\engine\\solver\\variables.py",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\backend\\apps\\scheduling\\engine\\solver\\variables.py",
+        "SHA256":  "1DD1C7AEEAD8BC7DE8257C1379685C07DA19E15E51CA6902062455F4C6DA0940",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "backend\\apps\\scheduling\\engine\\solver\\solver.py",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\backend\\apps\\scheduling\\engine\\solver\\solver.py",
+        "SHA256":  "9385A879538642BA89703360EC5FFFA6D3F5B82E292F67B58D35A1C2524D2B76",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "backend\\apps\\scheduling\\engine\\application\\scheduler.py",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\backend\\apps\\scheduling\\engine\\application\\scheduler.py",
+        "SHA256":  "59C8F7F84E43D587220BC7671DBF4E2AACD1604A582FE8FC532B1959CDB7D7AC",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "backend\\apps\\scheduling\\engine\\application\\scheduling_application.py",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\backend\\apps\\scheduling\\engine\\application\\scheduling_application.py",
+        "SHA256":  "EC62FE51899D921C883A736963186FFFF2D5208E9B34CEC6889EB1BED5F9266E",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "backend\\apps\\scheduling\\engine\\application\\timetable_persistence.py",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\backend\\apps\\scheduling\\engine\\application\\timetable_persistence.py",
+        "SHA256":  "27F1364C6280C4E07FC9E5E0977C2DF7CA4670741918878F839CDCC6E24E1A05",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "backend\\apps\\scheduling\\engine\\infrastructure\\django_loader.py",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\backend\\apps\\scheduling\\engine\\infrastructure\\django_loader.py",
+        "SHA256":  "5FC48DA92A293DB6193CAB322C1E467C2D01BAD1E6FC77078E91EF9B0BC8E869",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "backend\\apps\\scheduling\\api\\serializers.py",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\backend\\apps\\scheduling\\api\\serializers.py",
+        "SHA256":  "AB7AE9FE8BB3D85023942B8913EE199917BF0BC4F68D4A043E70964524929DDD",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "backend\\apps\\scheduling\\management\\commands\\generate_grade10_parallel.py",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\backend\\apps\\scheduling\\management\\commands\\generate_grade10_parallel.py",
+        "SHA256":  "8EB4941CCFA7049684D396F619A5615DBA2F0A2666EBAC03B80FDBAC99987719",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "backend\\apps\\scheduling\\management\\commands\\audit_grade10_contract.py",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\backend\\apps\\scheduling\\management\\commands\\audit_grade10_contract.py",
+        "SHA256":  "C854DADC12FE55E779BA657B323FA027AB96AFFF08505AE9BE7C69FBC6046961",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "frontend\\src\\pages\\Timetable.tsx",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\frontend\\src\\pages\\Timetable.tsx",
+        "SHA256":  "AC4132A3F7E18829C2FF75554B61135B601A49B25CFAC886382005EC31FF620F",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "frontend\\src\\Scheduling.tsx",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\frontend\\src\\Scheduling.tsx",
+        "SHA256":  "DA317882666D3117852A143F97EE071D279F64BCB91A937C3E1A0C545B1E29A0",
+        "Exists":  true
+    },
+    {
+        "RelativePath":  "frontend\\src\\api.ts",
+        "FullPath":  "C:\\Projects\\SmartTimetable\\frontend\\src\\api.ts",
+        "SHA256":  "B6522D5E882EE833108639558A529999A9FF59112DDB41BDA5EC6696C069E316",
+        "Exists":  true
+    }
+]

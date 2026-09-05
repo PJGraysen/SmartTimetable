@@ -1,0 +1,918 @@
+from dataclasses import dataclass
+from typing import Any
+from uuid import UUID
+
+from apps.scheduling.engine.domain.problem import SchedulingProblem
+from apps.scheduling.engine.application.grade10_parallel_blocks import (
+    GRADE10_PARALLEL_SUBJECT_TO_BLOCK,
+    get_grade10_parallel_block_for_subject,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class InfeasibilityDiagnostic:
+    code: str
+    rule: str
+    message: str
+    required_input: str
+    details: dict[str, Any]
+
+    def format_message(self) -> str:
+        return (
+            f"[{self.code}] {self.rule}\n"
+            f"Problem: {self.message}\n"
+            f"Required input: {self.required_input}\n"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class InfeasibilityReport:
+    diagnostics: tuple[InfeasibilityDiagnostic, ...]
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.diagnostics
+
+    def format_message(self) -> str:
+        if not self.diagnostics:
+            return (
+                "TIMETABLE GENERATION FAILED: "
+                "No deterministic infeasibility diagnostic was identified."
+            )
+
+        lines = [
+            "TIMETABLE GENERATION FAILED",
+            "",
+            "The solver reported the timetable as infeasible.",
+            "The following input/rule conflicts were identified:",
+            "",
+        ]
+
+        for index, diagnostic in enumerate(self.diagnostics, start=1):
+            lines.append(f"{index}. {diagnostic.rule}")
+            lines.append(f"   Problem: {diagnostic.message}")
+            lines.append(
+                f"   Required input: {diagnostic.required_input}"
+            )
+
+            if diagnostic.details:
+                lines.append("   Details:")
+                for key, value in diagnostic.details.items():
+                    lines.append(f"      {key}: {value}")
+
+            lines.append("")
+
+        return "\n".join(lines)
+
+
+def _teacher_name(
+    problem: SchedulingProblem,
+    teacher_id: UUID,
+) -> str:
+    teacher = problem.teacher_by_id.get(teacher_id)
+
+    if teacher is None:
+        return str(teacher_id)
+
+    code = getattr(teacher, "code", None)
+    name = getattr(teacher, "name", None)
+
+    if code and name:
+        return f"{code} ({name})"
+
+    return code or name or str(teacher_id)
+
+
+def _group_name(
+    problem: SchedulingProblem,
+    group_id: UUID,
+) -> str:
+    group = problem.instructional_group_by_id.get(group_id)
+
+    if group is None:
+        return str(group_id)
+
+    code = getattr(group, "code", None)
+    name = getattr(group, "name", None)
+
+    if code and name:
+        return f"{code} ({name})"
+
+    return code or name or str(group_id)
+
+
+def _room_name(
+    problem: SchedulingProblem,
+    room_id: UUID,
+) -> str:
+    room = problem.room_by_id.get(room_id)
+
+    if room is None:
+        return str(room_id)
+
+    code = getattr(room, "code", None)
+    name = getattr(room, "name", None)
+
+    if code and name:
+        return f"{code} ({name})"
+
+    return code or name or str(room_id)
+
+
+def _requirement_name(
+    problem: SchedulingProblem,
+    requirement,
+) -> str:
+    subject_code = getattr(requirement, "subject_code", None)
+
+    group_name = _group_name(
+        problem,
+        requirement.instructional_group_id,
+    )
+
+    if subject_code:
+        return f"{subject_code} / {group_name}"
+
+    return (
+        f"Requirement {requirement.id} / "
+        f"{group_name} / "
+        f"subject {requirement.subject_id}"
+    )
+
+
+def _active_teacher_ids(
+    problem: SchedulingProblem,
+) -> set[UUID]:
+    return {
+        teacher.id
+        for teacher in problem.teachers
+        if teacher.is_active
+    }
+
+
+def _active_group_ids(
+    problem: SchedulingProblem,
+) -> set[UUID]:
+    return {
+        group.id
+        for group in problem.instructional_groups
+        if group.is_active
+    }
+
+
+def _active_room_ids(
+    problem: SchedulingProblem,
+) -> set[UUID]:
+    return {
+        room.id
+        for room in problem.rooms
+        if room.is_active
+    }
+
+
+def _eligible_teachers_by_requirement(
+    problem: SchedulingProblem,
+) -> dict[UUID, tuple[UUID, ...]]:
+    active_teacher_ids = _active_teacher_ids(problem)
+
+    mapping: dict[UUID, list[UUID]] = {}
+
+    for assignment in problem.teacher_assignments:
+        if not assignment.is_active:
+            continue
+
+        if assignment.teacher_id not in active_teacher_ids:
+            continue
+
+        mapping.setdefault(
+            assignment.lesson_requirement_id,
+            [],
+        ).append(assignment.teacher_id)
+
+    return {
+        requirement_id: tuple(dict.fromkeys(teacher_ids))
+        for requirement_id, teacher_ids in mapping.items()
+    }
+
+
+def _teacher_unavailable_slots(
+    problem: SchedulingProblem,
+) -> set[tuple[UUID, object, UUID]]:
+    return {
+        (
+            availability.teacher_id,
+            availability.day,
+            availability.period_id,
+        )
+        for availability in problem.teacher_availability
+        if availability.is_active
+        and not availability.is_available
+    }
+
+
+def _room_unavailable_slots(
+    problem: SchedulingProblem,
+) -> set[tuple[UUID, object, UUID]]:
+    return {
+        (
+            availability.room_id,
+            availability.day,
+            availability.period_id,
+        )
+        for availability in problem.room_availability
+        if availability.is_active
+        and not availability.is_available
+    }
+
+
+def _teacher_free_afternoons(
+    problem: SchedulingProblem,
+) -> dict[UUID, object]:
+    mapping: dict[UUID, object] = {}
+
+    for assignment in problem.teacher_free_afternoons:
+        if not assignment.is_active:
+            continue
+
+        mapping[assignment.teacher_id] = assignment.day
+
+    return mapping
+
+
+def _usable_rooms_for_slot(
+    problem: SchedulingProblem,
+    *,
+    day,
+    period_id: UUID,
+    room_ids: set[UUID],
+    room_unavailable: set[tuple[UUID, object, UUID]],
+) -> set[UUID]:
+    return {
+        room_id
+        for room_id in room_ids
+        if (
+            room_id,
+            day,
+            period_id,
+        ) not in room_unavailable
+    }
+
+
+def _teacher_can_use_slot(
+    problem: SchedulingProblem,
+    *,
+    teacher_id: UUID,
+    day,
+    period_id: UUID,
+    teacher_unavailable: set[tuple[UUID, object, UUID]],
+    teacher_free_afternoons: dict[UUID, object],
+) -> bool:
+    if (
+        teacher_id,
+        day,
+        period_id,
+    ) in teacher_unavailable:
+        return False
+
+    free_afternoon = teacher_free_afternoons.get(teacher_id)
+
+    if free_afternoon is not None:
+        period = problem.period_by_id.get(period_id)
+
+        if (
+            period is not None
+            and period.is_active
+            and period.is_teaching_period
+            and (
+                period.part_of_day.value
+                if hasattr(period.part_of_day, "value")
+                else period.part_of_day
+            ) == "AFTERNOON"
+            and day == free_afternoon
+        ):
+            return False
+
+    return True
+
+
+def _candidate_slot_keys(
+    problem: SchedulingProblem,
+    *,
+    eligible_teacher_ids: tuple[UUID, ...],
+    room_ids: set[UUID],
+    teacher_unavailable: set[tuple[UUID, object, UUID]],
+    teacher_free_afternoons: dict[UUID, object],
+    room_unavailable: set[tuple[UUID, object, UUID]],
+) -> set[tuple[object, UUID]]:
+    candidates: set[tuple[object, UUID]] = set()
+
+    for teacher_id in eligible_teacher_ids:
+        for slot in problem.slots:
+            period = problem.period_by_id.get(slot.period_id)
+
+            if period is None:
+                continue
+
+            if not period.is_active:
+                continue
+
+            if not period.is_teaching_period:
+                continue
+
+            if not _teacher_can_use_slot(
+                problem,
+                teacher_id=teacher_id,
+                day=slot.day,
+                period_id=slot.period_id,
+                teacher_unavailable=teacher_unavailable,
+                teacher_free_afternoons=teacher_free_afternoons,
+            ):
+                continue
+
+            usable_rooms = _usable_rooms_for_slot(
+                problem,
+                day=slot.day,
+                period_id=slot.period_id,
+                room_ids=room_ids,
+                room_unavailable=room_unavailable,
+            )
+
+            if not usable_rooms:
+                continue
+
+            candidates.add(
+                (
+                    slot.day,
+                    slot.period_id,
+                )
+            )
+
+    return candidates
+
+
+def _diagnose_basic_configuration(
+    problem: SchedulingProblem,
+) -> list[InfeasibilityDiagnostic]:
+    diagnostics: list[InfeasibilityDiagnostic] = []
+
+    active_teaching_periods = problem.teaching_periods
+
+    active_rooms = [
+        room
+        for room in problem.rooms
+        if room.is_active
+    ]
+
+    active_groups = [
+        group
+        for group in problem.instructional_groups
+        if group.is_active
+    ]
+
+    if not active_teaching_periods:
+        diagnostics.append(
+            InfeasibilityDiagnostic(
+                code="NO_ACTIVE_TEACHING_PERIODS",
+                rule="Active teaching periods",
+                message=(
+                    "The timetable has no active teaching periods "
+                    "available to the solver."
+                ),
+                required_input=(
+                    "Create or activate at least one timetable period "
+                    "with is_teaching_period=True."
+                ),
+                details={
+                    "active_teaching_periods": 0,
+                },
+            )
+        )
+
+    if not active_rooms:
+        diagnostics.append(
+            InfeasibilityDiagnostic(
+                code="NO_ACTIVE_ROOMS",
+                rule="Room availability",
+                message=(
+                    "There are no active rooms available for generated "
+                    "lessons."
+                ),
+                required_input=(
+                    "Create or activate at least one room that can host "
+                    "the required lessons."
+                ),
+                details={
+                    "active_rooms": 0,
+                },
+            )
+        )
+
+    if not active_groups:
+        diagnostics.append(
+            InfeasibilityDiagnostic(
+                code="NO_ACTIVE_INSTRUCTIONAL_GROUPS",
+                rule="Active instructional groups",
+                message=(
+                    "There are no active instructional groups available "
+                    "to receive lessons."
+                ),
+                required_input=(
+                    "Create or activate at least one instructional group "
+                    "for the timetable."
+                ),
+                details={
+                    "active_instructional_groups": 0,
+                },
+            )
+        )
+
+    return diagnostics
+
+
+def _diagnose_requirements(
+    problem: SchedulingProblem,
+) -> list[InfeasibilityDiagnostic]:
+    diagnostics: list[InfeasibilityDiagnostic] = []
+
+    active_teacher_ids = _active_teacher_ids(problem)
+    active_group_ids = _active_group_ids(problem)
+    active_room_ids = _active_room_ids(problem)
+
+    eligible_by_requirement = _eligible_teachers_by_requirement(problem)
+    teacher_unavailable = _teacher_unavailable_slots(problem)
+    room_unavailable = _room_unavailable_slots(problem)
+    teacher_free_afternoons = _teacher_free_afternoons(problem)
+
+    for requirement in problem.lesson_requirements:
+        if not requirement.is_active:
+            continue
+
+        requirement_label = _requirement_name(
+            problem,
+            requirement,
+        )
+
+        if requirement.instructional_group_id not in active_group_ids:
+            diagnostics.append(
+                InfeasibilityDiagnostic(
+                    code="INACTIVE_INSTRUCTIONAL_GROUP",
+                    rule="Active instructional group",
+                    message=(
+                        f"{requirement_label} belongs to an inactive "
+                        "instructional group."
+                    ),
+                    required_input=(
+                        "Activate the instructional group or "
+                        "deactivate/remove the lesson requirement."
+                    ),
+                    details={
+                        "lesson_requirement_id": str(requirement.id),
+                        "instructional_group_id": str(
+                            requirement.instructional_group_id
+                        ),
+                    },
+                )
+            )
+            continue
+
+        eligible_teacher_ids = tuple(
+            teacher_id
+            for teacher_id in eligible_by_requirement.get(
+                requirement.id,
+                (),
+            )
+            if teacher_id in active_teacher_ids
+        )
+
+        # A missing active teacher is now a valid teacher-independent
+        # placement state. The solver can place the class with
+        # teacher_id=None and the teacher can be allocated later.
+        if not eligible_teacher_ids:
+            continue
+
+        if not active_room_ids:
+            continue
+
+        candidates = _candidate_slot_keys(
+            problem,
+            eligible_teacher_ids=eligible_teacher_ids,
+            room_ids=active_room_ids,
+            teacher_unavailable=teacher_unavailable,
+            teacher_free_afternoons=teacher_free_afternoons,
+            room_unavailable=room_unavailable,
+        )
+
+        available_slots = len(candidates)
+        required_slots = requirement.periods_per_week
+
+        if available_slots < required_slots:
+            teacher_labels = ", ".join(
+                _teacher_name(problem, teacher_id)
+                for teacher_id in eligible_teacher_ids
+            )
+
+            diagnostics.append(
+                InfeasibilityDiagnostic(
+                    code="LESSON_SLOT_CAPACITY",
+                    rule="Weekly lesson requirement capacity",
+                    message=(
+                        f"{requirement_label} requires "
+                        f"{required_slots} lesson(s) per week, but only "
+                        f"{available_slots} valid timetable slot(s) "
+                        "remain after applying teacher, free-afternoon "
+                        "and room-availability rules."
+                    ),
+                    required_input=(
+                        "Increase the number of valid available slots, "
+                        "add another eligible active teacher, make more "
+                        "periods available to the teacher, change the "
+                        "teacher's free-afternoon assignment, make more "
+                        "rooms available, or reduce the weekly lesson "
+                        "requirement."
+                    ),
+                    details={
+                        "lesson_requirement_id": str(requirement.id),
+                        "required_periods": required_slots,
+                        "available_slots": available_slots,
+                        "eligible_teachers": teacher_labels,
+                        "active_rooms": len(active_room_ids),
+                    },
+                )
+            )
+
+    return diagnostics
+
+
+def _is_grade10_group(problem: SchedulingProblem, group_id: UUID) -> bool:
+    group = problem.instructional_group_by_id.get(group_id)
+
+    if group is None:
+        return False
+
+    code = str(getattr(group, "code", "") or "").upper()
+    name = str(getattr(group, "name", "") or "").upper()
+
+    return code.startswith("10") or name.startswith("GRADE 10")
+
+
+def _effective_group_weekly_demand(
+    problem: SchedulingProblem,
+    group_id: UUID,
+) -> tuple[int, dict[str, int]]:
+    """
+    Calculate physical weekly group demand.
+
+    Ordinary requirements count independently.
+
+    Grade 10 elective subjects belonging to the same authoritative
+    parallel block share the same timetable slots, so each block is
+    counted once using its configured weekly shared-slot count.
+    """
+
+    requirements = [
+        requirement
+        for requirement in problem.lesson_requirements
+        if requirement.is_active
+        and requirement.instructional_group_id == group_id
+    ]
+
+    if not _is_grade10_group(problem, group_id):
+        return (
+            sum(
+                requirement.periods_per_week
+                for requirement in requirements
+            ),
+            {},
+        )
+
+    effective_total = 0
+    block_demand: dict[str, int] = {}
+    ordinary_total = 0
+
+    for requirement in requirements:
+        subject_code = getattr(requirement, "subject_code", None)
+
+        if not subject_code:
+            ordinary_total += requirement.periods_per_week
+            continue
+
+        block = get_grade10_parallel_block_for_subject(subject_code)
+
+        if block is None:
+            ordinary_total += requirement.periods_per_week
+            continue
+
+        existing = block_demand.get(block.code)
+
+        if existing is None:
+            block_demand[block.code] = block.weekly_shared_slots
+        elif existing != block.weekly_shared_slots:
+            raise ValueError(
+                f"Inconsistent weekly shared-slot definition for "
+                f"{block.code}: {existing} vs "
+                f"{block.weekly_shared_slots}"
+            )
+
+    effective_total = ordinary_total + sum(block_demand.values())
+
+    return effective_total, block_demand
+
+
+def _weekly_teaching_slot_count(
+    problem: SchedulingProblem,
+) -> int:
+    """
+    Count actual weekly teaching slots.
+
+    `problem.teaching_periods` contains period definitions, not the
+    Monday-Friday weekly instances. The authoritative weekly capacity
+    is therefore derived from `problem.slots`.
+    """
+
+    return sum(
+        1
+        for slot in problem.slots
+        if (
+            (period := problem.period_by_id.get(slot.period_id))
+            is not None
+            and period.is_active
+            and period.is_teaching_period
+        )
+    )
+
+
+def _diagnose_group_capacity(
+    problem: SchedulingProblem,
+) -> list[InfeasibilityDiagnostic]:
+    diagnostics: list[InfeasibilityDiagnostic] = []
+
+    weekly_teaching_slots = _weekly_teaching_slot_count(problem)
+
+    if weekly_teaching_slots == 0:
+        return diagnostics
+
+    active_group_ids = {
+        requirement.instructional_group_id
+        for requirement in problem.lesson_requirements
+        if requirement.is_active
+    }
+
+    for group_id in active_group_ids:
+        effective_demand, block_demand = _effective_group_weekly_demand(
+            problem,
+            group_id,
+        )
+
+        if effective_demand <= weekly_teaching_slots:
+            continue
+
+        group_name = _group_name(
+            problem,
+            group_id,
+        )
+
+        details: dict[str, Any] = {
+            "instructional_group_id": str(group_id),
+            "required_periods": effective_demand,
+            "available_group_slots": weekly_teaching_slots,
+        }
+
+        if block_demand:
+            details["parallel_block_slots"] = dict(block_demand)
+
+        diagnostics.append(
+            InfeasibilityDiagnostic(
+                code="INSTRUCTIONAL_GROUP_CAPACITY",
+                rule="Instructional-group weekly capacity",
+                message=(
+                    f"{group_name} requires {effective_demand} "
+                    f"physical lesson slots per week, but only "
+                    f"{weekly_teaching_slots} weekly teaching slots "
+                    "exist for that group."
+                ),
+                required_input=(
+                    "Increase the number of weekly teaching slots or "
+                    "reduce the effective weekly lesson demand for "
+                    "this instructional group."
+                ),
+                details=details,
+            )
+        )
+
+    return diagnostics
+
+
+def _diagnose_single_teacher_capacity(
+    problem: SchedulingProblem,
+) -> list[InfeasibilityDiagnostic]:
+    diagnostics: list[InfeasibilityDiagnostic] = []
+
+    active_teacher_ids = _active_teacher_ids(problem)
+
+    eligible_by_requirement = _eligible_teachers_by_requirement(problem)
+    teacher_unavailable = _teacher_unavailable_slots(problem)
+    teacher_free_afternoons = _teacher_free_afternoons(problem)
+
+    required_by_teacher: dict[UUID, int] = {}
+
+    for requirement in problem.lesson_requirements:
+        if not requirement.is_active:
+            continue
+
+        eligible = tuple(
+            teacher_id
+            for teacher_id in eligible_by_requirement.get(
+                requirement.id,
+                (),
+            )
+            if teacher_id in active_teacher_ids
+        )
+
+        if len(eligible) != 1:
+            continue
+
+        teacher_id = eligible[0]
+
+        required_by_teacher[teacher_id] = (
+            required_by_teacher.get(teacher_id, 0)
+            + requirement.periods_per_week
+        )
+
+    for teacher_id, required_periods in required_by_teacher.items():
+        available_slots = 0
+
+        for slot in problem.slots:
+            period = problem.period_by_id.get(slot.period_id)
+
+            if period is None:
+                continue
+
+            if not period.is_active or not period.is_teaching_period:
+                continue
+
+            if _teacher_can_use_slot(
+                problem,
+                teacher_id=teacher_id,
+                day=slot.day,
+                period_id=slot.period_id,
+                teacher_unavailable=teacher_unavailable,
+                teacher_free_afternoons=teacher_free_afternoons,
+            ):
+                available_slots += 1
+
+        if required_periods <= available_slots:
+            continue
+
+        diagnostics.append(
+            InfeasibilityDiagnostic(
+                code="TEACHER_CAPACITY",
+                rule="Teacher weekly capacity",
+                message=(
+                    f"{_teacher_name(problem, teacher_id)} is the only "
+                    f"eligible teacher for {required_periods} required "
+                    f"lesson period(s), but only {available_slots} "
+                    "valid teaching slots are available to that teacher."
+                ),
+                required_input=(
+                    "Assign another active eligible teacher, make more "
+                    "periods available to the teacher, change the "
+                    "teacher's free-afternoon assignment, or reduce "
+                    "the teacher's mandatory weekly lesson load."
+                ),
+                details={
+                    "teacher_id": str(teacher_id),
+                    "teacher": _teacher_name(problem, teacher_id),
+                    "required_periods": required_periods,
+                    "available_slots": available_slots,
+                },
+            )
+        )
+
+    return diagnostics
+
+
+def _diagnose_room_capacity(
+    problem: SchedulingProblem,
+) -> list[InfeasibilityDiagnostic]:
+    diagnostics: list[InfeasibilityDiagnostic] = []
+
+    active_room_ids = _active_room_ids(problem)
+
+    if not active_room_ids:
+        return diagnostics
+
+    room_unavailable = _room_unavailable_slots(problem)
+
+    total_required_periods = sum(
+        requirement.periods_per_week
+        for requirement in problem.lesson_requirements
+        if requirement.is_active
+    )
+
+    total_room_slot_capacity = 0
+
+    for slot in problem.slots:
+        period = problem.period_by_id.get(slot.period_id)
+
+        if period is None:
+            continue
+
+        if not period.is_active or not period.is_teaching_period:
+            continue
+
+        total_room_slot_capacity += len(
+            _usable_rooms_for_slot(
+                problem,
+                day=slot.day,
+                period_id=slot.period_id,
+                room_ids=active_room_ids,
+                room_unavailable=room_unavailable,
+            )
+        )
+
+    if total_required_periods <= total_room_slot_capacity:
+        return diagnostics
+
+    diagnostics.append(
+        InfeasibilityDiagnostic(
+            code="ROOM_CAPACITY",
+            rule="Room-slot capacity",
+            message=(
+                f"The timetable requires {total_required_periods} "
+                f"lesson placements, but the active rooms provide only "
+                f"{total_room_slot_capacity} usable room-slot placements."
+            ),
+            required_input=(
+                "Activate additional rooms, make currently unavailable "
+                "rooms available in more periods, increase the number "
+                "of teaching periods, or reduce weekly lesson demand."
+            ),
+            details={
+                "required_lesson_placements": total_required_periods,
+                "available_room_slots": total_room_slot_capacity,
+                "active_rooms": len(active_room_ids),
+                "rooms": ", ".join(
+                    _room_name(problem, room_id)
+                    for room_id in sorted(
+                        active_room_ids,
+                        key=str,
+                    )
+                ),
+            },
+        )
+    )
+
+    return diagnostics
+
+
+def analyze_infeasibility(
+    problem: SchedulingProblem,
+) -> InfeasibilityReport:
+    """
+    Analyze a SchedulingProblem after CP-SAT reports INFEASIBLE.
+
+    Diagnostics are conservative: a finding is emitted only where
+    the supplied scheduling data proves that the relevant capacity
+    or eligibility rule cannot be satisfied.
+    """
+
+    diagnostics: list[InfeasibilityDiagnostic] = []
+
+    diagnostics.extend(
+        _diagnose_basic_configuration(problem)
+    )
+
+    diagnostics.extend(
+        _diagnose_requirements(problem)
+    )
+
+    diagnostics.extend(
+        _diagnose_group_capacity(problem)
+    )
+
+    diagnostics.extend(
+        _diagnose_single_teacher_capacity(problem)
+    )
+
+    diagnostics.extend(
+        _diagnose_room_capacity(problem)
+    )
+
+    unique: list[InfeasibilityDiagnostic] = []
+    seen: set[tuple[str, str]] = set()
+
+    for diagnostic in diagnostics:
+        key = (
+            diagnostic.code,
+            diagnostic.message,
+        )
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        unique.append(diagnostic)
+
+    return InfeasibilityReport(
+        diagnostics=tuple(unique),
+    )

@@ -1,4 +1,6 @@
 import pytest
+from datetime import time
+from uuid import uuid4
 
 from apps.academics.models import (
     InstructionalGroup,
@@ -11,6 +13,7 @@ from apps.academics.models import (
 from apps.core.models import AcademicYear, School, Term
 from apps.scheduling.engine.domain.enums import DayOfWeek, PartOfDay
 from apps.scheduling.engine.infrastructure.django_loader import (
+    build_timetable_slots,
     load_lesson_requirements,
     load_periods,
     load_room_availability,
@@ -21,6 +24,7 @@ from apps.scheduling.engine.infrastructure.django_loader import (
     load_teachers,
     load_instructional_groups,
 )
+from apps.scheduling.engine.domain.entities import PeriodEntity
 from apps.scheduling.models import (
     Period,
     Room,
@@ -57,6 +61,27 @@ def test_load_periods_converts_django_models_to_domain_entities():
     assert entity.part_of_day == PartOfDay.MORNING
     assert entity.is_teaching_period is True
     assert entity.is_active is True
+
+
+def test_build_timetable_slots_uses_the_authoritative_49_period_week():
+    periods = tuple(
+        PeriodEntity(
+            id=uuid4(),
+            number=index,
+            name=f"Period {index}",
+            start_time=time(8, 0),
+            end_time=time(8, 40),
+            part_of_day=PartOfDay.MORNING,
+            is_teaching_period=True,
+        )
+        for index in range(1, 11)
+    )
+
+    slots = build_timetable_slots(periods)
+
+    assert len(slots) == 49
+    assert len([slot for slot in slots if slot.day == DayOfWeek.MONDAY]) == 9
+    assert len([slot for slot in slots if slot.day == DayOfWeek.TUESDAY]) == 10
 
 
 @pytest.mark.django_db

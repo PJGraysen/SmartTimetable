@@ -64,10 +64,6 @@ class LessonRequirementEntity:
     periods_per_week: int
     subject_code: str | None = None
     is_active: bool = True
-
-
-
-    subject_code: str = ""
 @dataclass(frozen=True, slots=True)
 class TeacherAssignmentEntity:
     """Assignment of a teacher to a lesson requirement."""
@@ -135,15 +131,16 @@ class TimetableSlot:
 @dataclass(frozen=True, slots=True)
 class SchedulingAssignment:
     """
-    A solver-level assignment of a lesson requirement
-    to a teacher, group, room and timetable slot.
+    A solver-level class placement.
+
+    teacher_id is optional because timetable generation may place a
+    class before a teacher has been assigned. A real teacher remains
+    subject to teacher clash, availability and free-afternoon rules.
     """
 
     lesson_requirement_id: UUID
-    teacher_id: UUID
+    teacher_id: UUID | None
     instructional_group_id: UUID
     period_id: UUID
     day: DayOfWeek
     room_id: Optional[UUID] = None
-
-

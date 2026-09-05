@@ -1,0 +1,61 @@
+﻿"""Grade 10 parallel blocks and subject grouping configuration."""
+
+from typing import Dict, Set, List
+from uuid import UUID
+
+
+# ============================================================================
+# Grade 10 Subject Groupings
+# ============================================================================
+# These define which subjects are taken together (parallel blocks)
+# by Grade 10 learners with different elective combinations.
+# ============================================================================
+
+GRADE10_PARALLEL_SUBJECT_TO_BLOCK: Dict[UUID, str] = {}
+"""
+Maps subject IDs to parallel block names for Grade 10.
+Example: {uuid_of_cs: 'BLOCK_A', uuid_of_business: 'BLOCK_B'}
+"""
+
+GRADE10_BLOCKS: Dict[str, Set[UUID]] = {}
+"""
+Maps parallel block names to sets of subject IDs.
+Example: {'BLOCK_A': {uuid_cs, uuid_music}, 'BLOCK_B': {uuid_business, uuid_agriculture}}
+"""
+
+GRADE10_BLOCK_LEARNER_GROUPS: Dict[str, List[UUID]] = {}
+"""
+Maps parallel block names to lists of instructional group IDs for that block.
+Example: {'BLOCK_A': [uuid_group1, uuid_group2], 'BLOCK_B': [uuid_group3, uuid_group4]}
+"""
+
+
+def get_block_for_subject(subject_id: UUID) -> str | None:
+    """Return the parallel block name for a given subject, or None if not found."""
+    return GRADE10_PARALLEL_SUBJECT_TO_BLOCK.get(subject_id)
+
+
+def get_subjects_in_block(block_name: str) -> Set[UUID]:
+    """Return the set of subject IDs in the given parallel block."""
+    return GRADE10_BLOCKS.get(block_name, set())
+
+
+def get_groups_in_block(block_name: str) -> List[UUID]:
+    """Return the list of instructional group IDs assigned to the given block."""
+    return GRADE10_BLOCK_LEARNER_GROUPS.get(block_name, [])
+
+
+def is_subject_in_grade10_blocks(subject_id: UUID) -> bool:
+    """Check if a subject is part of any Grade 10 parallel block."""
+    return subject_id in GRADE10_PARALLEL_SUBJECT_TO_BLOCK
+
+
+def are_subjects_in_same_block(subject_id_1: UUID, subject_id_2: UUID) -> bool:
+    """Check if two subjects are in the same parallel block."""
+    block_1 = get_block_for_subject(subject_id_1)
+    block_2 = get_block_for_subject(subject_id_2)
+    return (
+        block_1 is not None
+        and block_2 is not None
+        and block_1 == block_2
+    )

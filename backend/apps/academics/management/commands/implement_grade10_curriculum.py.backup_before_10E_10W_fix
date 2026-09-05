@@ -1,0 +1,425 @@
+﻿from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
+
+from apps.academics.models import (
+    InstructionalGroup,
+    LessonRequirement,
+    Subject,
+)
+from apps.core.models import Term
+
+
+class Command(BaseCommand):
+    help = (
+        "Implement the authoritative Grade 10 elective curriculum "
+        "without modifying the scheduling solver."
+    )
+
+    # Existing database subject-code normalization.
+    SUBJECTS = {
+        "CHEM": ("Chemistry", "CHEM"),
+        "PHY": ("Physics", "PHY"),
+        "LIT": ("Literature in English", "LIT"),
+        "BIO": ("Biology", "BIO"),
+        "MUS": ("Music", "MUS"),
+        "FRE": ("French", "FRE"),
+        "GEO": ("Geography", "GEO"),
+        "HIS": ("History", "HIS"),
+        "CS": ("Computer Science", "CS"),
+        "AGR": ("Agriculture", "AGR"),
+        "BUS": ("Business Studies", "BUS"),
+        "EMCM": (
+            "Essential Mathematics / Core Mathematics",
+            "EMCM",
+        ),
+    }
+
+    # Official Grade 10 elective combinations.
+    ELECTIVE_BLOCKS = (
+        ("CHEM / PHY / LIT", ("CHEM", "PHY", "LIT")),
+        ("BIO / MU / FRE", ("BIO", "MUS", "FRE")),
+        ("GEO / HIS / COMP", ("GEO", "HIS", "CS")),
+        ("A / BS", ("AGR", "BUS")),
+        ("E.M / CM", ("EMCM",)),
+    )
+
+    ELECTIVE_LESSONS_PER_WEEK = 6
+
+    @transaction.atomic
+    def handle(self, *args, **options):
+        self.stdout.write("")
+        self.stdout.write("=" * 72)
+        self.stdout.write("AUTHORITATIVE GRADE 10 CURRICULUM IMPLEMENTATION")
+        self.stdout.write("=" * 72)
+
+        groups = list(
+            InstructionalGroup.objects.filter(
+                code="G10A",
+                is_active=True,
+            )
+        )
+
+        if not groups:
+            raise CommandError(
+                "No active Grade 10 instructional group G10A exists."
+            )
+
+        if len(groups) > 1:
+            raise CommandError(
+                f"Expected one active G10A group; found {len(groups)}."
+            )
+
+        group = groups[0]
+
+        term = (
+            Term.objects
+            .filter(is_active=True)
+            .order_by("-created_at")
+            .first()
+        )
+
+        if term is None:
+            raise CommandError(
+                "No active academic term exists."
+            )
+
+        self.stdout.write(
+            f"Grade 10 group : {group.name} [{group.code}]"
+        )
+        self.stdout.write(
+            f"Term           : {term.name} [{term.id}]"
+        )
+        self.stdout.write("")
+
+        created_subjects = []
+        reused_subjects = []
+
+        # ------------------------------------------------------------
+        # SUBJECT MASTER
+        # ------------------------------------------------------------
+
+        for code, (name, _) in self.SUBJECTS.items():
+            subject = (
+                Subject.objects
+                .filter(code=code)
+                .first()
+            )
+
+            if subject is None:
+                subject = Subject.objects.create(
+                    code=code,
+                    name=name,
+                    is_active=True,
+                )
+
+                created_subjects.append(code)
+
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"CREATED SUBJECT  {code:<6} {name}"
+                    )
+                )
+            else:
+                reused_subjects.append(code)
+
+                if not subject.is_active:
+                    subject.is_active = True
+                    subject.save(
+                        update_fields=["is_active", "updated_at"]
+                    )
+
+                self.stdout.write(
+                    f"REUSED SUBJECT   {code:<6} {subject.name}"
+                )
+
+        self.stdout.write("")
+
+        # ------------------------------------------------------------
+        # LESSON REQUIREMENTS
+        # ------------------------------------------------------------
+
+        created_requirements = []
+        existing_requirements = []
+        inactive_requirements_reactivated = []
+
+        for block_name, subject_codes in self.ELECTIVE_BLOCKS:
+            self.stdout.write("")
+            self.stdout.write(
+                self.style.HTTP_INFO(
+                    f"BLOCK: {block_name}"
+                )
+            )
+
+            for code in subject_codes:
+                subject = Subject.objects.get(code=code)
+
+                requirement = (
+                    LessonRequirement.objects
+                    .filter(
+                        term=term,
+                        instructional_group=group,
+                        subject=subject,
+                    )
+                    .first()
+                )
+
+                if requirement is None:
+                    requirement = LessonRequirement.objects.create(
+                        term=term,
+                        instructional_group=group,
+                        subject=subject,
+                        lessons_per_week=self.ELECTIVE_LESSONS_PER_WEEK,
+                        is_active=True,
+                    )
+
+                    created_requirements.append(
+                        (
+                            code,
+                            subject.name,
+                            self.ELECTIVE_LESSONS_PER_WEEK,
+                        )
+                    )
+
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f"CREATED REQUIREMENT "
+                            f"{code:<6} "
+                            f"{subject.name:<40} "
+                            f"6 lessons/week"
+                        )
+                    )
+
+                else:
+                    existing_requirements.append(
+                        (
+                            code,
+                            subject.name,
+                            requirement.lessons_per_week,
+                            requirement.is_active,
+                        )
+                    )
+
+                    if not requirement.is_active:
+                        requirement.is_active = True
+                        requirement.save(
+                            update_fields=[
+                                "is_active",
+                                "updated_at",
+                            ]
+                        )
+
+                        inactive_requirements_reactivated.append(
+                            code
+                        )
+
+                        self.stdout.write(
+                            self.style.SUCCESS(
+                                f"REACTIVATED REQUIREMENT "
+                                f"{code:<6} {subject.name}"
+                            )
+                        )
+                    else:
+                        self.stdout.write(
+                            f"EXISTING REQUIREMENT "
+                            f"{code:<6} "
+                            f"{subject.name:<40} "
+                            f"{requirement.lessons_per_week} lessons/week"
+                        )
+
+        # ------------------------------------------------------------
+        # FINAL DATABASE AUDIT
+        # ------------------------------------------------------------
+
+        self.stdout.write("")
+        self.stdout.write("=" * 72)
+        self.stdout.write("FINAL GRADE 10 CURRICULUM AUDIT")
+        self.stdout.write("=" * 72)
+
+        requirements = list(
+            LessonRequirement.objects
+            .filter(
+                term=term,
+                instructional_group=group,
+                is_active=True,
+            )
+            .select_related("subject")
+            .order_by("subject__code")
+        )
+
+        active_codes = {
+            requirement.subject.code
+            for requirement in requirements
+        }
+
+        self.stdout.write("")
+        self.stdout.write(
+            f"ACTIVE REQUIREMENTS: {len(requirements)}"
+        )
+
+        total_lessons = 0
+
+        for requirement in requirements:
+            lessons = int(
+                requirement.lessons_per_week or 0
+            )
+
+            total_lessons += lessons
+
+            self.stdout.write(
+                f"{requirement.subject.code:<8} "
+                f"{requirement.subject.name:<42} "
+                f"{lessons:>2} lessons/week"
+            )
+
+        self.stdout.write("")
+        self.stdout.write(
+            f"TOTAL WEEKLY REQUIREMENT INSTANCES: {total_lessons}"
+        )
+
+        # ------------------------------------------------------------
+        # VERIFY OFFICIAL ELECTIVE SUBJECT PRESENCE
+        # ------------------------------------------------------------
+
+        required_codes = {
+            "CHEM",
+            "PHY",
+            "LIT",
+            "BIO",
+            "MUS",
+            "FRE",
+            "GEO",
+            "HIS",
+            "CS",
+            "AGR",
+            "BUS",
+            "EMCM",
+        }
+
+        missing = sorted(
+            required_codes - active_codes
+        )
+
+        if missing:
+            raise CommandError(
+                "Grade 10 curriculum is still missing active "
+                "requirements for: "
+                + ", ".join(missing)
+            )
+
+        self.stdout.write("")
+        self.stdout.write(
+            self.style.SUCCESS(
+                "PASS: all official Grade 10 elective subject "
+                "requirements are active."
+            )
+        )
+
+        # ------------------------------------------------------------
+        # TEACHER ASSIGNMENT AUDIT
+        # ------------------------------------------------------------
+
+        self.stdout.write("")
+        self.stdout.write(
+            "TEACHER ASSIGNMENT STATUS:"
+        )
+
+        missing_teacher_assignments = []
+
+        for requirement in requirements:
+            assignments = list(
+                requirement.teacher_assignments
+                .filter(
+                    is_active=True,
+                    teacher__is_active=True,
+                )
+                .select_related("teacher")
+            )
+
+            if not assignments:
+                missing_teacher_assignments.append(
+                    requirement.subject.code
+                )
+
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"NO ACTIVE TEACHER: "
+                        f"{requirement.subject.code} "
+                        f"{requirement.subject.name}"
+                    )
+                )
+            else:
+                teacher_codes = ", ".join(
+                    assignment.teacher.employee_code
+                    for assignment in assignments
+                )
+
+                self.stdout.write(
+                    f"ASSIGNED: "
+                    f"{requirement.subject.code:<6} "
+                    f"{teacher_codes}"
+                )
+
+        self.stdout.write("")
+        self.stdout.write("=" * 72)
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "GRADE 10 CURRICULUM IMPLEMENTATION COMPLETE"
+            )
+        )
+
+        self.stdout.write("")
+        self.stdout.write(
+            f"New subjects created       : {len(created_subjects)}"
+        )
+        self.stdout.write(
+            f"New requirements created  : {len(created_requirements)}"
+        )
+        self.stdout.write(
+            "Inactive requirements reactivated: "
+            f"{len(inactive_requirements_reactivated)}"
+        )
+        self.stdout.write(
+            f"Active Grade 10 requirements: {len(requirements)}"
+        )
+        self.stdout.write(
+            f"Total weekly lesson instances: {total_lessons}"
+        )
+
+        if missing_teacher_assignments:
+            self.stdout.write("")
+            self.stdout.write(
+                self.style.WARNING(
+                    "IMPORTANT: The following requirements still "
+                    "need authoritative teacher assignments:"
+                )
+            )
+
+            for code in missing_teacher_assignments:
+                self.stdout.write(
+                    f"  - {code}"
+                )
+
+            self.stdout.write("")
+            self.stdout.write(
+                self.style.WARNING(
+                    "No teacher was invented or assigned automatically."
+                )
+            )
+        else:
+            self.stdout.write("")
+            self.stdout.write(
+                self.style.SUCCESS(
+                    "PASS: every active Grade 10 requirement "
+                    "has an active teacher assignment."
+                )
+            )
+
+        self.stdout.write("")
+        self.stdout.write(
+            "No solver files were modified."
+        )
+        self.stdout.write(
+            "No frontend files were modified."
+        )
+        self.stdout.write("=" * 72)

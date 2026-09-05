@@ -41,7 +41,7 @@ class SchedulingService:
 
 def create_default_scheduler(
     *,
-    time_limit_seconds: float = 30.0,
+    time_limit_seconds: float = 120.0,
     num_workers: int | None = None,
     objective: SolverObjective | None = None,
 ) -> SchedulingService:

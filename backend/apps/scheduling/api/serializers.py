@@ -3,6 +3,7 @@
 from rest_framework import serializers
 
 from apps.scheduling.models import (
+    Period,
     SchedulingRun,
     TimetableEntry,
     TimetableVersion,
@@ -227,6 +228,31 @@ class TimetableVersionResultSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+    slots = serializers.SerializerMethodField()
+
+    @staticmethod
+    def get_slots(_version):
+        """Expose the backend's authoritative 49 lesson slots to the UI."""
+        from apps.scheduling.engine.infrastructure.django_loader import (
+            build_timetable_slots,
+            load_periods,
+        )
+
+        periods = Period.objects.filter(is_active=True).order_by("number", "id")
+        period_by_id = {period.id: period for period in periods}
+
+        return [
+            {
+                "day": slot.day.value,
+                "period": str(slot.period_id),
+                "period_number": slot.period_number,
+                "period_name": period_by_id[slot.period_id].name,
+                "period_start_time": period_by_id[slot.period_id].start_time,
+                "period_end_time": period_by_id[slot.period_id].end_time,
+            }
+            for slot in build_timetable_slots(load_periods(periods))
+        ]
+
     class Meta:
         model = TimetableVersion
         fields = (
@@ -239,6 +265,7 @@ class TimetableVersionResultSerializer(serializers.ModelSerializer):
             "is_active",
             "entries_count",
             "entries",
+            "slots",
             "created_at",
             "updated_at",
         )

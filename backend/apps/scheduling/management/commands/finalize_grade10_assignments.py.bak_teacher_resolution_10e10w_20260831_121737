@@ -1,0 +1,223 @@
+﻿from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
+
+from apps.scheduling.models import (
+    Teacher,
+    LessonRequirement,
+    TeacherAssignment,
+)
+
+
+class Command(BaseCommand):
+    help = "Finalize authoritative Grade 10E/10W teacher assignments."
+
+    # AUTHORITATIVE QUEEN OF APOSTLES GRADE 10 TEACHER MAPPING.
+    # Teacher codes MUST NOT be renumbered or changed.
+    GRADE10_ASSIGNMENTS = {
+        "Christian Religious Education": "T007",
+        "English": "T015",
+        "Essential Mathematics / Core Mathematics": "T004",
+        "Kiswahili": "T001",
+    }
+
+    GRADE10_GROUPS = {
+        "Grade 10E",
+        "Grade 10W",
+    }
+
+    def handle(self, *args, **options):
+        self.stdout.write(
+            "\n=== QUEEN OF APOSTLES GRADE 10E / 10W ASSIGNMENT FINALIZATION ==="
+        )
+
+        # ------------------------------------------------------------
+        # 1. VERIFY TEACHER-CODE INTEGRITY
+        # ------------------------------------------------------------
+        teachers = {}
+
+        for code in self.GRADE10_ASSIGNMENTS.values():
+            teacher = (
+                Teacher.objects
+                .filter(employee_code=code, is_active=True)
+                .first()
+            )
+
+            if teacher is None:
+                raise CommandError(
+                    f"ABORTED: Active teacher {code} was not found."
+                )
+
+            teachers[code] = teacher
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "PASS | Required teacher-code integrity verified."
+            )
+        )
+
+        # ------------------------------------------------------------
+        # 2. LOCATE BOTH AUTHORITATIVE GRADE 10 GROUPS
+        # ------------------------------------------------------------
+        requirements = {}
+
+        for group_name in sorted(self.GRADE10_GROUPS):
+            group_requirements = {}
+
+            queryset = (
+                LessonRequirement.objects
+                .select_related("subject", "instructional_group", "term")
+                .filter(
+                    instructional_group__name=group_name,
+                    is_active=True,
+                )
+            )
+
+            for requirement in queryset:
+                group_requirements[requirement.subject.name] = requirement
+
+            requirements[group_name] = group_requirements
+
+            self.stdout.write(
+                f"FOUND | {group_name} | "
+                f"{len(group_requirements)} active requirements"
+            )
+
+        # ------------------------------------------------------------
+        # 3. VERIFY ALL FOUR AUTHORITATIVE SUBJECTS EXIST
+        # ------------------------------------------------------------
+        for group_name in sorted(self.GRADE10_GROUPS):
+            group_requirements = requirements[group_name]
+
+            for subject_name in self.GRADE10_ASSIGNMENTS:
+                if subject_name not in group_requirements:
+                    raise CommandError(
+                        f"ABORTED: {group_name} requirement not found: "
+                        f"{subject_name}"
+                    )
+
+        # ------------------------------------------------------------
+        # 4. RECONCILE ASSIGNMENTS ATOMICALLY
+        #
+        # Existing historical assignments are preserved.
+        # Only is_active is changed.
+        #
+        # For each authoritative requirement:
+        #   - expected teacher becomes ACTIVE
+        #   - every other assignment becomes INACTIVE
+        #   - if expected assignment does not exist, create it
+        # ------------------------------------------------------------
+        reconciled = 0
+        created = 0
+        deactivated = 0
+
+        with transaction.atomic():
+            for group_name in sorted(self.GRADE10_GROUPS):
+                group_requirements = requirements[group_name]
+
+                for subject_name, teacher_code in self.GRADE10_ASSIGNMENTS.items():
+                    requirement = group_requirements[subject_name]
+                    expected_teacher = teachers[teacher_code]
+
+                    assignments = list(
+                        TeacherAssignment.objects
+                        .select_related("teacher")
+                        .filter(
+                            lesson_requirement=requirement
+                        )
+                    )
+
+                    expected_assignment = None
+
+                    # Locate an existing assignment for the authoritative
+                    # teacher. Prefer the first matching row if historical
+                    # duplicates exist.
+                    for assignment in assignments:
+                        if assignment.teacher_id == expected_teacher.id:
+                            if expected_assignment is None:
+                                expected_assignment = assignment
+
+                    # Deactivate every wrong/stale assignment.
+                    for assignment in assignments:
+                        if assignment.teacher_id != expected_teacher.id:
+                            if assignment.is_active:
+                                assignment.is_active = False
+                                assignment.save(
+                                    update_fields=["is_active", "updated_at"]
+                                )
+                                deactivated += 1
+
+                                self.stdout.write(
+                                    f"DEACTIVATED | {group_name} | "
+                                    f"{subject_name} | "
+                                    f"{assignment.teacher.employee_code}"
+                                )
+
+                    # Activate existing authoritative assignment.
+                    if expected_assignment is not None:
+                        if not expected_assignment.is_active:
+                            expected_assignment.is_active = True
+                            expected_assignment.save(
+                                update_fields=["is_active", "updated_at"]
+                            )
+
+                            self.stdout.write(
+                                self.style.SUCCESS(
+                                    f"ACTIVATED | {group_name} | "
+                                    f"{subject_name} | {teacher_code}"
+                                )
+                            )
+                        else:
+                            self.stdout.write(
+                                f"ALREADY ACTIVE | {group_name} | "
+                                f"{subject_name} | {teacher_code}"
+                            )
+
+                        reconciled += 1
+                        continue
+
+                    # No historical row exists: create exactly one.
+                    TeacherAssignment.objects.create(
+                        teacher=expected_teacher,
+                        lesson_requirement=requirement,
+                        is_active=True,
+                    )
+
+                    created += 1
+                    reconciled += 1
+
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f"CREATED | {group_name} | "
+                            f"{subject_name} | {teacher_code}"
+                        )
+                    )
+
+        # ------------------------------------------------------------
+        # 5. FINAL REPORT
+        # ------------------------------------------------------------
+        self.stdout.write("\n=== FINALIZATION COMPLETE ===")
+        self.stdout.write(
+            f"Authoritative requirements reconciled : {reconciled}"
+        )
+        self.stdout.write(
+            f"New assignments created              : {created}"
+        )
+        self.stdout.write(
+            f"Stale assignments deactivated        : {deactivated}"
+        )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "\nPASS | Grade 10E and Grade 10W teacher assignments finalized."
+            )
+        )
+
+        self.stdout.write(
+            "Teacher codes T001-T020 were NOT changed."
+        )
+        self.stdout.write(
+            "FRE and GST requirements were NOT modified."
+        )
+        self.stdout.write(
+            "No solver code was modified."
+        )

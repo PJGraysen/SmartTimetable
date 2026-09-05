@@ -1,0 +1,244 @@
+﻿from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
+
+from apps.scheduling.models import (
+    Teacher,
+    LessonRequirement,
+    TeacherAssignment,
+)
+
+
+class Command(BaseCommand):
+    help = (
+        "Finalize the Queen of Apostles Grade 10 teacher assignments. "
+        "Teacher codes are immutable."
+    )
+
+    # ------------------------------------------------------------
+    # EXACT GRADE 10 TIMETABLE ASSIGNMENTS
+    #
+    # These are existing teacher codes.
+    # They must NEVER be renumbered or changed.
+    # ------------------------------------------------------------
+    GRADE10_ASSIGNMENTS = {
+        "Christian Religious Education": "T007",
+        "English": "T015",
+        "Essential Mathematics / Core Mathematics": "T004",
+        "Kiswahili": "T001",
+    }
+
+    # These are not implemented at Queen of Apostles.
+    # They remain supported by the system for other schools.
+    QUEEN_DISABLED_SUBJECTS = {
+        "Group Study",
+        "Pastoral/Religious Programme",
+    }
+
+    def handle(self, *args, **options):
+
+        self.stdout.write(
+            self.style.WARNING(
+                "\n=== QUEEN OF APOSTLES GRADE 10 ASSIGNMENT FINALIZATION ==="
+            )
+        )
+
+        # ------------------------------------------------------------
+        # 1. IMMUTABLE TEACHER-CODE CHECK
+        # ------------------------------------------------------------
+        teachers = {
+            teacher.employee_code: teacher
+            for teacher in Teacher.objects.all()
+        }
+
+        expected_codes = {
+            f"T{number:03d}"
+            for number in range(1, 21)
+        }
+
+        if set(teachers.keys()) != expected_codes:
+            raise CommandError(
+                "ABORTED: Teacher codes are not exactly T001-T020."
+            )
+
+        for code, teacher in teachers.items():
+            expected_number = int(code[1:])
+
+            if teacher.teacher_number != expected_number:
+                raise CommandError(
+                    f"ABORTED: {code} has teacher_number="
+                    f"{teacher.teacher_number}; expected "
+                    f"{expected_number}."
+                )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "PASS | Teacher-code integrity verified: T001-T020."
+            )
+        )
+
+        # ------------------------------------------------------------
+        # 2. LOCATE CURRENT GRADE 10 REQUIREMENTS
+        # ------------------------------------------------------------
+        requirements = {
+            requirement.subject.name: requirement
+            for requirement in (
+                LessonRequirement.objects
+                .select_related(
+                    "subject",
+                    "instructional_group",
+                )
+                .filter(
+                    instructional_group__code__in=("10E", "10W"),
+                    is_active=True,
+                )
+            )
+        }
+
+        # All four expected curriculum subjects must exist.
+        for subject_code, teacher_code in self.GRADE10_ASSIGNMENTS.items():
+            if subject_code not in requirements:
+                raise CommandError(
+                    f"ABORTED: Grade 10 requirement not found: "
+                    f"{subject_code}"
+                )
+
+        # ------------------------------------------------------------
+        # 3. VERIFY EXISTING ASSIGNMENTS BEFORE WRITING
+        # ------------------------------------------------------------
+        for subject_code, teacher_code in self.GRADE10_ASSIGNMENTS.items():
+
+            requirement = requirements[subject_code]
+            teacher = teachers[teacher_code]
+
+            existing = list(
+                TeacherAssignment.objects.filter(
+                    lesson_requirement=requirement
+                ).select_related("teacher")
+            )
+
+            if len(existing) > 1:
+                codes = ", ".join(
+                    sorted(
+                        assignment.teacher.employee_code
+                        for assignment in existing
+                    )
+                )
+
+                raise CommandError(
+                    f"ABORTED: Multiple teachers already assigned to "
+                    f"{subject_name}: {codes}"
+                )
+
+            if len(existing) == 1:
+                existing_code = existing[0].teacher.employee_code
+
+                if existing_code != teacher_code:
+                    raise CommandError(
+                        f"ABORTED: {subject_name} already has "
+                        f"{existing_code}; expected {teacher_code}. "
+                        f"No assignment was changed."
+                    )
+
+        # ------------------------------------------------------------
+        # 4. TRANSACTION
+        # ------------------------------------------------------------
+        created = 0
+        disabled = 0
+
+        with transaction.atomic():
+
+            # --------------------------------------------------------
+            # Disable Queen-specific non-curriculum requirements.
+            #
+            # We do NOT delete them.
+            # We do NOT delete the subjects.
+            # Another school can use them later.
+            # --------------------------------------------------------
+            for subject_name in self.QUEEN_DISABLED_SUBJECTS:
+
+                disabled_requirements = (
+                    LessonRequirement.objects
+                    .filter(
+                        instructional_group__code__in=("10E", "10W"),
+                        subject__name=subject_name,
+                        is_active=True,
+                    )
+                )
+
+                count = disabled_requirements.update(
+                    is_active=False
+                )
+
+                disabled += count
+
+            # --------------------------------------------------------
+            # Create the four exact Grade 10 assignments.
+            # --------------------------------------------------------
+            for subject_code, teacher_code in self.GRADE10_ASSIGNMENTS.items():
+
+                requirement = requirements[subject_code]
+                teacher = teachers[teacher_code]
+
+                exists = TeacherAssignment.objects.filter(
+                    lesson_requirement=requirement
+                ).exists()
+
+                if exists:
+                    self.stdout.write(
+                        f"EXISTS | {teacher_code} | "
+                        f"Grade 10E/10W | {subject_code}"
+                    )
+                    continue
+
+                TeacherAssignment.objects.create(
+                    teacher=teacher,
+                    lesson_requirement=requirement,
+                )
+
+                created += 1
+
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"CREATED | {teacher_code} | "
+                        f"Grade 10E/10W | {subject_code}"
+                    )
+                )
+
+        # ------------------------------------------------------------
+        # 5. FINAL REPORT
+        # ------------------------------------------------------------
+        self.stdout.write("\n=== FINALIZATION RESULT ===")
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Teacher assignments created: {created}"
+            )
+        )
+
+        self.stdout.write(
+            f"Queen-specific requirements deactivated: {disabled}"
+        )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "\nTeacher codes T001-T020 were NOT changed."
+            )
+        )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "No teacher records were modified."
+            )
+        )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "No existing valid TeacherAssignment was deleted."
+            )
+        )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                "\nGrade 10 assignment finalization complete."
+            )
+        )

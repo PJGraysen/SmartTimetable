@@ -1,0 +1,112 @@
+from django.core.management.base import BaseCommand
+from apps.core.models import Term
+from apps.academics.models import InstructionalGroup
+from apps.scheduling.models import LessonRequirement, TeacherAssignment
+
+from apps.scheduling.engine.application.grade10_parallel_blocks import (
+    GRADE10_PARALLEL_BLOCKS,
+    describe_grade10_parallel_blocks,
+    validate_grade10_parallel_blocks,
+)
+
+
+class Command(BaseCommand):
+    help = "Read-only audit of real Grade 10 parallel-block runtime data."
+
+    def handle(self, *args, **options):
+        self.stdout.write("=" * 72)
+        self.stdout.write(
+            "SMARTTIMETABLE PRO - GRADE 10 PARALLEL RUNTIME AUDIT"
+        )
+        self.stdout.write("=" * 72)
+        self.stdout.write("READ-ONLY: NO DATABASE CHANGES")
+        self.stdout.write("")
+
+        validate_grade10_parallel_blocks()
+
+        self.stdout.write("=== AUTHORITATIVE BLOCKS ===")
+        for line in describe_grade10_parallel_blocks():
+            self.stdout.write(line)
+
+        self.stdout.write("")
+        self.stdout.write("=== GRADE 10 DATABASE REQUIREMENTS ===")
+
+        groups = InstructionalGroup.objects.filter(
+            code__in=("G10E", "G10W", "10E", "10W"),
+        ).order_by("code")
+
+        if not groups.exists():
+            groups = InstructionalGroup.objects.filter(
+                name__icontains="Grade 10"
+            ).order_by("code")
+
+        if not groups.exists():
+            self.stdout.write(
+                self.style.ERROR(
+                    "FAIL - No Grade 10 instructional groups found."
+                )
+            )
+            return
+
+        for group in groups:
+            self.stdout.write(
+                f"\nGROUP: {group.code} | {group.name}"
+            )
+
+            requirements = LessonRequirement.objects.filter(
+                instructional_group=group,
+                is_active=True,
+            ).select_related("subject").order_by(
+                "subject__code"
+            )
+
+            for requirement in requirements:
+                assignments = TeacherAssignment.objects.filter(
+                    lesson_requirement=requirement,
+                    is_active=True,
+                ).select_related("teacher")
+
+                teachers = ", ".join(
+                    assignment.teacher.code
+                    for assignment in assignments
+                    if getattr(assignment.teacher, "is_active", True)
+                ) or "NONE"
+
+                self.stdout.write(
+                    f"  {requirement.subject.code:<8} "
+                    f"weekly={requirement.lessons_per_week:<2} "
+                    f"teachers={teachers}"
+                )
+
+        self.stdout.write("")
+        self.stdout.write("=== PARALLEL-BLOCK SUBJECT PRESENCE ===")
+
+        required_subjects = {
+            subject
+            for block in GRADE10_PARALLEL_BLOCKS
+            for subject in block.subject_codes
+        }
+
+        found_subjects = set(
+            LessonRequirement.objects.filter(
+                instructional_group__in=groups,
+                is_active=True,
+                subject__code__in=required_subjects,
+            ).values_list("subject__code", flat=True)
+        )
+
+        for subject in sorted(required_subjects):
+            if subject in found_subjects:
+                self.stdout.write(f"  PASS - {subject}")
+            else:
+                self.stdout.write(
+                    self.style.ERROR(
+                        f"  FAIL - {subject} missing from active requirements"
+                    )
+                )
+
+        self.stdout.write("")
+        self.stdout.write("=" * 72)
+        self.stdout.write("RUNTIME AUDIT COMPLETE")
+        self.stdout.write("NO DATABASE CHANGES")
+        self.stdout.write("=" * 72)

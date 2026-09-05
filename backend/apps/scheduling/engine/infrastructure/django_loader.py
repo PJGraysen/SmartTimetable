@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Iterable
 
@@ -510,13 +510,24 @@ def build_timetable_slots(
     loaded PeriodEntity records. No period numbers are hard-coded.
     """
 
-    loaded_periods = tuple(periods)
+    teaching_periods = tuple(
+        period
+        for period in periods
+        if period.is_active and period.is_teaching_period
+    )
+
     weekdays = _resolve_weekdays()
 
     slots: list[TimetableSlot] = []
 
     for day in weekdays:
-        for period in loaded_periods:
+        # Every weekday receives the complete active teaching-period
+        # universe. Monday P1 remains Assembly through the institutional
+        # reservation constraint; it must still exist as a physical slot
+        # so Monday retains nine teaching positions.
+        day_periods = teaching_periods
+
+        for period in day_periods:
             slots.append(
                 TimetableSlot(
                     day=day,
@@ -527,3 +538,4 @@ def build_timetable_slots(
             )
 
     return tuple(slots)
+

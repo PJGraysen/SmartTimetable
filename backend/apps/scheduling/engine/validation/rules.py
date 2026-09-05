@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections import defaultdict
 from typing import Iterable
@@ -569,7 +569,11 @@ def validate_invalid_assignments(
 
     for assignment in _unique_assignments(assignments):
 
-        if assignment.teacher_id not in teacher_ids:
+        # teacher_id=None is a valid pending teacher allocation.
+        if (
+            assignment.teacher_id is not None
+            and assignment.teacher_id not in teacher_ids
+        ):
             findings.append(
                 _finding(
                     severity=ValidationSeverity.ERROR,

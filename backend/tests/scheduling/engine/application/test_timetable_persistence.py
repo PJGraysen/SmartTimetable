@@ -25,6 +25,7 @@ from apps.scheduling.models import (
     Room,
     SchedulingRun,
     SchedulingRunStatus,
+    TeacherAssignment,
     TimetableEntry,
     TimetableVersion,
 )
@@ -104,6 +105,12 @@ def scheduling_data():
         employee_code="EMP001",
         first_name="John",
         last_name="Teacher",
+        is_active=True,
+    )
+
+    TeacherAssignment.objects.create(
+        teacher=teacher,
+        lesson_requirement=requirement,
         is_active=True,
     )
 

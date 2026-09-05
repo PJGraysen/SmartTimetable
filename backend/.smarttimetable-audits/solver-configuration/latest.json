@@ -1,0 +1,64 @@
+{
+  "audit": "solver_configuration",
+  "read_only": true,
+  "term": {
+    "id": "8ba158ac-4526-41d6-bf40-cb30023e09eb",
+    "name": "2026 - Term 1"
+  },
+  "problem_dimensions": {
+    "requirements": 40,
+    "teachers": 20,
+    "groups": 10,
+    "rooms": 4,
+    "periods": 15,
+    "slots": 49
+  },
+  "production_model": {
+    "assignment_variables": 7840,
+    "cp_sat_variables": 7840,
+    "constraints": 4069,
+    "has_objective": true
+  },
+  "solver": {
+    "type": "apps.scheduling.engine.solver.solver.CPSATSolver",
+    "constructor": "(*, time_limit_seconds: 'float' = 120.0, num_workers: 'Optional[int]' = None) -> 'None'",
+    "constructor_defaults": {
+      "time_limit_seconds": "120.0",
+      "num_workers": "None"
+    },
+    "methods": {
+      "solve": "(self, problem: 'SchedulingProblem', solver_model: 'SolverModel') -> 'SolverResult'",
+      "_configure_solver": null,
+      "_create_solver": null,
+      "_extract_assignments": "(*, problem: 'SchedulingProblem', solver_model: 'SolverModel', solver: 'cp_model.CpSolver') -> 'tuple[SchedulingAssignment, ...]'"
+    }
+  },
+  "scheduler_factory_signature": "(*, time_limit_seconds: 'float' = 120.0, num_workers: 'int | None' = None, objective: 'SolverObjective | None' = None) -> 'SchedulingService'",
+  "source_configuration": {
+    "max_time_in_seconds": [
+      "solver.parameters.max_time_in_seconds = ("
+    ],
+    "num_search_workers": [],
+    "random_seed": [],
+    "log_search_progress": [],
+    "search_branching": [],
+    "cp_model_presolve": [],
+    "linearization_level": [],
+    "max_deterministic_time": [],
+    "enumerate_all_solutions": []
+  },
+  "known_good_run": {
+    "id": "8eccf5f8-c91a-439a-9970-297abfbdc403",
+    "status": "COMPLETED",
+    "solver_status": "OPTIMAL",
+    "objective_value": "46.000000",
+    "started_at": "2026-09-02T16:07:14.284988+00:00",
+    "completed_at": "2026-09-02T16:08:23.674093+00:00",
+    "statistics": {
+      "branches": 1998,
+      "conflicts": 0,
+      "entries_created": 98,
+      "wall_time_seconds": 62.7556683
+    }
+  }
+}

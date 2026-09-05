@@ -1,4 +1,4 @@
-﻿from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.academics.models import (
@@ -383,6 +383,8 @@ class TimetableEntry(TimeStampedModel):
         Teacher,
         on_delete=models.PROTECT,
         related_name="timetable_entries",
+        null=True,
+        blank=True,
     )
     lesson_requirement = models.ForeignKey(
         LessonRequirement,

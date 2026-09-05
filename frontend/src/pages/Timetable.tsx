@@ -1,12 +1,11 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Printer, RefreshCw } from "lucide-react";
 import {
   getSchedulingRunResults,
   getSchedulingRuns,
   type SchedulingRun,
+  type TimetableEntryResult,
 } from "../services/scheduling";
-
-type TimetableEntry = Record<string, unknown>;
 
 type TimetableColumn = {
   key: string;
@@ -21,19 +20,102 @@ type ClassDefinition = {
   aliases: string[];
 };
 
-const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"] as const;
+type DayDefinition = {
+  code: string;
+  label: string;
+};
+
+const DAYS: DayDefinition[] = [
+  { code: "MON", label: "MONDAY" },
+  { code: "TUE", label: "TUESDAY" },
+  { code: "WED", label: "WEDNESDAY" },
+  { code: "THU", label: "THURSDAY" },
+  { code: "FRI", label: "FRIDAY" },
+];
 
 const CLASSES: ClassDefinition[] = [
-  { label: "Form 4E", aliases: ["form 4e", "f4 east", "form 4 east", "4e"] },
-  { label: "Form 4W", aliases: ["form 4w", "f4 west", "form 4 west", "4w"] },
-  { label: "Form 3E", aliases: ["form 3e", "f3 east", "form 3 east", "3e"] },
-  { label: "Form 3W", aliases: ["form 3w", "f3 west", "form 3 west", "3w"] },
-  { label: "Grade 10E", aliases: ["grade 10e", "grade 10 east", "10e"] },
-  { label: "Grade 10W", aliases: ["grade 10w", "grade 10 west", "10w"] },
-  { label: "Grade 9E", aliases: ["grade 9e", "grade 9 east", "9e"] },
-  { label: "Grade 9W", aliases: ["grade 9w", "grade 9 west", "9w"] },
-  { label: "Grade 8E", aliases: ["grade 8e", "grade 8 east", "8e"] },
-  { label: "Grade 8W", aliases: ["grade 8w", "grade 8 west", "8w"] },
+  {
+    label: "Form 4E",
+    aliases: ["form 4e", "form 4 east", "f4 east", "4e", "f4e"],
+  },
+  {
+    label: "Form 4W",
+    aliases: ["form 4w", "form 4 west", "f4 west", "4w", "f4w"],
+  },
+  {
+    label: "Form 3E",
+    aliases: ["form 3e", "form 3 east", "f3 east", "3e", "f3e"],
+  },
+  {
+    label: "Form 3W",
+    aliases: ["form 3w", "form 3 west", "f3 west", "3w", "f3w"],
+  },
+  {
+    label: "Grade 10E",
+    aliases: [
+      "grade 10e",
+      "grade 10 east",
+      "10e",
+      "10 east",
+      "grade10e",
+      "g10e",
+    ],
+  },
+  {
+    label: "Grade 10W",
+    aliases: [
+      "grade 10w",
+      "grade 10 west",
+      "10w",
+      "10 west",
+      "grade10w",
+      "g10w",
+    ],
+  },
+  {
+    label: "Grade 9E",
+    aliases: [
+      "grade 9e",
+      "grade 9 east",
+      "9e",
+      "9 east",
+      "grade9e",
+      "g9e",
+    ],
+  },
+  {
+    label: "Grade 9W",
+    aliases: [
+      "grade 9w",
+      "grade 9 west",
+      "9w",
+      "9 west",
+      "grade9w",
+      "g9w",
+    ],
+  },
+  {
+    label: "Grade 8E",
+    aliases: [
+      "grade 8e",
+      "grade 8 east",
+      "8e",
+      "8 east",
+      "grade8e",
+      "g8e",
+    ],
+  },
+  {
+    label: "Grade 8W",
+    aliases: [
+      "grade 8w",
+      "grade 8 west",
+      "8w",
+      "8 west",
+      "grade8w",
+      "g8w",
+    ],
+  },
 ];
 
 const COLUMNS: TimetableColumn[] = [
@@ -72,22 +154,22 @@ const COLUMNS: TimetableColumn[] = [
     kind: "tea",
   },
   {
-    key: "p6",
-    label: "P6",
+    key: "p5",
+    label: "P5",
     time: "11:00–11:40",
     kind: "lesson",
     period: 6,
   },
   {
-    key: "p7",
-    label: "P7",
+    key: "p6",
+    label: "P6",
     time: "11:40–12:20",
     kind: "lesson",
     period: 7,
   },
   {
-    key: "p8",
-    label: "P8",
+    key: "p7",
+    label: "P7",
     time: "12:20–13:00",
     kind: "lesson",
     period: 8,
@@ -99,22 +181,22 @@ const COLUMNS: TimetableColumn[] = [
     kind: "lunch",
   },
   {
-    key: "p10",
-    label: "P10",
+    key: "p8",
+    label: "P8",
     time: "14:00–14:40",
     kind: "lesson",
     period: 10,
   },
   {
-    key: "p11",
-    label: "P11",
+    key: "p9",
+    label: "P9",
     time: "14:40–15:20",
     kind: "lesson",
     period: 11,
   },
   {
-    key: "p12",
-    label: "P12",
+    key: "p10",
+    label: "P10",
     time: "15:20–16:00",
     kind: "lesson",
     period: 12,
@@ -133,7 +215,15 @@ const COLUMNS: TimetableColumn[] = [
   },
 ];
 
-function asText(value: unknown): string {
+function normalise(value: unknown): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function text(value: unknown): string {
   if (typeof value === "string") {
     return value.trim();
   }
@@ -142,251 +232,224 @@ function asText(value: unknown): string {
     return String(value);
   }
 
-  if (value && typeof value === "object") {
-    const object = value as Record<string, unknown>;
-
-    for (const key of [
-      "name",
-      "label",
-      "title",
-      "code",
-      "value",
-    ]) {
-      const nested = object[key];
-
-      if (typeof nested === "string" && nested.trim()) {
-        return nested.trim();
-      }
-    }
-  }
-
   return "";
 }
 
-function firstText(
-  entry: TimetableEntry,
-  keys: string[],
-): string {
-  for (const key of keys) {
-    const value = asText(entry[key]);
+function normalisedSubjectCode(entry: TimetableEntryResult): string {
+  return text(entry.subject_code);
+}
+
+function subjectName(entry: TimetableEntryResult): string {
+  return text(entry.subject_name);
+}
+
+function teacherCode(entry: TimetableEntryResult): string {
+  return text(entry.teacher_code) || text(entry.employee_code);
+}
+
+function displayTeacherCode(entry: TimetableEntryResult): string {
+  const raw = entry as unknown as Record<string, unknown>;
+  const code =
+    teacherCode(entry) ||
+    text(raw.teacher_number) ||
+    text(raw.teacherNumber);
+
+  if (!code) {
+    return "";
+  }
+
+  const numericMatch = code.match(/^(?:T|EMP)0*(\d+)$/i);
+
+  return numericMatch ? numericMatch[1] : code;
+}
+
+function teacherName(entry: TimetableEntryResult): string {
+  return text(entry.teacher_name);
+}
+
+function groupName(entry: TimetableEntryResult): string {
+  return text(entry.instructional_group_name);
+}
+
+function canonicalDayCode(entry: TimetableEntryResult): string {
+  const raw = normalise(entry.day || entry.day_display);
+
+  if (raw === "mon" || raw === "monday") {
+    return "MON";
+  }
+
+  if (raw === "tue" || raw === "tuesday" || raw === "tues") {
+    return "TUE";
+  }
+
+  if (raw === "wed" || raw === "wednesday") {
+    return "WED";
+  }
+
+  if (
+    raw === "thu" ||
+    raw === "thursday" ||
+    raw === "thur" ||
+    raw === "thurs"
+  ) {
+    return "THU";
+  }
+
+  if (raw === "fri" || raw === "friday") {
+    return "FRI";
+  }
+
+  return raw.toUpperCase();
+}
+
+function periodNumber(entry: TimetableEntryResult): number {
+  const value = Number(entry.period_number);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function classMatches(
+  entry: TimetableEntryResult,
+  definition: ClassDefinition,
+): boolean {
+  const group = normalise(groupName(entry));
+
+  if (!group) {
+    return false;
+  }
+
+  return definition.aliases.some((alias) => {
+    const candidate = normalise(alias);
+
+    return (
+      group === candidate ||
+      group.includes(candidate) ||
+      candidate.includes(group)
+    );
+  });
+}
+
+function electiveLabel(entry: TimetableEntryResult): string {
+  const raw = entry as unknown as Record<string, unknown>;
+
+  const candidates = [
+    raw.elective_option,
+    raw.electiveOption,
+    raw.option,
+    raw.option_name,
+    raw.optionName,
+    raw.elective_block,
+    raw.electiveBlock,
+    raw.pathway,
+    raw.pathway_name,
+    raw.pathwayName,
+  ];
+
+  for (const candidate of candidates) {
+    const value = text(candidate);
 
     if (value) {
       return value;
     }
   }
 
-  return "";
-}
+  const requirement = text(entry.lesson_requirement_name);
 
-function normalise(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function extractEntries(value: unknown): TimetableEntry[] {
-  if (Array.isArray(value)) {
-    return value.filter(
-      (item): item is TimetableEntry =>
-        Boolean(item) &&
-        typeof item === "object" &&
-        !Array.isArray(item),
-    );
-  }
-
-  if (!value || typeof value !== "object") {
-    return [];
-  }
-
-  const object = value as Record<string, unknown>;
-
-  for (const key of [
-    "results",
-    "entries",
-    "value",
-    "data",
-    "timetable_entries",
-    "timetableEntries",
-  ]) {
-    const nested = object[key];
-
-    if (Array.isArray(nested)) {
-      return extractEntries(nested);
-    }
-  }
-
-  for (const nested of Object.values(object)) {
-    if (Array.isArray(nested)) {
-      const entries = extractEntries(nested);
-
-      if (entries.length > 0) {
-        return entries;
-      }
-    }
-  }
-
-  return [];
-}
-
-function entryDay(entry: TimetableEntry): string {
-  return normalise(
-    firstText(entry, [
-      "day",
-      "day_name",
-      "weekday",
-      "day_label",
-    ]),
-  );
-}
-
-function entryPeriod(entry: TimetableEntry): number {
-  const candidates = [
-    entry.period_number,
-    entry.periodNumber,
-    entry.period,
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === "number") {
-      return candidate;
-    }
-
-    if (typeof candidate === "string" && candidate.trim()) {
-      const parsed = Number(candidate);
-
-      if (Number.isFinite(parsed)) {
-        return parsed;
-      }
-    }
-
-    if (candidate && typeof candidate === "object") {
-      const object = candidate as Record<string, unknown>;
-
-      for (const key of ["number", "period_number"]) {
-        const nested = object[key];
-
-        if (typeof nested === "number") {
-          return nested;
-        }
-
-        if (typeof nested === "string" && nested.trim()) {
-          const parsed = Number(nested);
-
-          if (Number.isFinite(parsed)) {
-            return parsed;
-          }
-        }
-      }
-    }
-  }
-
-  return 0;
-}
-
-function entryClass(entry: TimetableEntry): string {
-  return normalise(
-    firstText(entry, [
-      "class_name",
-      "class_label",
-      "className",
-      "class",
-      "stream",
-      "grade_name",
-      "grade",
-      "form",
-      "group_name",
-    ]),
-  );
-}
-
-function classMatches(
-  entry: TimetableEntry,
-  definition: ClassDefinition,
-): boolean {
-  const value = entryClass(entry);
-
-  if (!value) {
-    return false;
-  }
-
-  return definition.aliases.some((alias) => {
-    const normalisedAlias = normalise(alias);
-
-    return (
-      value === normalisedAlias ||
-      value.includes(normalisedAlias) ||
-      normalisedAlias.includes(value)
-    );
-  });
-}
-
-function subjectCode(entry: TimetableEntry): string {
-  return firstText(entry, [
-    "subject_code",
-    "subjectCode",
-    "subject",
-    "subject_name",
-    "subjectName",
-  ]);
-}
-
-function teacherCode(entry: TimetableEntry): string {
-  return firstText(entry, [
-    "teacher_code",
-    "teacherCode",
-    "teacher",
-    "teacher_name",
-    "teacherName",
-    "employee_code",
-    "employeeCode",
-  ]);
-}
-
-function formatLesson(entry: TimetableEntry): string {
-  const subject = subjectCode(entry);
-  const teacher = teacherCode(entry);
-
-  if (subject && teacher) {
-    return `${subject}  ${teacher}`;
-  }
-
-  return subject || teacher || "—";
-}
-
-function entryMatches(
-  entry: TimetableEntry,
-  day: string,
-  definition: ClassDefinition,
-  period: number,
-): boolean {
-  return (
-    entryDay(entry) === normalise(day) &&
-    entryPeriod(entry) === period &&
-    classMatches(entry, definition)
-  );
-}
-
-function extractVersion(run: SchedulingRun): string {
-  const candidate = firstText(
-    run as unknown as TimetableEntry,
-    [
-      "timetable_version",
-      "timetableVersion",
-      "version_name",
-      "versionName",
-      "version",
-    ],
+  const optionMatch = requirement.match(
+    /\b(option\s*[1-4]|elective\s*(?:option\s*)?[1-4])\b/i,
   );
 
-  return candidate || "Live timetable";
+  return optionMatch ? optionMatch[1] : "";
+}
+
+const GRADE10_ELECTIVE_BLOCKS: Record<string, string[]> = {
+  "OPTION 1": ["BIO", "MUS", "FRE"],
+  "OPTION 2": ["CHEM", "PHY", "LIT"],
+  "OPTION 3": ["GEO", "HIST", "GOV", "CS"],
+  "OPTION 4": ["BUS", "AGRI"],
+};
+
+function electiveSubjectCode(entry: TimetableEntryResult): string {
+  const code = normalisedSubjectCode(entry).toUpperCase();
+  const name = normalise(subjectName(entry));
+
+  if (code === "BIO" || name === "biology") {
+    return "BIO";
+  }
+
+  if (code === "MUS" || name === "music") {
+    return "MUS";
+  }
+
+  if (code === "FRE" || name === "french") {
+    return "FRE";
+  }
+
+  if (code === "CHEM" || code === "CHE" || name === "chemistry") {
+    return "CHEM";
+  }
+
+  if (code === "PHY" || name === "physics") {
+    return "PHY";
+  }
+
+  if (code === "LIT" || name === "literature" || name === "english literature") {
+    return "LIT";
+  }
+
+  if (code === "GEO" || name === "geography") {
+    return "GEO";
+  }
+
+  if (code === "HIST" || code === "HIS" || name === "history") {
+    return "HIST";
+  }
+
+  if (code === "GOV" || name === "government") {
+    return "GOV";
+  }
+
+  if (code === "CS" || code === "COMPUTER STUDIES" || name === "computer studies" || name === "computer science") {
+    return "CS";
+  }
+
+  if (code === "BUS" || name === "business" || name === "business studies") {
+    return "BUS";
+  }
+
+  if (code === "AGRI" || code === "AGR" || name === "agriculture") {
+    return "AGRI";
+  }
+
+  return code;
+}
+
+function electiveBlockForSubject(subjectCode: string): string[] | null {
+  const code = text(subjectCode).toUpperCase();
+
+  for (const subjects of Object.values(GRADE10_ELECTIVE_BLOCKS)) {
+    if (subjects.includes(code)) {
+      return subjects;
+    }
+  }
+
+  return null;
+}
+
+function formatLesson(entry: TimetableEntryResult) {
+  return {
+    code: normalisedSubjectCode(entry),
+    name: subjectName(entry),
+    teacher: teacherCode(entry),
+    teacherName: teacherName(entry),
+    elective: electiveLabel(entry),
+  };
 }
 
 function completedRuns(runs: SchedulingRun[]): SchedulingRun[] {
   return [...runs]
     .filter((run) => {
-      const status = normalise(asText(run.status));
+      const status = normalise(run.status);
+
       return (
         status === "completed" ||
         status === "complete" ||
@@ -423,7 +486,7 @@ function cellClass(column: TimetableColumn): string {
 }
 
 function Timetable() {
-  const [entries, setEntries] = useState<TimetableEntry[]>([]);
+  const [entries, setEntries] = useState<TimetableEntryResult[]>([]);
   const [version, setVersion] = useState("Live timetable");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -435,11 +498,7 @@ function Timetable() {
 
     try {
       const runsData = await getSchedulingRuns();
-
-      const runs = Array.isArray(runsData)
-        ? runsData
-        : [];
-
+      const runs = Array.isArray(runsData) ? runsData : [];
       const completed = completedRuns(runs);
 
       if (completed.length === 0) {
@@ -449,18 +508,35 @@ function Timetable() {
       }
 
       const latestRun = completed[0];
+      const result = await getSchedulingRunResults(latestRun.id);
+      const timetableVersion = result.timetable_version;
 
-      const results = await getSchedulingRunResults(
-        latestRun.id,
+      if (!timetableVersion) {
+        setEntries([]);
+        setVersion("Completed run has no timetable version");
+        setError(
+          "The latest completed scheduling run did not return a timetable version.",
+        );
+        return;
+      }
+
+      const backendEntries = Array.isArray(timetableVersion.entries)
+        ? timetableVersion.entries
+        : [];
+
+      setEntries(backendEntries);
+
+      setVersion(
+        timetableVersion.name ||
+          latestRun.timetable_version ||
+          "Live timetable",
       );
-
-      setEntries(extractEntries(results));
-      setVersion(extractVersion(latestRun));
     } catch (err) {
       console.error("Timetable loading failed:", err);
 
       setEntries([]);
       setVersion("Live timetable");
+
       setError(
         "Unable to load the latest completed timetable from the backend.",
       );
@@ -474,10 +550,114 @@ function Timetable() {
     void loadTimetable();
   }, [loadTimetable]);
 
-  const scheduledEntries = useMemo(
-    () => entries.length,
-    [entries],
-  );
+  const scheduledEntries = entries.length;
+
+  const entriesBySlot = useMemo(() => {
+    const map = new Map<string, TimetableEntryResult[]>();
+
+    for (const entry of entries) {
+      const day = canonicalDayCode(entry);
+      const period = periodNumber(entry);
+
+      if (!day || !period) {
+        continue;
+      }
+
+      const key = `${day}:${period}`;
+      const existing = map.get(key) || [];
+
+      existing.push(entry);
+      map.set(key, existing);
+    }
+
+    return map;
+  }, [entries]);
+
+  function getSlotEntries(
+    dayCode: string,
+    definition: ClassDefinition,
+    period: number,
+  ): TimetableEntryResult[] {
+    const slot = entriesBySlot.get(`${dayCode}:${period}`) || [];
+
+    return slot.filter((entry) => classMatches(entry, definition));
+  }
+
+  const teachersByClassAndSubject = useMemo(() => {
+    const map = new Map<string, Map<string, string[]>>();
+
+    for (const definition of CLASSES) {
+      const subjectMap = new Map<string, string[]>();
+
+      for (const entry of entries) {
+        if (!classMatches(entry, definition)) {
+          continue;
+        }
+
+        const subject = electiveSubjectCode(entry);
+
+        if (!subject) {
+          continue;
+        }
+
+        const teacher = displayTeacherCode(entry);
+
+        if (!teacher) {
+          continue;
+        }
+
+        const teachers = subjectMap.get(subject) || [];
+
+        if (!teachers.includes(teacher)) {
+          teachers.push(teacher);
+        }
+
+        subjectMap.set(subject, teachers);
+      }
+
+      map.set(definition.label, subjectMap);
+    }
+
+    return map;
+  }, [entries]);
+
+  const grade10TeachersBySubject = useMemo(() => {
+    const map = new Map<string, string[]>();
+
+    for (const entry of entries) {
+      const group = normalise(groupName(entry));
+
+      if (
+        !group.includes("grade 10") &&
+        !group.includes("grade10") &&
+        !group.includes("g10")
+      ) {
+        continue;
+      }
+
+      const subject = electiveSubjectCode(entry);
+
+      if (!subject) {
+        continue;
+      }
+
+      const teacher = displayTeacherCode(entry);
+
+      if (!teacher) {
+        continue;
+      }
+
+      const teachers = map.get(subject) || [];
+
+      if (!teachers.includes(teacher)) {
+        teachers.push(teacher);
+      }
+
+      map.set(subject, teachers);
+    }
+
+    return map;
+  }, [entries]);
 
   return (
     <>
@@ -643,10 +823,7 @@ function Timetable() {
           background: #eff9e9;
         }
 
-        .tt-period-head.tt-prayers {
-          background: #f0edf9;
-        }
-
+        .tt-period-head.tt-prayers,
         .tt-period-head.tt-activities {
           background: #f0edf9;
         }
@@ -720,10 +897,30 @@ function Timetable() {
           color: #18395f;
         }
 
+        .tt-subject-name {
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          font-size: 8px;
+          color: #59697b;
+          font-weight: 600;
+        }
+
         .tt-teacher {
           font-size: 9px;
           color: #68778a;
-          font-weight: 600;
+          font-weight: 700;
+        }
+
+        .tt-elective {
+          margin-top: 1px;
+          padding: 1px 4px;
+          border-radius: 3px;
+          background: #eef3ff;
+          color: #35558c;
+          font-size: 7px;
+          font-weight: 800;
+          text-transform: uppercase;
         }
 
         .tt-footer {
@@ -777,16 +974,17 @@ function Timetable() {
             </h1>
 
             <p className="tt-subtitle">
-              {version} • 5 Days • 10 Classes • 10 Learning Periods
+              {version} • 5 Days • {CLASSES.length} Classes • Backend-defined Learning Periods
             </p>
           </div>
 
           <div className="tt-actions">
             <div className="tt-status">
               <span className="tt-status-dot" />
+
               {loading
                 ? "Loading timetable..."
-                : `${scheduledEntries} live entries loaded`}
+                : `${scheduledEntries} backend entries loaded`}
             </div>
 
             <button
@@ -810,23 +1008,14 @@ function Timetable() {
           </div>
         </header>
 
-        {error ? (
-          <div className="tt-error">
-            {error}
-          </div>
-        ) : null}
+        {error ? <div className="tt-error">{error}</div> : null}
 
         <div className="tt-table-wrap">
           <table className="tt-table">
             <thead>
               <tr>
-                <th className="tt-day-head">
-                  DAY
-                </th>
-
-                <th className="tt-class-head">
-                  CLASS
-                </th>
+                <th className="tt-day-head">DAY</th>
+                <th className="tt-class-head">CLASS</th>
 
                 {COLUMNS.map((column) => (
                   <th
@@ -835,12 +1024,8 @@ function Timetable() {
                       "tt-period-head",
                       column.kind === "tea" ? "tt-tea" : "",
                       column.kind === "lunch" ? "tt-lunch" : "",
-                      column.kind === "prayers"
-                        ? "tt-prayers"
-                        : "",
-                      column.kind === "activities"
-                        ? "tt-activities"
-                        : "",
+                      column.kind === "prayers" ? "tt-prayers" : "",
+                      column.kind === "activities" ? "tt-activities" : "",
                     ].join(" ")}
                   >
                     <span className="tt-period-label">
@@ -859,14 +1044,14 @@ function Timetable() {
               {DAYS.map((day) =>
                 CLASSES.map((classDefinition, classIndex) => (
                   <tr
-                    key={`${day}-${classDefinition.label}`}
+                    key={`${day.code}-${classDefinition.label}`}
                   >
                     {classIndex === 0 ? (
                       <th
                         rowSpan={CLASSES.length}
                         className="tt-day"
                       >
-                        {day}
+                        {day.label}
                       </th>
                     ) : null}
 
@@ -921,19 +1106,14 @@ function Timetable() {
 
                       const period = column.period || 0;
 
-                      const slotEntries = entries.filter(
-                        (entry) =>
-                          entryMatches(
-                            entry,
-                            day,
-                            classDefinition,
-                            period,
-                          ),
+                      const slotEntries = getSlotEntries(
+                        day.code,
+                        classDefinition,
+                        period,
                       );
 
                       const isMondayAssembly =
-                        day === "MONDAY" &&
-                        period === 1;
+                        day.code === "MON" && period === 1;
 
                       return (
                         <td
@@ -947,30 +1127,81 @@ function Timetable() {
                               </span>
                             </div>
                           ) : slotEntries.length > 0 ? (
-                            slotEntries.map((entry, index) => {
-                              const subject =
-                                subjectCode(entry);
+                            (() => {
+                              const isGrade10 =
+                                classDefinition.label === "Grade 10E" ||
+                                classDefinition.label === "Grade 10W";
 
-                              const teacher =
-                                teacherCode(entry);
+                              const electiveBlock = isGrade10
+                                ? electiveBlockForSubject(
+                                    electiveSubjectCode(slotEntries[0]),
+                                  )
+                                : null;
+
+                              if (electiveBlock) {
+                                const subjectTeachers =
+                                  teachersByClassAndSubject.get(
+                                    classDefinition.label,
+                                  );
+
+                                const teacherCodes = electiveBlock.map(
+                                  (subject) => {
+                                    const classTeachers =
+                                      subjectTeachers?.get(subject) || [];
+
+                                    const teachers =
+                                      classTeachers.length > 0
+                                        ? classTeachers
+                                        : grade10TeachersBySubject.get(
+                                            subject,
+                                          ) || [];
+
+                                    return teachers.length > 0
+                                      ? teachers.join("/")
+                                      : "—";
+                                  },
+                                );
+
+                                return (
+                                  <div className="tt-lesson">
+                                    <span className="tt-subject">
+                                      {electiveBlock.join("/")}
+                                    </span>
+
+                                    <span className="tt-teacher">
+                                      {teacherCodes.join("/")}
+                                    </span>
+                                  </div>
+                                );
+                              }
 
                               return (
-                                <div
-                                  className="tt-lesson"
-                                  key={`${day}-${classDefinition.label}-${period}-${index}`}
-                                >
-                                  <span className="tt-subject">
-                                    {subject || formatLesson(entry)}
-                                  </span>
+                                <>
+                                  {slotEntries.map((entry) => {
+                                    const lesson = formatLesson(entry);
 
-                                  {teacher ? (
-                                    <span className="tt-teacher">
-                                      {teacher}
-                                    </span>
-                                  ) : null}
-                                </div>
+                                    return (
+                                      <div
+                                        className="tt-lesson"
+                                        key={entry.id}
+                                      >
+                                        <span className="tt-subject">
+                                          {lesson.code ||
+                                            lesson.name ||
+                                            "SUBJECT"}
+                                        </span>
+
+                                        {lesson.teacher ? (
+                                          <span className="tt-teacher">
+                                            {displayTeacherCode(entry)}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    );
+                                  })}
+                                </>
                               );
-                            })
+                            })()
                           ) : (
                             "—"
                           )}
@@ -985,17 +1216,11 @@ function Timetable() {
         </div>
 
         <footer className="tt-footer">
-          <span>
-            Subject • Teacher No.
-          </span>
+          <span>Subject Code • Teacher Code</span>
 
-          <span>
-            ✓ {scheduledEntries} scheduled entries
-          </span>
+          <span>✓ {scheduledEntries} backend entries</span>
 
-          <span>
-            All times are local time
-          </span>
+          <span>All times are local time</span>
         </footer>
       </main>
     </>

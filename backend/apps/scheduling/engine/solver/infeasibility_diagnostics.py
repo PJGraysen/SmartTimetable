@@ -4,7 +4,6 @@ from uuid import UUID
 
 from apps.scheduling.engine.domain.problem import SchedulingProblem
 
-
 @dataclass(frozen=True, slots=True)
 class InfeasibilityDiagnostic:
     code: str
@@ -31,7 +30,10 @@ class InfeasibilityReport:
 
     def format_message(self) -> str:
         if not self.diagnostics:
-            return "TIMETABLE GENERATION FAILED: No deterministic infeasibility diagnostic was identified."
+            return (
+                "TIMETABLE GENERATION FAILED: "
+                "No deterministic infeasibility diagnostic was identified."
+            )
 
         lines = [
             "TIMETABLE GENERATION FAILED",
@@ -276,7 +278,11 @@ def _teacher_can_use_slot(
             period is not None
             and period.is_active
             and period.is_teaching_period
-            and period.part_of_day.value == "AFTERNOON"
+            and (
+                period.part_of_day.value
+                if hasattr(period.part_of_day, "value")
+                else period.part_of_day
+            ) == "AFTERNOON"
             and day == free_afternoon
         ):
             return False
@@ -473,28 +479,10 @@ def _diagnose_requirements(
             if teacher_id in active_teacher_ids
         )
 
+        # A missing active teacher is now a valid teacher-independent
+        # placement state. The solver can place the class with
+        # teacher_id=None and the teacher can be allocated later.
         if not eligible_teacher_ids:
-            diagnostics.append(
-                InfeasibilityDiagnostic(
-                    code="MISSING_ACTIVE_TEACHER_ASSIGNMENT",
-                    rule="Teacher assignment",
-                    message=(
-                        f"{requirement_label} requires "
-                        f"{requirement.periods_per_week} lesson(s), "
-                        "but has no active assignment to an active "
-                        "teacher."
-                    ),
-                    required_input=(
-                        "Create at least one active TeacherAssignment "
-                        "for this lesson requirement and ensure the "
-                        "assigned teacher is active."
-                    ),
-                    details={
-                        "lesson_requirement_id": str(requirement.id),
-                        "required_periods": requirement.periods_per_week,
-                    },
-                )
-            )
             continue
 
         if not active_room_ids:
@@ -531,8 +519,8 @@ def _diagnose_requirements(
                     ),
                     required_input=(
                         "Increase the number of valid available slots, "
-                        "add another eligible active teacher, make the "
-                        "teacher available in more periods, change the "
+                        "add another eligible active teacher, make more "
+                        "periods available to the teacher, change the "
                         "teacher's free-afternoon assignment, make more "
                         "rooms available, or reduce the weekly lesson "
                         "requirement."
@@ -550,34 +538,130 @@ def _diagnose_requirements(
     return diagnostics
 
 
+def _is_grade10_group(problem: SchedulingProblem, group_id: UUID) -> bool:
+    group = problem.instructional_group_by_id.get(group_id)
+
+    if group is None:
+        return False
+
+    code = str(getattr(group, "code", "") or "").upper()
+    name = str(getattr(group, "name", "") or "").upper()
+
+    return code.startswith("10") or name.startswith("GRADE 10")
+
+
+def _effective_group_weekly_demand(
+    problem: SchedulingProblem,
+    group_id: UUID,
+) -> tuple[int, dict[str, int]]:
+    """
+    Calculate physical weekly group demand.
+
+    Ordinary requirements count independently.
+
+    Grade 10 elective subjects belonging to the same authoritative
+    parallel block share the same timetable slots, so each block is
+    counted once using its configured weekly shared-slot count.
+    """
+
+    requirements = [
+        requirement
+        for requirement in problem.lesson_requirements
+        if requirement.is_active
+        and requirement.instructional_group_id == group_id
+    ]
+
+    if not _is_grade10_group(problem, group_id):
+        return (
+            sum(
+                requirement.periods_per_week
+                for requirement in requirements
+            ),
+            {},
+        )
+
+    effective_total = 0
+    block_demand: dict[str, int] = {}
+    ordinary_total = 0
+
+    for requirement in requirements:
+        subject_code = getattr(requirement, "subject_code", None)
+
+        if not subject_code:
+            ordinary_total += requirement.periods_per_week
+            continue
+
+        # Core subjects are not members of a Grade 10 parallel block.
+        # The authoritative lookup raises ValueError for such subjects,
+        # so check the authoritative subject-to-block mapping first.
+        if subject_code not in GRADE10_PARALLEL_SUBJECT_TO_BLOCK:
+            ordinary_total += requirement.periods_per_week
+            continue
+
+        block = get_grade10_parallel_block_for_subject(subject_code)
+
+        existing = block_demand.get(block.code)
+
+        if existing is None:
+            block_demand[block.code] = block.weekly_shared_slots
+        elif existing != block.weekly_shared_slots:
+            raise ValueError(
+                f"Inconsistent weekly shared-slot definition for "
+                f"{block.code}: {existing} vs "
+                f"{block.weekly_shared_slots}"
+            )
+
+    effective_total = ordinary_total + sum(block_demand.values())
+
+    return effective_total, block_demand
+
+
+def _weekly_teaching_slot_count(
+    problem: SchedulingProblem,
+) -> int:
+    """
+    Count actual weekly teaching slots.
+
+    `problem.teaching_periods` contains period definitions, not the
+    Monday-Friday weekly instances. The authoritative weekly capacity
+    is therefore derived from `problem.slots`.
+    """
+
+    return sum(
+        1
+        for slot in problem.slots
+        if (
+            (period := problem.period_by_id.get(slot.period_id))
+            is not None
+            and period.is_active
+            and period.is_teaching_period
+        )
+    )
+
+
 def _diagnose_group_capacity(
     problem: SchedulingProblem,
 ) -> list[InfeasibilityDiagnostic]:
     diagnostics: list[InfeasibilityDiagnostic] = []
 
-    teaching_slot_count = len(problem.teaching_periods)
+    weekly_teaching_slots = _weekly_teaching_slot_count(problem)
 
-    if teaching_slot_count == 0:
+    if weekly_teaching_slots == 0:
         return diagnostics
 
-    requirements_by_group: dict[UUID, int] = {}
+    active_group_ids = {
+        requirement.instructional_group_id
+        for requirement in problem.lesson_requirements
+        if requirement.is_active
+    }
 
-    for requirement in problem.lesson_requirements:
-        if not requirement.is_active:
-            continue
-
-        requirements_by_group[
-            requirement.instructional_group_id
-        ] = (
-            requirements_by_group.get(
-                requirement.instructional_group_id,
-                0,
-            )
-            + requirement.periods_per_week
+    for group_id in active_group_ids:
+        effective_demand, block_demand = _effective_group_weekly_demand(
+            problem,
+            group_id,
         )
 
-    for group_id, required_periods in requirements_by_group.items():
-        if required_periods <= teaching_slot_count:
+        if effective_demand <= weekly_teaching_slots:
             continue
 
         group_name = _group_name(
@@ -585,26 +669,31 @@ def _diagnose_group_capacity(
             group_id,
         )
 
+        details: dict[str, Any] = {
+            "instructional_group_id": str(group_id),
+            "required_periods": effective_demand,
+            "available_group_slots": weekly_teaching_slots,
+        }
+
+        if block_demand:
+            details["parallel_block_slots"] = dict(block_demand)
+
         diagnostics.append(
             InfeasibilityDiagnostic(
                 code="INSTRUCTIONAL_GROUP_CAPACITY",
-                rule="Instructional-group clash capacity",
+                rule="Instructional-group weekly capacity",
                 message=(
-                    f"{group_name} requires {required_periods} total "
-                    f"lesson periods per week, but only "
-                    f"{teaching_slot_count} timetable teaching slots "
+                    f"{group_name} requires {effective_demand} "
+                    f"physical lesson slots per week, but only "
+                    f"{weekly_teaching_slots} weekly teaching slots "
                     "exist for that group."
                 ),
                 required_input=(
-                    "Increase the number of active teaching periods "
-                    "or reduce the total weekly lesson requirements "
-                    "for this instructional group."
+                    "Increase the number of weekly teaching slots or "
+                    "reduce the effective weekly lesson demand for "
+                    "this instructional group."
                 ),
-                details={
-                    "instructional_group_id": str(group_id),
-                    "required_periods": required_periods,
-                    "available_group_slots": teaching_slot_count,
-                },
+                details=details,
             )
         )
 
@@ -825,3 +914,7 @@ def analyze_infeasibility(
     return InfeasibilityReport(
         diagnostics=tuple(unique),
     )
+
+
+
+

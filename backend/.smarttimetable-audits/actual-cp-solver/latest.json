@@ -1,0 +1,71 @@
+{
+  "audit": "actual_cp_solver",
+  "read_only": true,
+  "term": {
+    "id": "8ba158ac-4526-41d6-bf40-cb30023e09eb",
+    "name": "2026 - Term 1"
+  },
+  "model": {
+    "assignment_variables": 7840,
+    "cp_sat_variables": 7840,
+    "constraints": 4069,
+    "has_objective": true
+  },
+  "solver": {
+    "class": "apps.scheduling.engine.solver.solver.CPSATSolver",
+    "signature": "(*, time_limit_seconds: 'float' = 120.0, num_workers: 'Optional[int]' = None) -> 'None'",
+    "instance_state": {
+      "time_limit_seconds": "120.0",
+      "num_workers": "None"
+    },
+    "configuration_lines": [
+      {
+        "line": 10,
+        "text": "solver = cp_model.CpSolver()"
+      },
+      {
+        "line": 12,
+        "text": "solver.parameters.max_time_in_seconds = ("
+      },
+      {
+        "line": 17,
+        "text": "solver.parameters.num_workers = self.num_workers"
+      },
+      {
+        "line": 20,
+        "text": "status = solver.solve(solver_model.model)"
+      },
+      {
+        "line": 37,
+        "text": "wall_time_seconds=solver.wall_time,"
+      },
+      {
+        "line": 38,
+        "text": "branches=solver.num_branches,"
+      },
+      {
+        "line": 39,
+        "text": "conflicts=solver.num_conflicts,"
+      },
+      {
+        "line": 41,
+        "text": "solver.objective_value"
+      }
+    ],
+    "solve_source": "    def solve(\n        self,\n        problem: SchedulingProblem,\n        solver_model: SolverModel,\n    ) -> SolverResult:\n        \"\"\"\n        Solve the supplied scheduling model.\n        \"\"\"\n\n        solver = cp_model.CpSolver()\n\n        solver.parameters.max_time_in_seconds = (\n            self.time_limit_seconds\n        )\n\n        if self.num_workers is not None:\n            solver.parameters.num_workers = self.num_workers\n\n        try:\n            status = solver.solve(solver_model.model)\n\n            solver_status = self._map_status(status)\n\n            assignments: tuple[SchedulingAssignment, ...] = ()\n\n            if status in (\n                cp_model.FEASIBLE,\n                cp_model.OPTIMAL,\n            ):\n                assignments = self._extract_assignments(\n                    problem=problem,\n                    solver_model=solver_model,\n                    solver=solver,\n                )\n\n            statistics = SolverStatistics(\n                wall_time_seconds=solver.wall_time,\n                branches=solver.num_branches,\n                conflicts=solver.num_conflicts,\n                objective_value=(\n                    solver.objective_value\n                    if status in (\n                        cp_model.FEASIBLE,\n                        cp_model.OPTIMAL,\n                    )\n                    else None\n                ),\n            )\n\n            error_message: str | None = None\n\n            if status == cp_model.INFEASIBLE:\n                diagnostic_report = analyze_infeasibility(\n                    problem,\n                )\n\n                error_message = diagnostic_report.format_message()\n\n            return SolverResult(\n                status=solver_status,\n                assignments=assignments,\n                statistics=statistics,\n                error_message=error_message,\n            )\n\n        except Exception as exc:\n            return SolverResult(\n                status=SolverStatus.FAILED,\n                error_message=str(exc),\n            )\n"
+  },
+  "known_good_run": {
+    "id": "8eccf5f8-c91a-439a-9970-297abfbdc403",
+    "status": "COMPLETED",
+    "solver_status": "OPTIMAL",
+    "objective_value": "46.000000",
+    "started_at": "2026-09-02T16:07:14.284988+00:00",
+    "completed_at": "2026-09-02T16:08:23.674093+00:00",
+    "statistics": {
+      "branches": 1998,
+      "conflicts": 0,
+      "entries_created": 98,
+      "wall_time_seconds": 62.7556683
+    }
+  }
+}

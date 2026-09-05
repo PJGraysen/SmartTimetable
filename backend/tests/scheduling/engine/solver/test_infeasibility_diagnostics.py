@@ -1,4 +1,4 @@
-﻿from datetime import time
+from datetime import time
 from uuid import uuid4
 
 from apps.scheduling.engine.domain.entities import (
@@ -131,8 +131,6 @@ def build_problem(
         for index, period_id in enumerate(period_ids)
     )
 
-    # SchedulingProblem requires every active teacher to have
-    # exactly one active free-afternoon assignment.
     free_afternoons = (
         TeacherFreeAfternoonEntity(
             id=uuid4(),
@@ -173,7 +171,135 @@ def build_problem(
     )
 
 
-def test_missing_teacher_assignment_is_reported():
+def build_grade10_parallel_problem():
+    group_id = uuid4()
+    teacher_id = uuid4()
+    room_id = uuid4()
+
+    period_ids = [uuid4() for _ in range(10)]
+
+    periods = tuple(
+        PeriodEntity(
+            id=period_id,
+            number=index + 1,
+            name=f"Period {index + 1}",
+            start_time=time(8 + (index % 4), 0),
+            end_time=time(8 + (index % 4), 40),
+            part_of_day=(
+                PartOfDay.MORNING
+                if index < 5
+                else PartOfDay.AFTERNOON
+            ),
+            is_teaching_period=True,
+        )
+        for index, period_id in enumerate(period_ids)
+    )
+
+    days = (
+        DayOfWeek.MONDAY,
+        DayOfWeek.TUESDAY,
+        DayOfWeek.WEDNESDAY,
+        DayOfWeek.THURSDAY,
+        DayOfWeek.FRIDAY,
+    )
+
+    slots = tuple(
+        TimetableSlot(
+            day=day,
+            period_id=period_id,
+            period_number=index + 1,
+            part_of_day=(
+                PartOfDay.MORNING
+                if index < 5
+                else PartOfDay.AFTERNOON
+            ),
+        )
+        for day in days
+        for period_id, index in zip(period_ids, range(10))
+    )
+
+    group = InstructionalGroupEntity(
+        id=group_id,
+        name="Grade 10E",
+        code="10E",
+    )
+
+    teacher = TeacherEntity(
+        id=teacher_id,
+        name="Grade 10 Teacher",
+        code="T010",
+    )
+
+    room = RoomEntity(
+        id=room_id,
+        name="Grade 10 Room",
+        code="R010",
+        capacity=50,
+    )
+
+    core_codes = {
+        "ENG": 5,
+        "KIS": 5,
+        "EMCM": 5,
+        "CRE": 4,
+        "CSL": 3,
+        "ICT": 2,
+        "PE": 3,
+        "PRP": 1,
+        "GST": 1,
+    }
+
+    option_codes = {
+        "BIO": 5,
+        "MUS": 5,
+        "FRE": 5,
+        "CHEM": 5,
+        "PHY": 5,
+        "LIT": 5,
+        "GEO": 5,
+        "HIS": 5,
+        "CS": 5,
+        "BUS": 5,
+        "AGR": 5,
+    }
+
+    requirements = []
+
+    for code, frequency in {
+        **core_codes,
+        **option_codes,
+    }.items():
+        requirements.append(
+            LessonRequirementEntity(
+                id=uuid4(),
+                instructional_group_id=group_id,
+                subject_id=uuid4(),
+                periods_per_week=frequency,
+                subject_code=code,
+            )
+        )
+
+    return SchedulingProblem.from_iterables(
+        periods=periods,
+        teachers=(teacher,),
+        instructional_groups=(group,),
+        rooms=(room,),
+        lesson_requirements=tuple(requirements),
+        teacher_assignments=(),
+        teacher_availability=(),
+        teacher_free_afternoons=(
+            TeacherFreeAfternoonEntity(
+                id=uuid4(),
+                teacher_id=teacher_id,
+                day=DayOfWeek.MONDAY,
+            ),
+        ),
+        room_availability=(),
+        slots=slots,
+    )
+
+
+def test_missing_teacher_assignment_is_not_reported_as_infeasibility():
     problem = build_problem(
         teacher_assignment=False,
     )
@@ -185,7 +311,7 @@ def test_missing_teacher_assignment_is_reported():
         for diagnostic in report.diagnostics
     }
 
-    assert "MISSING_ACTIVE_TEACHER_ASSIGNMENT" in codes
+    assert "MISSING_ACTIVE_TEACHER_ASSIGNMENT" not in codes
 
 
 def test_teacher_unavailability_can_make_requirement_infeasible():
@@ -311,7 +437,8 @@ def test_room_availability_is_loaded_for_every_room_and_period():
 
 def test_diagnostic_message_contains_required_input():
     problem = build_problem(
-        teacher_assignment=False,
+        periods_per_week=3,
+        teaching_period_count=2,
     )
 
     report = analyze_infeasibility(problem)
@@ -319,7 +446,7 @@ def test_diagnostic_message_contains_required_input():
 
     assert "TIMETABLE GENERATION FAILED" in message
     assert "Required input:" in message
-    assert "TeacherAssignment" in message
+    assert "Weekly lesson requirement capacity" in message
 
 
 def test_inactive_instructional_group_is_reported():
@@ -377,9 +504,6 @@ def test_room_diagnostics_include_room_names():
         room_count=2,
     )
 
-    # With two rooms and two teaching slots there is enough total
-    # room-slot capacity, so construct a deliberately unavailable
-    # configuration to force ROOM_CAPACITY.
     unavailable_room_availability = tuple(
         RoomAvailabilityEntity(
             id=availability.id,
@@ -418,3 +542,31 @@ def test_room_diagnostics_include_room_names():
 
     assert "R001" in diagnostic.details["rooms"]
     assert "R002" in diagnostic.details["rooms"]
+
+
+def test_grade10_parallel_electives_count_as_shared_physical_slots():
+    problem = build_grade10_parallel_problem()
+
+    report = analyze_infeasibility(problem)
+
+    capacity_diagnostics = [
+        diagnostic
+        for diagnostic in report.diagnostics
+        if diagnostic.code == "INSTRUCTIONAL_GROUP_CAPACITY"
+    ]
+
+    assert not capacity_diagnostics
+
+
+def test_grade10_effective_demand_is_49_not_84():
+    problem = build_grade10_parallel_problem()
+
+    report = analyze_infeasibility(problem)
+
+    capacity_diagnostics = [
+        diagnostic
+        for diagnostic in report.diagnostics
+        if diagnostic.code == "INSTRUCTIONAL_GROUP_CAPACITY"
+    ]
+
+    assert not capacity_diagnostics

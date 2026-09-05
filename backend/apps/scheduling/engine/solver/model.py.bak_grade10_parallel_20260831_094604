@@ -1,0 +1,1173 @@
+﻿from __future__ import annotations
+
+from collections import defaultdict
+from dataclasses import dataclass
+from uuid import UUID
+
+from ortools.sat.python import cp_model
+
+from apps.scheduling.engine.domain.enums import PartOfDay
+from apps.scheduling.engine.domain.problem import SchedulingProblem
+from apps.scheduling.engine.solver.objective import apply_solver_objectives
+from apps.scheduling.engine.solver.variables import AssignmentVariable
+from apps.scheduling.engine.application.grade10_parallel_blocks import GRADE10_PARALLEL_BLOCKS
+
+# ------------------------------------------------------------------
+# Grade 10 synchronized curriculum blocks
+# ------------------------------------------------------------------
+#
+# These are LOGICAL scheduling blocks over the existing subject
+# requirements. They do not create or modify database entities.
+#
+# OPT1 = BIO / MUSIC / FRE
+# OPT2 = CHEM / PHY / LIT
+# OPT3 = GEO / HIS / COMP
+#
+# Mathematics is a separate synchronized block:
+# EC / CM
+# ------------------------------------------------------------------
+
+GRADE10_SYNCHRONIZED_BLOCKS: tuple[frozenset[str], ...] = ()
+
+
+def _normalized_subject_code(requirement) -> str | None:
+    code = getattr(requirement, "subject_code", None)
+
+    if code is None:
+        return None
+
+    return str(code).strip().upper()
+
+
+def _synchronized_block_for_subject(
+    subject_code: str | None,
+) -> frozenset[str] | None:
+    if not subject_code:
+        return None
+
+    normalized = subject_code.strip().upper()
+
+    for block in GRADE10_SYNCHRONIZED_BLOCKS:
+        if normalized in block:
+            return block
+
+    return None
+
+
+
+# ------------------------------------------------------------------
+# Grade 10 synchronized option blocks
+#
+# These are the established simultaneous subject combinations:
+#
+# OPT1 = BIO / MUSIC / FRE
+# OPT2 = CHEM / PHY / LIT
+# OPT3 = GEO / HIS / COMP
+#
+# Synchronization is enforced by exact day + period.
+# Teacher assignments remain independent and database-driven.
+# ------------------------------------------------------------------
+
+GRADE10_OPTION_BLOCKS: tuple[frozenset[str], ...] = tuple(
+    frozenset(block.subject_codes)
+    for block in GRADE10_PARALLEL_BLOCKS
+)
+
+def option_block_for_subject(
+    subject_code: str | None,
+) -> frozenset[str] | None:
+    """Return the established Grade 10 option block for a subject code."""
+
+    if not subject_code:
+        return None
+
+    normalized = subject_code.strip().upper()
+
+    for block in GRADE10_OPTION_BLOCKS:
+        if normalized in block:
+            return block
+
+    return None
+
+
+
+
+# ============================================================================
+# AUTHORITATIVE SIMULTANEOUS SUBJECT BLOCKS
+# ============================================================================
+#
+# Subjects in the same block may occupy the same instructional-group/day/
+# period because they represent simultaneous subject-combination teaching.
+#
+# Teacher assignments remain independent.
+# Room assignments remain independent.
+#
+# IMPORTANT:
+# EMCM is a single Grade 10 mathematics requirement.
+# There is deliberately NO CM/EM simultaneous block.
+# ============================================================================
+
+SIMULTANEOUS_SUBJECT_GROUPS: tuple[frozenset[str], ...] = ()
+
+
+def simultaneous_group_for_subject(
+    subject_code: str | None,
+) -> frozenset[str] | None:
+    if not subject_code:
+        return None
+
+    normalized = subject_code.strip().upper()
+
+    for group in SIMULTANEOUS_SUBJECT_GROUPS:
+        if normalized in group:
+            return group
+
+    return None
+
+
+@dataclass(slots=True)
+class SolverModel:
+    """
+    CP-SAT model together with the assignment variables created for it.
+    """
+
+    model: cp_model.CpModel
+    variables: tuple[AssignmentVariable, ...]
+
+    def variables_for_lesson(
+        self,
+        lesson_requirement_id: UUID,
+    ):
+        """Return variables belonging to one lesson requirement."""
+        return tuple(
+            variable
+            for variable in self.variables
+            if variable.lesson_requirement_id == lesson_requirement_id
+        )
+
+
+class SolverModelBuilder:
+    """
+    Builds a CP-SAT model from a validated SchedulingProblem.
+
+    This class translates the domain problem into:
+
+    1. Assignment variables
+    2. Exact weekly lesson requirements
+    3. Teacher clash constraints
+    4. Teaching-group clash constraints
+    5. Simultaneous subject-combination constraints
+    6. Room clash constraints
+    7. Teacher availability constraints
+    8. Mandatory teacher free-afternoon constraints
+    9. Room availability constraints
+
+    The objective parameter is retained for compatibility with the
+    application scheduler. Objective construction remains the responsibility
+    of the scheduler/objective subsystem.
+    """
+
+    def __init__(self, objective=None):
+        self.objective = objective
+
+    def build(
+        self,
+        problem: SchedulingProblem,
+    ) -> SolverModel:
+        model = cp_model.CpModel()
+
+        variables = self._create_assignment_variables(
+            model=model,
+            problem=problem,
+        )
+
+        self._add_lesson_requirement_constraints(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        self._add_grade10_option_block_constraints(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        self._add_simultaneous_subject_constraints(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        self._add_teacher_clash_constraints(
+            model=model,
+            variables=variables,
+        )
+
+        self._add_group_clash_constraints(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        self._add_single_lesson_per_day_constraints(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        self._add_room_clash_constraints(
+            model=model,
+            variables=variables,
+        )
+
+        self._add_teacher_availability_constraints(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        self._add_teacher_free_afternoon_constraints(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        self._add_room_availability_constraints(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        apply_solver_objectives(
+            model=model,
+            problem=problem,
+            variables=tuple(variables),
+            objective=self.objective,
+        )
+
+        return SolverModel(
+            model=model,
+            variables=tuple(variables),
+        )
+
+    # ------------------------------------------------------------------
+    # Variable creation
+    # ------------------------------------------------------------------
+
+    def _create_assignment_variables(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+    ) -> list[AssignmentVariable]:
+
+        variables: list[AssignmentVariable] = []
+
+        active_requirements = [
+            requirement
+            for requirement in problem.lesson_requirements
+            if requirement.is_active
+        ]
+
+        active_teachers = [
+            teacher
+            for teacher in problem.teachers
+            if teacher.is_active
+        ]
+
+        active_groups = [
+            group
+            for group in problem.instructional_groups
+            if group.is_active
+        ]
+
+        active_rooms = [
+            room
+            for room in problem.rooms
+            if room.is_active
+        ]
+
+        teachers_by_requirement: dict[
+            UUID,
+            list[UUID],
+        ] = defaultdict(list)
+
+        for assignment in problem.teacher_assignments:
+            if not assignment.is_active:
+                continue
+
+            teachers_by_requirement[
+                assignment.lesson_requirement_id
+            ].append(
+                assignment.teacher_id
+            )
+
+        valid_group_ids = {
+            group.id
+            for group in active_groups
+        }
+
+        valid_teacher_ids = {
+            teacher.id
+            for teacher in active_teachers
+        }
+
+        valid_room_ids = {
+            room.id
+            for room in active_rooms
+        }
+
+        for requirement in active_requirements:
+
+            if requirement.instructional_group_id not in valid_group_ids:
+                continue
+
+            eligible_teacher_ids = [
+                teacher_id
+                for teacher_id in teachers_by_requirement[
+                    requirement.id
+                ]
+                if teacher_id in valid_teacher_ids
+            ]
+
+            for teacher_id in eligible_teacher_ids:
+
+                for slot in problem.slots:
+
+                    period = problem.period_by_id.get(
+                        slot.period_id
+                    )
+
+                    if period is None:
+                        continue
+
+                    if not period.is_active:
+                        continue
+
+                    if not period.is_teaching_period:
+                        continue
+
+                    for room in active_rooms:
+
+                        if room.id not in valid_room_ids:
+                            continue
+
+                        name = (
+                            f"assign_"
+                            f"{requirement.id}_"
+                            f"{teacher_id}_"
+                            f"{slot.day.value}_"
+                            f"{slot.period_id}_"
+                            f"{room.id}"
+                        )
+
+                        variable = model.new_bool_var(name)
+
+                        variables.append(
+                            AssignmentVariable(
+                                lesson_requirement_id=requirement.id,
+                                teacher_id=teacher_id,
+                                instructional_group_id=(
+                                    requirement.instructional_group_id
+                                ),
+                                period_id=slot.period_id,
+                                day=slot.day.value,
+                                room_id=room.id,
+                                variable=variable,
+                            )
+                        )
+
+        return variables
+
+    # ------------------------------------------------------------------
+    # Exact weekly lesson requirements
+    # ------------------------------------------------------------------
+
+
+    def _add_lesson_requirement_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+        """
+        HARD CONSTRAINT:
+
+        Every active LessonRequirement must receive exactly its
+        database-defined weekly quota.
+
+        This is deliberately an equality over ALL assignment
+        variables belonging to the requirement.
+
+        Teacher, room, day and period remain solver choices subject
+        to the existing hard constraints.
+        """
+
+        variables_by_requirement: dict[
+            UUID, list[cp_model.IntVar]
+        ] = defaultdict(list)
+
+        for variable in variables:
+            variables_by_requirement[
+                variable.lesson_requirement_id
+            ].append(variable.variable)
+
+        for requirement in problem.lesson_requirements:
+            if not requirement.is_active:
+                continue
+
+            requirement_variables = variables_by_requirement.get(
+                requirement.id,
+                [],
+            )
+
+            required_count = requirement.periods_per_week
+
+            if required_count < 0:
+                raise ValueError(
+                    "Lesson requirement "
+                    f"{requirement.id} has invalid weekly quota "
+                    f"{required_count}."
+                )
+
+            model.add(
+                sum(requirement_variables) == required_count
+            )
+
+
+    # ------------------------------------------------------------------
+    # Daily lesson distribution
+    # ------------------------------------------------------------------
+
+    def _add_single_lesson_per_day_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+        """Do not repeat one requirement on a day without explicit data."""
+
+        variables_by_requirement_day: dict[
+            tuple[UUID, str], list[cp_model.IntVar]
+        ] = defaultdict(list)
+
+        for variable in variables:
+            variables_by_requirement_day[
+                (variable.lesson_requirement_id, variable.day)
+            ].append(variable.variable)
+
+        active_requirement_ids = {
+            requirement.id
+            for requirement in problem.lesson_requirements
+            if requirement.is_active
+        }
+
+        for (requirement_id, _day), day_variables in (
+            variables_by_requirement_day.items()
+        ):
+            if requirement_id in active_requirement_ids:
+                model.add_at_most_one(day_variables)
+
+    # ------------------------------------------------------------------
+    # Simultaneous subject combinations
+    # ------------------------------------------------------------------
+
+    def _add_simultaneous_subject_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+        """
+        Force members of the same configured subject combination to
+        occupy exactly the same day/period slots for the same
+        instructional group.
+
+        Teacher assignments remain independent.
+
+        Room assignments remain independent.
+
+        Each requirement retains its own weekly lesson count.
+        """
+
+        requirements_by_id = {
+            requirement.id: requirement
+            for requirement in problem.lesson_requirements
+            if requirement.is_active
+        }
+
+        variables_by_requirement: dict[
+            UUID,
+            list[AssignmentVariable],
+        ] = defaultdict(list)
+
+        for variable in variables:
+            if variable.lesson_requirement_id in requirements_by_id:
+                variables_by_requirement[
+                    variable.lesson_requirement_id
+                ].append(variable)
+
+        requirements_by_block: dict[
+            tuple[UUID, frozenset[str]],
+            list[UUID],
+        ] = defaultdict(list)
+
+        for requirement in requirements_by_id.values():
+
+            block = simultaneous_group_for_subject(
+                requirement.subject_code
+            )
+
+            if block is None:
+                continue
+
+            requirements_by_block[
+                (
+                    requirement.instructional_group_id,
+                    block,
+                )
+            ].append(
+                requirement.id
+            )
+
+        for (
+            instructional_group_id,
+            block,
+        ), requirement_ids in requirements_by_block.items():
+
+            if len(requirement_ids) < 2:
+                continue
+
+            requirements = [
+                requirements_by_id[requirement_id]
+                for requirement_id in requirement_ids
+            ]
+
+            weekly_counts = {
+                requirement.periods_per_week
+                for requirement in requirements
+            }
+
+            if len(weekly_counts) != 1:
+                raise ValueError(
+                    "Simultaneous subject block has mismatched "
+                    "weekly lesson counts for instructional group "
+                    f"{instructional_group_id}: "
+                    f"{sorted(weekly_counts)}."
+                )
+
+            slot_keys = {
+                (
+                    variable.day,
+                    variable.period_id,
+                )
+                for requirement_id in requirement_ids
+                for variable in variables_by_requirement[
+                    requirement_id
+                ]
+            }
+
+            for day, period_id in slot_keys:
+
+                slot_variables_by_requirement: dict[
+                    UUID,
+                    list[cp_model.IntVar],
+                ] = {}
+
+                for requirement_id in requirement_ids:
+
+                    slot_variables_by_requirement[
+                        requirement_id
+                    ] = [
+                        variable.variable
+                        for variable in variables_by_requirement[
+                            requirement_id
+                        ]
+                        if (
+                            variable.day == day
+                            and variable.period_id == period_id
+                        )
+                    ]
+
+                    model.add_at_most_one(
+                        slot_variables_by_requirement[
+                            requirement_id
+                        ]
+                    )
+
+                first_requirement_id = requirement_ids[0]
+
+                first_slot_expression = sum(
+                    slot_variables_by_requirement[
+                        first_requirement_id
+                    ]
+                )
+
+                for other_requirement_id in requirement_ids[1:]:
+
+                    other_slot_expression = sum(
+                        slot_variables_by_requirement[
+                            other_requirement_id
+                        ]
+                    )
+
+                    model.add(
+                        first_slot_expression
+                        == other_slot_expression
+                    )
+
+    # ------------------------------------------------------------------
+    # Teacher clashes
+    # ------------------------------------------------------------------
+
+    def _add_grade10_option_block_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+        """
+        Enforce the established Grade 10 synchronized option blocks.
+
+        OPT1:
+            BIO / MUSIC / FRE
+
+        OPT2:
+            CHEM / PHY / LIT
+
+        OPT3:
+            GEO / HIS / COMP
+
+        The synchronization key is:
+
+            teaching_group + day + period
+
+        Teacher selection remains independent because each subject
+        continues to use its own database TeacherAssignment records.
+
+        This method does not alter:
+            - Period records
+            - LessonRequirement records
+            - TeacherAssignment records
+            - teacher availability
+            - room availability
+            - free-afternoon rules
+            - Form 3/Form 4 scheduling
+        """
+
+        requirements_by_id = {
+            requirement.id: requirement
+            for requirement in problem.lesson_requirements
+            if requirement.is_active
+        }
+
+        # Collect variables belonging to Grade 10 option subjects.
+        #
+        # The group identity is retained so that synchronization occurs
+        # only between requirements belonging to the same Grade 10
+        # scheduling context.
+        option_variables: dict[
+            tuple[UUID, str, UUID, frozenset[str]],
+            list[cp_model.IntVar],
+        ] = defaultdict(list)
+
+        for variable in variables:
+            requirement = requirements_by_id.get(
+                variable.lesson_requirement_id
+            )
+
+            if requirement is None:
+                continue
+
+            block = option_block_for_subject(
+                requirement.subject_code
+            )
+
+            if block is None:
+                continue
+
+            option_variables[
+                (
+                    variable.instructional_group_id,
+                    variable.day,
+                    variable.period_id,
+                    block,
+                )
+            ].append(variable.variable)
+
+        # For every Grade 10 option block at a given day/period,
+        # the block's active requirements must either all occur together
+        # or none occur.
+        #
+        # Because every requirement already has its own weekly quota,
+        # this constraint does not alter those quotas. It only controls
+        # their placement.
+        for (
+            teaching_group_id,
+            day,
+            period_id,
+            block,
+        ) in {
+            key
+            for key in option_variables
+        }:
+
+            block_variables = option_variables.get(
+                (
+                    teaching_group_id,
+                    day,
+                    period_id,
+                    block,
+                ),
+                [],
+            )
+
+            if not block_variables:
+                continue
+
+            # Group variables by requirement.
+            variables_by_requirement: dict[
+                UUID,
+                list[cp_model.IntVar],
+            ] = defaultdict(list)
+
+            for variable in variables:
+                if variable.instructional_group_id != teaching_group_id:
+                    continue
+
+                if variable.day != day:
+                    continue
+
+                if variable.period_id != period_id:
+                    continue
+
+                requirement = requirements_by_id.get(
+                    variable.lesson_requirement_id
+                )
+
+                if requirement is None:
+                    continue
+
+                requirement_block = option_block_for_subject(
+                    requirement.subject_code
+                )
+
+                if requirement_block != block:
+                    continue
+
+                variables_by_requirement[
+                    requirement.id
+                ].append(variable.variable)
+
+            if len(variables_by_requirement) < 2:
+                continue
+
+            requirement_presence: list[cp_model.IntVar] = []
+
+            for requirement_id, requirement_variables in (
+                variables_by_requirement.items()
+            ):
+                presence = model.new_bool_var(
+                    f"grade10_option_presence_"
+                    f"{requirement_id}_"
+                    f"{day}_"
+                    f"{period_id}"
+                )
+
+                model.add_max_equality(
+                    presence,
+                    requirement_variables,
+                )
+
+                requirement_presence.append(presence)
+
+            # All participating subjects in the established option
+            # combination must have identical presence at this
+            # exact day/period.
+            first = requirement_presence[0]
+
+            for other in requirement_presence[1:]:
+                model.add(first == other)
+
+    def _add_teacher_clash_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        variables: list[AssignmentVariable],
+    ) -> None:
+
+        groups: dict[
+            tuple[UUID, str, UUID],
+            list[cp_model.IntVar],
+        ] = defaultdict(list)
+
+        for variable in variables:
+
+            groups[
+                (
+                    variable.teacher_id,
+                    variable.day,
+                    variable.period_id,
+                )
+            ].append(
+                variable.variable
+            )
+
+        for grouped_variables in groups.values():
+            model.add_at_most_one(
+                grouped_variables
+            )
+
+    # ------------------------------------------------------------------
+    # Instructional-group clashes
+    # ------------------------------------------------------------------
+
+    def _add_group_clash_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+        """
+        Prevent unrelated subjects from occupying the same
+        instructional-group/day/period.
+
+        Explicit simultaneous subject combinations are the only
+        exception.
+
+        A single lesson requirement can never be duplicated inside
+        one instructional-group/day/period through multiple
+        teacher/room alternatives.
+        """
+
+        requirements_by_id = {
+            requirement.id: requirement
+            for requirement in problem.lesson_requirements
+        }
+
+        slots: dict[
+            tuple[UUID, str, UUID],
+            list[AssignmentVariable],
+        ] = defaultdict(list)
+
+        for variable in variables:
+
+            slots[
+                (
+                    variable.instructional_group_id,
+                    variable.day,
+                    variable.period_id,
+                )
+            ].append(variable)
+
+        for grouped_variables in slots.values():
+
+            variables_by_requirement: dict[
+                UUID,
+                list[cp_model.IntVar],
+            ] = defaultdict(list)
+
+            variables_by_block: dict[
+                frozenset[str] | None,
+                list[cp_model.IntVar],
+            ] = defaultdict(list)
+
+            requirement_block: dict[
+                UUID,
+                frozenset[str] | None,
+            ] = {}
+
+            for variable in grouped_variables:
+
+                requirement = requirements_by_id.get(
+                    variable.lesson_requirement_id
+                )
+
+                subject_code = (
+                    requirement.subject_code
+                    if requirement is not None
+                    else None
+                )
+
+                block = simultaneous_group_for_subject(
+                    subject_code
+                )
+
+                requirement_block[
+                    variable.lesson_requirement_id
+                ] = block
+
+                variables_by_requirement[
+                    variable.lesson_requirement_id
+                ].append(
+                    variable.variable
+                )
+
+                variables_by_block[block].append(
+                    variable.variable
+                )
+
+            # A single lesson requirement can only have one selected
+            # teacher/room assignment in one group/day/period.
+            for requirement_variables in (
+                variables_by_requirement.values()
+            ):
+                model.add_at_most_one(
+                    requirement_variables
+                )
+
+            ordinary_requirements = [
+                requirement_id
+                for requirement_id, block
+                in requirement_block.items()
+                if block is None
+            ]
+
+            simultaneous_blocks = list(
+                {
+                    block
+                    for block in requirement_block.values()
+                    if block is not None
+                }
+            )
+
+            # Ordinary subjects are mutually exclusive.
+            if ordinary_requirements:
+                model.add_at_most_one(
+                    [
+                        variable.variable
+                        for variable in grouped_variables
+                        if requirement_block.get(
+                            variable.lesson_requirement_id
+                        ) is None
+                    ]
+                )
+
+            # An ordinary subject cannot overlap a simultaneous block.
+            for ordinary_requirement_id in ordinary_requirements:
+
+                ordinary_variables = (
+                    variables_by_requirement[
+                        ordinary_requirement_id
+                    ]
+                )
+
+                for block in simultaneous_blocks:
+
+                    block_variables = variables_by_block[
+                        block
+                    ]
+
+                    for ordinary_variable in ordinary_variables:
+
+                        for block_variable in block_variables:
+
+                            model.add_at_most_one(
+                                [
+                                    ordinary_variable,
+                                    block_variable,
+                                ]
+                            )
+
+            # Two different simultaneous blocks cannot overlap.
+            for index, first_block in enumerate(
+                simultaneous_blocks
+            ):
+
+                for second_block in simultaneous_blocks[
+                    index + 1:
+                ]:
+
+                    first_variables = variables_by_block[
+                        first_block
+                    ]
+
+                    second_variables = variables_by_block[
+                        second_block
+                    ]
+
+                    for first_variable in first_variables:
+
+                        for second_variable in second_variables:
+
+                            model.add_at_most_one(
+                                [
+                                    first_variable,
+                                    second_variable,
+                                ]
+                            )
+
+    # ------------------------------------------------------------------
+    # Room clashes
+    # ------------------------------------------------------------------
+
+    def _add_room_clash_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        variables: list[AssignmentVariable],
+    ) -> None:
+
+        groups: dict[
+            tuple[UUID, str, UUID],
+            list[cp_model.IntVar],
+        ] = defaultdict(list)
+
+        for variable in variables:
+
+            if variable.room_id is None:
+                continue
+
+            groups[
+                (
+                    variable.room_id,
+                    variable.day,
+                    variable.period_id,
+                )
+            ].append(
+                variable.variable
+            )
+
+        for grouped_variables in groups.values():
+            model.add_at_most_one(
+                grouped_variables
+            )
+
+    # ------------------------------------------------------------------
+    # Teacher availability
+    # ------------------------------------------------------------------
+
+    def _add_teacher_availability_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+
+        unavailable_slots: set[
+            tuple[UUID, str, UUID]
+        ] = {
+            (
+                availability.teacher_id,
+                availability.day.value,
+                availability.period_id,
+            )
+            for availability in problem.teacher_availability
+            if availability.is_active
+            and not availability.is_available
+        }
+
+        for variable in variables:
+
+            key = (
+                variable.teacher_id,
+                variable.day,
+                variable.period_id,
+            )
+
+            if key in unavailable_slots:
+                model.add(
+                    variable.variable == 0
+                )
+
+    # ------------------------------------------------------------------
+    # Mandatory teacher free afternoons
+    # ------------------------------------------------------------------
+
+    def _add_teacher_free_afternoon_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+
+        for teacher in problem.teachers:
+
+            if not teacher.is_active:
+                continue
+
+            free_afternoon = problem.teacher_free_afternoon(
+                teacher.id
+            )
+
+            if free_afternoon is None:
+                raise ValueError(
+                    f"Teacher {teacher.id} has no free-afternoon assignment."
+                )
+
+            for variable in variables:
+
+                if variable.teacher_id != teacher.id:
+                    continue
+
+                if variable.day != free_afternoon.day.value:
+                    continue
+
+                period = problem.period_by_id.get(
+                    variable.period_id
+                )
+
+                if period is None:
+                    continue
+
+                if not period.is_active:
+                    continue
+
+                if not period.is_teaching_period:
+                    continue
+
+                if period.part_of_day != PartOfDay.AFTERNOON:
+                    continue
+
+                model.add(
+                    variable.variable == 0
+                )
+
+    # ------------------------------------------------------------------
+    # Room availability
+    # ------------------------------------------------------------------
+
+    def _add_room_availability_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+
+        unavailable_slots: set[
+            tuple[UUID, str, UUID]
+        ] = {
+            (
+                availability.room_id,
+                availability.day.value,
+                availability.period_id,
+            )
+            for availability in problem.room_availability
+            if availability.is_active
+            and not availability.is_available
+        }
+
+        for variable in variables:
+
+            if variable.room_id is None:
+                continue
+
+            key = (
+                variable.room_id,
+                variable.day,
+                variable.period_id,
+            )
+
+            if key in unavailable_slots:
+                model.add(
+                    variable.variable == 0
+                )

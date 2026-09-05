@@ -1,0 +1,172 @@
+from django.core.management.base import BaseCommand
+
+from apps.academics.models import InstructionalGroup, LessonRequirement
+from apps.scheduling.engine.application.grade10_parallel_blocks import (
+    describe_grade10_parallel_blocks,
+    grade10_parallel_slot_count,
+    validate_grade10_parallel_blocks,
+)
+
+
+class Command(BaseCommand):
+    help = "Read-only audit of Grade 10 parallel elective runtime configuration."
+
+    def teacher_label(self, teacher):
+        """
+        Safely identify a teacher without assuming a `code` field exists.
+        """
+        for field_name in (
+            "code",
+            "employee_code",
+            "staff_code",
+            "employee_number",
+            "staff_number",
+            "teacher_code",
+            "name",
+            "full_name",
+        ):
+            value = getattr(teacher, field_name, None)
+            if value not in (None, ""):
+                return str(value)
+
+        return str(getattr(teacher, "pk", "UNKNOWN"))
+
+    def subject_label(self, subject):
+        """
+        Safely identify a subject using whichever descriptive field exists.
+        """
+        for field_name in (
+            "code",
+            "short_code",
+            "abbreviation",
+            "name",
+            "title",
+        ):
+            value = getattr(subject, field_name, None)
+            if value not in (None, ""):
+                return str(value)
+
+        return str(getattr(subject, "pk", "UNKNOWN"))
+
+    def requirement_label(self, requirement):
+        subject = getattr(requirement, "subject", None)
+        if subject is not None:
+            return self.subject_label(subject)
+
+        for field_name in (
+            "subject_code",
+            "subject_name",
+            "name",
+            "code",
+        ):
+            value = getattr(requirement, field_name, None)
+            if value not in (None, ""):
+                return str(value)
+
+        return str(requirement.pk)
+
+    def handle(self, *args, **options):
+        self.stdout.write("=" * 72)
+        self.stdout.write(
+            "SMARTTIMETABLE PRO - GRADE 10 PARALLEL RUNTIME AUDIT"
+        )
+        self.stdout.write("=" * 72)
+        self.stdout.write("READ-ONLY: NO DATABASE CHANGES")
+        self.stdout.write("")
+
+        validate_grade10_parallel_blocks()
+
+        self.stdout.write("=== AUTHORITATIVE BLOCKS ===")
+        for description in describe_grade10_parallel_blocks():
+            self.stdout.write(description)
+
+        self.stdout.write("")
+        self.stdout.write(
+            f"SHARED BLOCK SLOTS = {grade10_parallel_slot_count()}"
+        )
+        self.stdout.write("")
+
+        self.stdout.write("=== GRADE 10 DATABASE REQUIREMENTS ===")
+
+        groups = InstructionalGroup.objects.filter(
+            code__in=("10E", "10W")
+        ).order_by("code")
+
+        if not groups.exists():
+            self.stdout.write("WARNING - Grade 10E / 10W groups not found.")
+            return
+
+        total_requirements = 0
+        total_assignments = 0
+
+        for group in groups:
+            self.stdout.write("")
+            self.stdout.write(
+                f"GROUP: {getattr(group, 'code', group.pk)} | "
+                f"{getattr(group, 'name', group.pk)}"
+            )
+
+            requirements = (
+                LessonRequirement.objects
+                .filter(
+                    instructional_group=group,
+                    is_active=True,
+                )
+                .select_related("subject")
+                .prefetch_related(
+                    "teacher_assignments__teacher"
+                )
+                .order_by("subject__name")
+            )
+
+            if not requirements.exists():
+                self.stdout.write("  REQUIREMENTS: NONE")
+                continue
+
+            for requirement in requirements:
+                total_requirements += 1
+
+                assignments = tuple(
+                    assignment
+                    for assignment in requirement.teacher_assignments.all()
+                    if getattr(assignment, "is_active", True)
+                )
+
+                active_assignments = tuple(
+                    assignment
+                    for assignment in assignments
+                    if getattr(
+                        getattr(assignment, "teacher", None),
+                        "is_active",
+                        True,
+                    )
+                )
+
+                total_assignments += len(active_assignments)
+
+                teacher_names = ", ".join(
+                    self.teacher_label(assignment.teacher)
+                    for assignment in active_assignments
+                    if getattr(assignment, "teacher", None) is not None
+                ) or "NONE"
+
+                self.stdout.write(
+                    f"  {self.requirement_label(requirement)}"
+                    f" | {requirement.periods_per_week} periods/week"
+                    f" | teachers: {teacher_names}"
+                )
+
+        self.stdout.write("")
+        self.stdout.write("=== RUNTIME TOTALS ===")
+        self.stdout.write(
+            f"ACTIVE GRADE 10 REQUIREMENTS = {total_requirements}"
+        )
+        self.stdout.write(
+            f"ACTIVE TEACHER ASSIGNMENTS = {total_assignments}"
+        )
+
+        self.stdout.write("")
+        self.stdout.write("=" * 72)
+        self.stdout.write("GRADE 10 PARALLEL RUNTIME AUDIT COMPLETE")
+        self.stdout.write("READ-ONLY: NO DATABASE CHANGES")
+        self.stdout.write("=" * 72)

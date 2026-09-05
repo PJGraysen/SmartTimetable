@@ -1,0 +1,25 @@
+{
+  "detected_constraints": null,
+  "detected_has_objective": null,
+  "detected_variables": 7840,
+  "fingerprint": "df759e14ac08d6ab0e234ae146541dc075d196ab1353b478ab0fef819b24c576",
+  "fingerprint_algorithm": "sha256(canonical JSON structural representation of actual SolverModel)",
+  "instructional_groups": 10,
+  "periods": 15,
+  "public_model_attributes": [
+    "model",
+    "variables",
+    "variables_for_lesson"
+  ],
+  "requirements": 40,
+  "room_availability": 0,
+  "rooms": 4,
+  "slots": 49,
+  "solver_model_type": "apps.scheduling.engine.solver.model.SolverModel",
+  "teacher_assignments": 36,
+  "teacher_availability": 0,
+  "teacher_free_afternoons": 20,
+  "teachers": 20,
+  "term": "2026 - Term 1",
+  "term_id": "8ba158ac-4526-41d6-bf40-cb30023e09eb"
+}

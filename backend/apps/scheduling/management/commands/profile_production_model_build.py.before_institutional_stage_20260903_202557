@@ -1,0 +1,263 @@
+﻿from __future__ import annotations
+
+import time
+
+from django.core.management.base import BaseCommand
+from ortools.sat.python import cp_model
+
+from apps.scheduling.engine.infrastructure.django_loader import (
+    DjangoSchedulingLoader,
+)
+from apps.scheduling.engine.solver.model import SolverModelBuilder
+from apps.scheduling.engine.solver.objective import apply_solver_objectives
+from apps.scheduling.models import SchedulingRun
+
+
+class Command(BaseCommand):
+    help = "Read-only stage-by-stage profiler of the real production CP-SAT model build."
+
+    def handle(self, *args, **options):
+        print()
+        print("=" * 110)
+        print("SMARTTIMETABLE PRO - CORRECT PRODUCTION MODEL BUILD PROFILER")
+        print("=" * 110)
+        print("READ-ONLY: NO DATABASE CHANGES")
+        print("READ-ONLY: NO SOLVER EXECUTION")
+        print()
+
+        run = (
+            SchedulingRun.objects
+            .filter(status="COMPLETED")
+            .select_related("term", "timetable_version")
+            .order_by("-completed_at", "-id")
+            .first()
+        )
+
+        if run is None:
+            raise RuntimeError("No completed SchedulingRun exists.")
+
+        term = run.term
+
+        print("REFERENCE COMPLETED RUN")
+        print("-" * 110)
+        print(f"RUN:           {run.id}")
+        print(f"STATUS:        {run.status}")
+        print(f"SOLVER STATUS: {run.solver_status}")
+        print(f"VERSION:       {run.timetable_version}")
+        print(f"OBJECTIVE:     {run.objective_value}")
+        print()
+
+        loader = DjangoSchedulingLoader()
+
+        load_started = time.perf_counter()
+        problem = loader.load_problem(term=term)
+        load_elapsed = time.perf_counter() - load_started
+
+        print("PRODUCTION DOMAIN")
+        print("-" * 110)
+        print(f"REQUIREMENTS:         {len(problem.lesson_requirements)}")
+        print(f"TEACHERS:             {len(problem.teachers)}")
+        print(f"GROUPS:               {len(problem.instructional_groups)}")
+        print(f"ROOMS:                {len(problem.rooms)}")
+        print(f"PERIODS:              {len(problem.periods)}")
+        print(f"SLOTS:                {len(problem.slots)}")
+        print(f"TEACHER ASSIGNMENTS:  {len(problem.teacher_assignments)}")
+        print(f"TEACHER AVAILABILITY: {len(problem.teacher_availability)}")
+        print(f"FREE AFTERNOONS:      {len(problem.teacher_free_afternoons)}")
+        print(f"ROOM AVAILABILITY:    {len(problem.room_availability)}")
+        print(f"LOAD TIME:            {load_elapsed:.6f}s")
+        print()
+
+        builder = SolverModelBuilder()
+        model = cp_model.CpModel()
+
+        def variables_count():
+            return len(model.Proto().variables)
+
+        def constraints_count():
+            return len(model.Proto().constraints)
+
+        def run_stage(label, callback):
+            before_variables = variables_count()
+            before_constraints = constraints_count()
+
+            started = time.perf_counter()
+            result = callback()
+            elapsed = time.perf_counter() - started
+
+            after_variables = variables_count()
+            after_constraints = constraints_count()
+
+            print(
+                f"{label:<50} "
+                f"{elapsed:>12.6f}s  "
+                f"VARS +{after_variables - before_variables:<7} "
+                f"CONSTRAINTS +{after_constraints - before_constraints:<7} "
+                f"TOTAL {after_constraints}"
+            )
+
+            return result
+
+        print("ACTUAL PRODUCTION BUILD STAGES")
+        print("-" * 110)
+
+        total_started = time.perf_counter()
+
+        variables = run_stage(
+            "CREATE ASSIGNMENT VARIABLES",
+            lambda: builder._create_assignment_variables(
+                model=model,
+                problem=problem,
+            ),
+        )
+
+        run_stage(
+            "LESSON REQUIREMENT CONSTRAINTS",
+            lambda: builder._add_lesson_requirement_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            ),
+        )
+
+        run_stage(
+            "GRADE 10 OPTION BLOCK CONSTRAINTS",
+            lambda: builder._add_grade10_option_block_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            ),
+        )
+
+        run_stage(
+            "SIMULTANEOUS SUBJECT CONSTRAINTS",
+            lambda: builder._add_simultaneous_subject_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            ),
+        )
+
+        run_stage(
+            "TEACHER CLASH CONSTRAINTS",
+            lambda: builder._add_teacher_clash_constraints(
+                model=model,
+                variables=variables,
+            ),
+        )
+
+        run_stage(
+            "GROUP CLASH CONSTRAINTS",
+            lambda: builder._add_group_clash_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            ),
+        )
+
+        run_stage(
+            "SINGLE LESSON PER DAY CONSTRAINTS",
+            lambda: builder._add_single_lesson_per_day_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            ),
+        )
+
+        run_stage(
+            "ROOM CLASH CONSTRAINTS",
+            lambda: builder._add_room_clash_constraints(
+                model=model,
+                variables=variables,
+            ),
+        )
+
+        run_stage(
+            "TEACHER AVAILABILITY CONSTRAINTS",
+            lambda: builder._add_teacher_availability_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            ),
+        )
+
+        run_stage(
+            "TEACHER FREE AFTERNOON CONSTRAINTS",
+            lambda: builder._add_teacher_free_afternoon_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            ),
+        )
+
+        run_stage(
+            "ROOM AVAILABILITY CONSTRAINTS",
+            lambda: builder._add_room_availability_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            ),
+        )
+
+        print()
+        print("OBJECTIVE")
+        print("-" * 110)
+
+        objective_before = bool(model.Proto().objective)
+
+        objective_started = time.perf_counter()
+
+        apply_solver_objectives(
+            model=model,
+            problem=problem,
+            variables=tuple(variables),
+            objective=builder.objective,
+        )
+
+        objective_elapsed = time.perf_counter() - objective_started
+        objective_after = bool(model.Proto().objective)
+
+        print(
+            f"{'APPLY SOLVER OBJECTIVES':<50} "
+            f"{objective_elapsed:>12.6f}s  "
+            f"OBJECTIVE {objective_before} -> {objective_after}"
+        )
+
+        total_elapsed = time.perf_counter() - total_started
+
+        print()
+        print("=" * 110)
+        print("FINAL MODEL")
+        print("=" * 110)
+        print(f"VARIABLES:        {variables_count()}")
+        print(f"CONSTRAINTS:      {constraints_count()}")
+        print(f"HAS OBJECTIVE:    {bool(model.Proto().objective)}")
+        print(f"TOTAL BUILD TIME: {total_elapsed:.6f}s")
+        print()
+
+        expected_variables = (
+            len(problem.lesson_requirements)
+            * len(problem.slots)
+            * len(problem.rooms)
+        )
+
+        print("DIMENSION CHECK")
+        print("-" * 110)
+        print(f"EXPECTED VARIABLES: {expected_variables}")
+        print(f"ACTUAL VARIABLES:   {variables_count()}")
+
+        if expected_variables != variables_count():
+            raise RuntimeError(
+                "Production model variable dimension mismatch."
+            )
+
+        print()
+        print("RESULT: PASS")
+        print("The real production model was constructed successfully.")
+        print("No solver execution occurred.")
+        print("No database changes occurred.")
+        print()
+        print("=" * 110)
+        print("READ-ONLY COMPLETE")
+        print("=" * 110)
+        print()

@@ -1,0 +1,31 @@
+{
+  "cp_sat_model": {
+    "constraint_types": {
+      "<unknown>": 4069
+    },
+    "constraints": 4069,
+    "has_objective": true,
+    "proto_available": true,
+    "proto_type": "ortools.sat.python.cp_model_helper.CpModelProto",
+    "variables": 7840
+  },
+  "problem_dimensions": {
+    "groups": 10,
+    "periods": 15,
+    "requirements": 40,
+    "room_availability": 0,
+    "rooms": 4,
+    "slots": 49,
+    "teacher_assignments": 36,
+    "teacher_availability": 0,
+    "teacher_free_afternoons": 20,
+    "teachers": 20
+  },
+  "solver_model": {
+    "assignment_variables": 7840,
+    "fingerprint": "aff9b40f25a9fde4e0f08e01497ce6abe3562deee650bb8783e793b6d4c41a13",
+    "type": "apps.scheduling.engine.solver.model.SolverModel"
+  },
+  "term": "2026 - Term 1",
+  "term_id": "8ba158ac-4526-41d6-bf40-cb30023e09eb"
+}

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Optional
 
@@ -37,7 +37,7 @@ class CPSATSolver:
     def __init__(
         self,
         *,
-        time_limit_seconds: float = 30.0,
+        time_limit_seconds: float = 120.0,
         num_workers: Optional[int] = None,
     ) -> None:
         self.time_limit_seconds = time_limit_seconds
