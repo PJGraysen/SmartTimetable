@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 from datetime import time
 from typing import Optional
 from uuid import UUID
@@ -144,3 +144,4 @@ class SchedulingAssignment:
     period_id: UUID
     day: DayOfWeek
     room_id: Optional[UUID] = None
+

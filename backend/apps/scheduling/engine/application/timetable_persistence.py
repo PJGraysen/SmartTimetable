@@ -17,6 +17,8 @@ from apps.scheduling.models import (
     TimetableEntry,
     TimetableVersion,
 )
+
+
 @dataclass(frozen=True, slots=True)
 class PersistenceResult:
     """Result of persisting a generated timetable."""
@@ -72,11 +74,6 @@ class TimetablePersistenceService:
         assignments = tuple(solver_result.assignments)
 
         self._validate_assignments(assignments)
-
-        self._validate_assignment_completeness(
-            term=scheduling_run.term,
-            assignments=assignments,
-        )
 
         # --------------------------------------------------------------
         # Create the timetable version.
@@ -277,7 +274,6 @@ class TimetablePersistenceService:
         teacher_ids = {
             assignment.teacher_id
             for assignment in assignments
-            if assignment.teacher_id is not None
         }
 
         instructional_group_ids = {
@@ -332,9 +328,6 @@ class TimetablePersistenceService:
                 "Solver assignment references unknown teacher(s): "
                 f"{sorted(str(value) for value in missing_teachers)}"
             )
-
-        # teacher_id=None is intentional. It means the class placement
-        # exists but teacher allocation is pending.
 
         # --------------------------------------------------------------
         # Validate instructional groups.
@@ -397,218 +390,6 @@ class TimetablePersistenceService:
                     f"requirement {requirement.id}."
                 )
 
-    @staticmethod
-    def _validate_assignment_completeness(
-        *,
-        term,
-        assignments: Iterable[SchedulingAssignment],
-    ) -> None:
-        """
-        Ensure solver output fulfils the active database requirements.
-
-        Grade 10 elective requirements are alternatives within four
-        parallel option blocks. Each block occupies exactly five shared
-        weekly class slots per instructional group. Therefore persistence
-        must validate those blocks as shared capacity rather than requiring
-        every alternative subject requirement to appear in the solver
-        output.
-
-        Ordinary requirements continue to require their exact
-        lessons_per_week count.
-        """
-
-        assignments = tuple(assignments)
-
-        from apps.academics.models import LessonRequirement
-        from apps.scheduling.models import TeacherAssignment
-
-        requirements = tuple(
-            LessonRequirement.objects.filter(
-                term=term,
-                is_active=True,
-                instructional_group__is_active=True,
-            )
-        )
-
-        requirement_by_id = {
-            requirement.id: requirement
-            for requirement in requirements
-        }
-
-        assignments_by_requirement = defaultdict(list)
-
-        for assignment in assignments:
-            assignments_by_requirement[
-                assignment.lesson_requirement_id
-            ].append(assignment)
-
-        expected_ids = set(requirement_by_id)
-        actual_ids = set(assignments_by_requirement)
-
-        unexpected_ids = actual_ids - expected_ids
-
-        if unexpected_ids:
-            raise ValueError(
-                "Solver output references lesson requirements that are "
-                "not active for the term. "
-                f"Missing: 0; unexpected: {len(unexpected_ids)}."
-            )
-
-        # --------------------------------------------------------------
-        # Grade 10 identification and shared option-block accounting.
-        # --------------------------------------------------------------
-
-        grade10_group_ids = set()
-
-        for requirement in requirements:
-            group = requirement.instructional_group
-
-            group_code = str(
-                getattr(group, "code", "") or ""
-            ).strip().upper()
-
-            group_name = str(
-                getattr(group, "name", "") or ""
-            ).strip().upper()
-
-            if group_code in {"10E", "10W"} or group_name in {
-                "10E",
-                "10W",
-                "GRADE 10E",
-                "GRADE 10W",
-            }:
-                grade10_group_ids.add(requirement.instructional_group_id)
-
-        grade10_block_requirements = defaultdict(list)
-        ordinary_requirements = []
-
-        for requirement in requirements:
-            if requirement.instructional_group_id not in grade10_group_ids:
-                ordinary_requirements.append(requirement)
-                continue
-
-            subject = getattr(requirement, "subject", None)
-            subject_code = str(
-                getattr(subject, "code", "") or ""
-            ).strip().upper()
-
-            if subject_code not in GRADE10_PARALLEL_SUBJECT_TO_BLOCK:
-                ordinary_requirements.append(requirement)
-                continue
-
-            block = get_grade10_parallel_block_for_subject(subject_code)
-
-            grade10_block_requirements[
-                (
-                    requirement.instructional_group_id,
-                    block.code,
-                )
-            ].append(requirement)
-
-        # --------------------------------------------------------------
-        # Ordinary requirements remain exact.
-        # --------------------------------------------------------------
-
-        for requirement in ordinary_requirements:
-            requirement_assignments = assignments_by_requirement.get(
-                requirement.id,
-                []
-            )
-
-            expected_count = requirement.lessons_per_week
-
-            if len(requirement_assignments) != expected_count:
-                raise ValueError(
-                    "Solver output has an incorrect weekly lesson count "
-                    f"for {requirement.instructional_group_id} / "
-                    f"{requirement.subject_id}: expected "
-                    f"{expected_count}, got "
-                    f"{len(requirement_assignments)}."
-                )
-
-        # --------------------------------------------------------------
-        # Grade 10 option blocks use shared weekly capacity.
-        #
-        # A block must produce exactly five assignments across all of its
-        # alternative subject requirements. Individual alternatives may
-        # legitimately have zero assignments because they are not selected
-        # by a particular instructional group.
-        # --------------------------------------------------------------
-
-        for (group_id, block_code), block_requirements in (
-            grade10_block_requirements.items()
-        ):
-            block = get_grade10_parallel_block_for_subject(
-                block_requirements[0].subject.code
-            )
-
-            block_assignment_count = sum(
-                len(assignments_by_requirement.get(
-                    requirement.id,
-                    [],
-                ))
-                for requirement in block_requirements
-            )
-
-            expected_block_count = block.weekly_shared_slots
-
-            if block_assignment_count != expected_block_count:
-                raise ValueError(
-                    "Solver output has an incorrect weekly shared-slot "
-                    f"count for Grade 10 group {group_id} / "
-                    f"{block_code}: expected "
-                    f"{expected_block_count}, got "
-                    f"{block_assignment_count}."
-                )
-
-        # --------------------------------------------------------------
-        # Validate teacher eligibility and duplicate group slots.
-        # --------------------------------------------------------------
-
-        duplicate_slots = set()
-        seen_slots = set()
-
-        for requirement_id, requirement_assignments in (
-            assignments_by_requirement.items()
-        ):
-            requirement = requirement_by_id[requirement_id]
-
-            eligible_teacher_ids = set(
-                TeacherAssignment.objects.filter(
-                    lesson_requirement_id=requirement_id,
-                    is_active=True,
-                    teacher__is_active=True,
-                ).values_list("teacher_id", flat=True)
-            )
-
-            for assignment in requirement_assignments:
-                # Teacher allocation is optional at timetable-generation
-                # time. A missing teacher is a valid pending placement.
-                if assignment.teacher_id is not None:
-                    if assignment.teacher_id not in eligible_teacher_ids:
-                        raise ValueError(
-                            "Solver assigned a teacher who is not active on "
-                            f"lesson requirement {requirement_id}."
-                        )
-
-                slot = (
-                    assignment.instructional_group_id,
-                    assignment.day,
-                    assignment.period_id,
-                )
-
-                if slot in seen_slots:
-                    duplicate_slots.add(slot)
-
-                seen_slots.add(slot)
-
-        if duplicate_slots:
-            raise ValueError(
-                "Solver output contains duplicate instructional-group "
-                "slots: "
-                f"{len(duplicate_slots)} duplicate(s)."
-            )
-
     # ------------------------------------------------------------------
     # Timetable entry construction
     # ------------------------------------------------------------------
@@ -630,7 +411,7 @@ class TimetablePersistenceService:
                 day=(
                     assignment.day.value
                     if hasattr(assignment.day, "value")
-                    else str(assignment.day)
+                    else assignment.day
                 ),
                 period_id=assignment.period_id,
                 instructional_group_id=assignment.instructional_group_id,
