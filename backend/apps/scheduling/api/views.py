@@ -376,18 +376,14 @@ class SchedulingDashboardView(_APIView):
             if last_completed and last_completed.completed_at else None
         )
 
-        # Recent runs: prefer approved, fall back to completed
-        approved_runs = list(
-            _SR.objects.filter(approved_at__isnull=False)
+        # Recent runs: last 5 COMPLETED (approved or not). Each row
+        # carries its own approved_at flag; approving one must not
+        # hide the others from the list.
+        recent_runs_qs = list(
+            _SR.objects.filter(status=_SRS.COMPLETED)
             .select_related("term", "term__academic_year", "timetable_version", "approved_by")
-            .order_by("-approved_at")[:5]
+            .order_by("-completed_at", "-created_at")[:5]
         )
-        if not approved_runs:
-            approved_runs = list(
-                _SR.objects.filter(status=_SRS.COMPLETED)
-                .select_related("term", "term__academic_year", "timetable_version")
-                .order_by("-completed_at")[:5]
-            )
 
         def _run_row(r):
             return {
@@ -409,7 +405,7 @@ class SchedulingDashboardView(_APIView):
                 "error_message": r.error_message or "",
             }
 
-        recent_runs = [_run_row(r) for r in approved_runs]
+        recent_runs = [_run_row(r) for r in recent_runs_qs]
 
         # Failed runs
         failed_runs = [

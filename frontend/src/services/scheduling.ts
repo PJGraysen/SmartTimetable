@@ -164,3 +164,32 @@ export async function discardSchedulingRun(id: string): Promise<{ ok: boolean }>
   );
   return data;
 }
+
+
+// --- Requirements report for a run ---
+export type RunReportSubject = {
+  subject: string;
+  required: number;
+  placed: number;
+  status: "OK" | "MISSING" | "EXTRA";
+};
+
+export type RunReportClass = {
+  class_name: string;
+  required_total: number;
+  placed_total: number;
+  subjects: RunReportSubject[];
+};
+
+export type RunReport = {
+  run_id: string;
+  version_id: string;
+  version_number: number;
+  version_name: string;
+  classes: RunReportClass[];
+};
+
+export async function getSchedulingRunReport(id: string): Promise<RunReport> {
+  const { data } = await http.get<RunReport>(`/scheduling/runs/${id}/report/`);
+  return data;
+}

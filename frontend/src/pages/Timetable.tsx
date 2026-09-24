@@ -209,6 +209,49 @@ const COLUMNS: TimetableColumn[] = [
   },
 ];
 
+// Defensive: cap rendered lesson columns at 10. If a stale
+// state ever produces an exploded COLUMNS array, this prevents
+// html2canvas from generating a >1000-column PDF capture.
+function _startMinute(t: string): number {
+  const m = t.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return 999999;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+const COLUMNS_SAFE: TimetableColumn[] = (() => {
+  const lessons = COLUMNS.filter((c) => c.kind === "lesson").slice(0, 10);
+  const others = COLUMNS.filter((c) => c.kind !== "lesson");
+  return [...lessons, ...others].sort(
+    (a, b) => _startMinute(a.time) - _startMinute(b.time)
+  );
+})();
+
+// --- Compact day / class labels for space-saving headers ---
+function shortDayLabel(value: string | null | undefined): string {
+  if (!value) return "";
+  const key = String(value).toUpperCase().trim();
+  return ({
+    "MONDAY": "MON", "MON": "MON",
+    "TUESDAY": "TUE", "TUE": "TUE",
+    "WEDNESDAY": "WED", "WED": "WED",
+    "THURSDAY": "THU", "THUR": "THU", "THU": "THU",
+    "FRIDAY": "FRI", "FRI": "FRI",
+  } as Record<string, string>)[key] ?? value;
+}
+
+function shortClassLabel(value: string | null | undefined): string {
+  if (!value) return "";
+  const key = String(value).trim();
+  return ({
+    "Form 4E": "F4E", "Form 4W": "F4W",
+    "Grade 10E": "G10E", "Grade 10W": "G10W",
+    "Grade 8E": "G8E", "Grade 8W": "G8W",
+    "Grade 9E": "G9E", "Grade 9W": "G9W",
+  } as Record<string, string>)[key] ?? value;
+}
+
+
+
 
 /* ============================================================
    LIVE NOW  -  active sessions panel
@@ -648,6 +691,19 @@ function cellClass(column: TimetableColumn): string {
   return "tt-cell";
 }
 
+// --- PDF/PNG export: force React render flush before capture ---
+// html2canvas fires synchronously and can snapshot the DOM before React
+// commits a fresh render. Double requestAnimationFrame guarantees the
+// browser has painted the latest tree. Added to fix intermittent
+// phantom-column and stale-cell captures.
+async function waitForRenderFlush(): Promise<void> {
+  await new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  );
+  await Promise.resolve();
+}
+// --- end flush helper ---
+
 function Timetable() {
   const [entries, setEntries] = useState<TimetableEntryResult[]>([]);
   const [version, setVersion] = useState("Live timetable");
@@ -901,6 +957,7 @@ function Timetable() {
 
   async function downloadTimetablePNG() {
     try {
+      await waitForRenderFlush();
       const mod = await import("html2canvas");
       const html2canvas = (mod as any).default || (mod as any);
       const el = captureTarget();
@@ -930,6 +987,7 @@ function Timetable() {
 
   async function downloadTimetablePDF() {
     try {
+      await waitForRenderFlush();
       const h2cMod = await import("html2canvas");
       const html2canvas = (h2cMod as any).default || (h2cMod as any);
       const jsPdfMod: any = await import("jspdf");
@@ -1658,7 +1716,7 @@ function Timetable() {
                 <th className="tt-day-head">DAY</th>
                 <th className="tt-class-head">CLASS</th>
 
-                {COLUMNS.map((column) => (
+                {COLUMNS_SAFE.map((column) => (
                   <th
                     key={column.key}
                     className={[
@@ -1685,22 +1743,22 @@ function Timetable() {
               {DAYS.map((day) =>
                 visibleClasses.map((classDefinition, classIndex) => (
                   <tr
-                    key={`${day.code}-${classDefinition.label}`}
+                    key={`${day.code}-${shortClassLabel(classDefinition.label)}`}
                   >
                     {classIndex === 0 ? (
                       <th
                         rowSpan={visibleClasses.length}
                         className="tt-day"
                       >
-                        {day.label}
+                        {day.code}
                       </th>
                     ) : null}
 
                     <th className="tt-class">
-                      {classDefinition.label}
+                      {shortClassLabel(classDefinition.label)}
                     </th>
 
-                    {COLUMNS.map((column) => {
+                    {COLUMNS_SAFE.map((column) => {
                       if (column.kind === "tea") {
                         return (
                           <td

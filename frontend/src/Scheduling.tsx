@@ -769,7 +769,7 @@ export default function Scheduling() {
 
   function handleViewRun(runId: string) {
     console.log("[scheduling] View clicked for run", runId);
-    navigate(`/timetable?run=${runId}`);
+    window.location.href = `/timetables?run=${runId}`;
   }
 
   async function handleRefresh() {
@@ -933,6 +933,7 @@ export default function Scheduling() {
                           onView={() => handleViewRun(r.id)}
                           onApprove={handleApproveRun}
                           onDiscard={handleDiscardRun}
+                  onUnapprove={async (id) => { await unapproveSchedulingRun(id); }}
                         />
               ))}
             </div>
@@ -994,7 +995,13 @@ export default function Scheduling() {
   );
 }
 
-function RunRow({ run, onView }: { run: ScheduleRunSummary; onView: () => void }) {
+function RunRow({ run, onView, onApprove, onDiscard, onUnapprove }: {
+  run: ScheduleRunSummary;
+  onView: () => void;
+  onApprove: (runId: string) => Promise<void>;
+  onDiscard: (runId: string) => Promise<void>;
+  onUnapprove: (runId: string) => Promise<void>;
+}) {
   const isApproved = !!run.approved_at;
   return (
     <div style={{
@@ -1032,7 +1039,14 @@ function RunRow({ run, onView }: { run: ScheduleRunSummary; onView: () => void }
 
         </button>
 
-        <button type="button" onClick={() => onDiscard(run.id)}
+        {isApproved && (
+            <button type="button" onClick={() => onUnapprove(run.id)}
+              style={{ /* same as Approve styling */ padding: "0.35rem 0.7rem", fontSize: "0.78rem", borderRadius: 6, border: "1px solid #f59e0b", background: "#fff7ed", color: "#b45309", cursor: "pointer", marginRight: 4 }}
+              title="Reopen — timetable will no longer be active">
+              Disapprove
+            </button>
+          )}
+          <button type="button" onClick={() => onDiscard(run.id)}
 
           style={{ marginRight: 6, background: "#fff", color: "#b45309", border: "1px solid #fcd34d", borderRadius: 6, padding: "4px 10px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
 
