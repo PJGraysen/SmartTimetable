@@ -2,6 +2,12 @@
 from typing import Any
 from uuid import UUID
 
+from apps.scheduling.engine.application.grade10_parallel_blocks import is_senior_school_instructional_group
+from apps.scheduling.engine.application.grade10_parallel_blocks import (
+    get_grade10_parallel_block_for_subject,
+    is_grade10_instructional_group,
+)
+from apps.scheduling.engine.domain.enums import DayOfWeek
 from apps.scheduling.engine.domain.problem import SchedulingProblem
 
 
@@ -251,6 +257,27 @@ def _usable_rooms_for_slot(
     }
 
 
+def _is_schedulable_teaching_slot(
+    problem: SchedulingProblem,
+    *,
+    day: DayOfWeek,
+    period_id: UUID,
+) -> bool:
+    period = problem.period_by_id.get(period_id)
+
+    if (
+        period is None
+        or not period.is_active
+        or not period.is_teaching_period
+    ):
+        return False
+
+    return not (
+        day == DayOfWeek.MONDAY
+        and period.number == 1
+    )
+
+
 def _teacher_can_use_slot(
     problem: SchedulingProblem,
     *,
@@ -260,6 +287,13 @@ def _teacher_can_use_slot(
     teacher_unavailable: set[tuple[UUID, object, UUID]],
     teacher_free_afternoons: dict[UUID, object],
 ) -> bool:
+    if not _is_schedulable_teaching_slot(
+        problem,
+        day=day,
+        period_id=period_id,
+    ):
+        return False
+
     if (
         teacher_id,
         day,
@@ -297,15 +331,11 @@ def _candidate_slot_keys(
 
     for teacher_id in eligible_teacher_ids:
         for slot in problem.slots:
-            period = problem.period_by_id.get(slot.period_id)
-
-            if period is None:
-                continue
-
-            if not period.is_active:
-                continue
-
-            if not period.is_teaching_period:
+            if not _is_schedulable_teaching_slot(
+                problem,
+                day=slot.day,
+                period_id=slot.period_id,
+            ):
                 continue
 
             if not _teacher_can_use_slot(
@@ -474,27 +504,6 @@ def _diagnose_requirements(
         )
 
         if not eligible_teacher_ids:
-            diagnostics.append(
-                InfeasibilityDiagnostic(
-                    code="MISSING_ACTIVE_TEACHER_ASSIGNMENT",
-                    rule="Teacher assignment",
-                    message=(
-                        f"{requirement_label} requires "
-                        f"{requirement.periods_per_week} lesson(s), "
-                        "but has no active assignment to an active "
-                        "teacher."
-                    ),
-                    required_input=(
-                        "Create at least one active TeacherAssignment "
-                        "for this lesson requirement and ensure the "
-                        "assigned teacher is active."
-                    ),
-                    details={
-                        "lesson_requirement_id": str(requirement.id),
-                        "required_periods": requirement.periods_per_week,
-                    },
-                )
-            )
             continue
 
         if not active_room_ids:
@@ -550,31 +559,145 @@ def _diagnose_requirements(
     return diagnostics
 
 
-def _diagnose_group_capacity(
+def _effective_requirement_counts_by_group(
     problem: SchedulingProblem,
-) -> list[InfeasibilityDiagnostic]:
-    diagnostics: list[InfeasibilityDiagnostic] = []
+) -> dict[UUID, int]:
+    """
+    Calculate effective weekly instructional demand by instructional group.
 
-    teaching_slot_count = len(problem.teaching_periods)
+    Senior-school BLOCK requirements belonging to a canonical senior-school
+    elective block share one timetable allocation. The canonical block
+    allocation is therefore counted once per instructional group.
 
-    if teaching_slot_count == 0:
-        return diagnostics
+    Grade 10 parallel elective blocks retain their existing subject-code/block
+    detection and max-per-block treatment. This remains independent of the
+    requirement_type field because legacy/synthetic Grade 10 fixtures may not
+    explicitly set that field.
+
+    STANDALONE and PRACTICAL requirements remain independent and retain their
+    own periods_per_week values.
+    """
+    from apps.scheduling.engine.solver.model import (
+        _senior_school_block_weekly_shared_slots,
+        senior_school_block_code_for_subject,
+    )
 
     requirements_by_group: dict[UUID, int] = {}
+    senior_school_block_counts: dict[tuple[UUID, str], int] = {}
+    grade10_parallel_block_counts: dict[tuple[UUID, str], int] = {}
 
     for requirement in problem.lesson_requirements:
         if not requirement.is_active:
             continue
 
-        requirements_by_group[
-            requirement.instructional_group_id
-        ] = (
-            requirements_by_group.get(
-                requirement.instructional_group_id,
-                0,
+        group_id = requirement.instructional_group_id
+        group = problem.instructional_group_by_id.get(group_id)
+
+        requirement_type = str(
+            getattr(
+                requirement,
+                "requirement_type",
+                "STANDALONE",
             )
+            or "STANDALONE"
+        ).upper()
+
+        subject_code = requirement.subject_code
+
+        # Senior-school blocks are canonical BLOCK requirements. Practical
+        # requirements such as CS practicals must remain independent.
+        senior_block_code = None
+        if requirement_type == "BLOCK" and is_senior_school_instructional_group(group):
+            senior_block_code = senior_school_block_code_for_subject(
+                subject_code
+            )
+
+        if (
+            requirement_type == "BLOCK"
+            and senior_block_code is not None
+        ):
+            key = (group_id, senior_block_code)
+            shared_slots = _senior_school_block_weekly_shared_slots(
+                senior_block_code
+            )
+            senior_school_block_counts[key] = max(
+                senior_school_block_counts.get(key, 0),
+                shared_slots,
+            )
+            continue
+
+        # Grade 10 parallel blocks are identified by their instructional
+        # group and subject code, preserving the established behavior for
+        # fixtures whose requirement_type defaults to STANDALONE.
+        grade10_block = (
+            get_grade10_parallel_block_for_subject(subject_code)
+            if is_grade10_instructional_group(group)
+            else None
+        )
+
+        if grade10_block is not None:
+            key = (group_id, grade10_block.code)
+            grade10_parallel_block_counts[key] = max(
+                grade10_parallel_block_counts.get(key, 0),
+                requirement.periods_per_week,
+            )
+            continue
+
+        requirements_by_group[group_id] = (
+            requirements_by_group.get(group_id, 0)
             + requirement.periods_per_week
         )
+
+    for (group_id, _block_code), periods_per_week in (
+        senior_school_block_counts.items()
+    ):
+        requirements_by_group[group_id] = (
+            requirements_by_group.get(group_id, 0)
+            + periods_per_week
+        )
+
+    for (group_id, _block_code), periods_per_week in (
+        grade10_parallel_block_counts.items()
+    ):
+        requirements_by_group[group_id] = (
+            requirements_by_group.get(group_id, 0)
+            + periods_per_week
+        )
+
+    return requirements_by_group
+
+
+def _group_teaching_slot_count(
+    problem: SchedulingProblem,
+) -> int:
+    count = 0
+
+    for slot in problem.slots:
+        if not _is_schedulable_teaching_slot(
+            problem,
+            day=slot.day,
+            period_id=slot.period_id,
+        ):
+            continue
+
+        count += 1
+
+    return count
+
+
+def _diagnose_group_capacity(
+    problem: SchedulingProblem,
+) -> list[InfeasibilityDiagnostic]:
+    diagnostics: list[InfeasibilityDiagnostic] = []
+
+    teaching_slot_count = _group_teaching_slot_count(problem)
+
+    if teaching_slot_count == 0:
+        return diagnostics
+
+    requirements_by_group = _effective_requirement_counts_by_group(
+        problem
+    )
 
     for group_id, required_periods in requirements_by_group.items():
         if required_periods <= teaching_slot_count:
@@ -651,14 +774,6 @@ def _diagnose_single_teacher_capacity(
         available_slots = 0
 
         for slot in problem.slots:
-            period = problem.period_by_id.get(slot.period_id)
-
-            if period is None:
-                continue
-
-            if not period.is_active or not period.is_teaching_period:
-                continue
-
             if _teacher_can_use_slot(
                 problem,
                 teacher_id=teacher_id,
@@ -721,12 +836,11 @@ def _diagnose_room_capacity(
     total_room_slot_capacity = 0
 
     for slot in problem.slots:
-        period = problem.period_by_id.get(slot.period_id)
-
-        if period is None:
-            continue
-
-        if not period.is_active or not period.is_teaching_period:
+        if not _is_schedulable_teaching_slot(
+            problem,
+            day=slot.day,
+            period_id=slot.period_id,
+        ):
             continue
 
         total_room_slot_capacity += len(

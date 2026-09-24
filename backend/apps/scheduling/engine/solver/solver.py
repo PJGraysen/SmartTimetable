@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Optional
+from uuid import UUID
 
 from ortools.sat.python import cp_model
 
@@ -15,6 +17,7 @@ from apps.scheduling.engine.solver.infeasibility_diagnostics import (
     analyze_infeasibility,
 )
 from apps.scheduling.engine.solver.model import SolverModel
+from apps.scheduling.engine.solver.variables import AssignmentVariable
 from apps.scheduling.engine.solver.result import (
     SolverResult,
     SolverStatistics,
@@ -37,7 +40,7 @@ class CPSATSolver:
     def __init__(
         self,
         *,
-        time_limit_seconds: float = 120.0,
+        time_limit_seconds: float = 900.0,
         num_workers: Optional[int] = None,
     ) -> None:
         self.time_limit_seconds = time_limit_seconds
@@ -53,6 +56,22 @@ class CPSATSolver:
         """
 
         solver = cp_model.CpSolver()
+
+
+
+        # Diversity injection (SmartTimetable Pro):
+
+        # Every generation uses a fresh seed so CP-SAT explores
+
+        # a different region of the feasible space.
+
+        import time as _tt, os as _oo
+
+        solver.parameters.random_seed = int.from_bytes(_oo.urandom(4), 'little') & 0x7FFFFFFF
+
+        solver.parameters.randomize_search = True
+
+        solver.parameters.num_search_workers = 8
 
         solver.parameters.max_time_in_seconds = (
             self.time_limit_seconds
@@ -139,14 +158,67 @@ class CPSATSolver:
         solver: cp_model.CpSolver,
     ) -> tuple[SchedulingAssignment, ...]:
         """Convert true CP-SAT variables into domain assignments."""
+        selected_variables = [
+            (index, variable)
+            for index, variable in enumerate(solver_model.variables)
+            if solver.value(variable.variable) == 1
+        ]
+        variables_by_slot: dict[
+            tuple[str, UUID],
+            list[tuple[int, AssignmentVariable]],
+        ] = defaultdict(list)
+
+        for index, variable in selected_variables:
+            variables_by_slot[
+                (
+                    variable.day,
+                    variable.period_id,
+                )
+            ].append(
+                (
+                    index,
+                    variable,
+                )
+            )
+
+        room_ids_by_variable_index: dict[int, UUID] = {}
+
+        for slot_key, slot_variables in variables_by_slot.items():
+            available_room_ids = (
+                solver_model.available_room_ids_by_slot.get(slot_key)
+            )
+
+            if available_room_ids is None:
+                raise ValueError(
+                    "No room candidates were recorded for selected "
+                    f"timetable slot {slot_key!r}."
+                )
+
+            if len(slot_variables) > len(available_room_ids):
+                raise ValueError(
+                    "Selected lessons exceed available rooms for "
+                    f"timetable slot {slot_key!r}."
+                )
+
+            for (
+                index,
+                _variable,
+            ), room_id in zip(
+                sorted(
+                    slot_variables,
+                    key=lambda item: (
+                        str(item[1].instructional_group_id),
+                        str(item[1].lesson_requirement_id),
+                        str(item[1].teacher_id),
+                    ),
+                ),
+                available_room_ids,
+            ):
+                room_ids_by_variable_index[index] = room_id
 
         assignments: list[SchedulingAssignment] = []
 
-        for variable in solver_model.variables:
-
-            if solver.value(variable.variable) != 1:
-                continue
-
+        for index, variable in selected_variables:
             assignments.append(
                 SchedulingAssignment(
                     lesson_requirement_id=(
@@ -158,7 +230,7 @@ class CPSATSolver:
                     ),
                     period_id=variable.period_id,
                     day=problem_day(variable.day),
-                    room_id=variable.room_id,
+                    room_id=room_ids_by_variable_index[index],
                 )
             )
 

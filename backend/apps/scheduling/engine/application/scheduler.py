@@ -31,7 +31,88 @@ class SchedulingService:
         Generate a timetable for the supplied scheduling problem.
         """
 
+        # --- Block-slot rotation (SmartTimetable Pro) ---
+        # Rotate Form 4 block-slot periods per generation while
+        # preserving the day-of-week pattern.
+        try:
+            import os as _os_rot
+            from apps.scheduling.models import (
+                TimetableVersion as _TVrot,
+            )
+            from apps.scheduling.engine.application.grade10_parallel_blocks import (
+                set_block_rotation_offset as _set_rot,
+            )
+            _forced = _os_rot.environ.get("ST_BLOCK_ROTATION_OFFSET")
+            if _forced is not None:
+                _rot_offset = int(_forced)
+            else:
+                _prev = _TVrot.objects.order_by("-version_number").first()
+                _rot_offset = ((_prev.version_number + 1) if _prev else 0)
+            _set_rot(_rot_offset)
+        except Exception:
+            pass
+        # --- end block-slot rotation ---
+
         solver_model = self.model_builder.build(problem)
+
+        # --- Diversity vs previous version (SmartTimetable Pro) ---
+        # Per-class: at most 15% of a class's weekly lessons may
+        # repeat the previous version. Forces >=85% change per class.
+        try:
+            import sys as _s2
+            from collections import defaultdict as _dd2
+            from apps.scheduling.models import (
+                TimetableVersion as _TVdiv,
+                TimetableEntry as _TEdiv,
+            )
+            _prev_div = _TVdiv.objects.order_by("-version_number").first()
+            if _prev_div is not None:
+                _prev_map = {}
+                for _e in _TEdiv.objects.filter(
+                    timetable_version=_prev_div
+                ).only(
+                    "instructional_group_id",
+                    "day",
+                    "period_id",
+                    "lesson_requirement_id",
+                ):
+                    _prev_map[(
+                        str(_e.instructional_group_id),
+                        str(_e.day or "").upper(),
+                        str(_e.period_id),
+                    )] = str(_e.lesson_requirement_id)
+
+                if _prev_map:
+                    _prev_per_class = _dd2(int)
+                    for (_ig, _d, _p) in _prev_map:
+                        _prev_per_class[_ig] += 1
+
+                    _same_vars_per_class = _dd2(list)
+                    for _v in solver_model.variables:
+                        _k = (
+                            str(_v.instructional_group_id),
+                            str(_v.day or "").upper(),
+                            str(_v.period_id),
+                        )
+                        if _prev_map.get(_k) == str(_v.lesson_requirement_id):
+                            _same_vars_per_class[_k[0]].append(_v.variable)
+
+                    _total_caps = 0
+                    for _ig, _vs in _same_vars_per_class.items():
+                        _n = _prev_per_class.get(_ig, 0)
+                        if _n == 0:
+                            continue
+                        _limit = max(1, int(0.15 * _n))
+                        solver_model.model.add(sum(_vs) <= _limit)
+                        _total_caps += 1
+                    print(
+                        f"[DIVERSITY] per-class caps={_total_caps} limit=15pct",
+                        file=_s2.stderr,
+                    )
+        except Exception as _de:
+            import sys as _s3
+            print(f"[DIVERSITY] skipped: {_de}", file=_s3.stderr)
+        # --- end diversity ---
 
         return self.solver.solve(
             problem=problem,
@@ -41,7 +122,7 @@ class SchedulingService:
 
 def create_default_scheduler(
     *,
-    time_limit_seconds: float = 120.0,
+    time_limit_seconds: float = 900.0,
     num_workers: int | None = None,
     objective: SolverObjective | None = None,
 ) -> SchedulingService:

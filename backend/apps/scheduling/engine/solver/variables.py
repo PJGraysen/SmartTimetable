@@ -12,8 +12,9 @@ class AssignmentVariable:
     CP-SAT Boolean variable representing one possible lesson placement.
 
     The variable is true when the lesson requirement occupies the
-    specified group, room and timetable slot. teacher_id may be None
-    when teacher assignment is intentionally deferred.
+    specified group and timetable slot. teacher_id may be None when
+    teacher assignment is intentionally deferred. A room is allocated
+    after solving from the slot's eligible room set.
     """
 
     lesson_requirement_id: UUID

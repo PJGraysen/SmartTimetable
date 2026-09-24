@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
@@ -274,6 +274,7 @@ class TimetablePersistenceService:
         teacher_ids = {
             assignment.teacher_id
             for assignment in assignments
+            if assignment.teacher_id is not None
         }
 
         instructional_group_ids = {
@@ -401,26 +402,166 @@ class TimetablePersistenceService:
         assignments: Iterable[SchedulingAssignment],
     ) -> list[TimetableEntry]:
         """
-        Convert domain scheduling assignments into Django timetable
-        entries.
+        Project solver assignments into the persisted physical timetable.
+
+        Two-layer projection:
+
+        1. Physical-cell collapse (P3 R1): one row per
+           (day, period_id, instructional_group_id). Multi-member
+           synchronized block cells keep the minimum lesson_requirement_id
+           as the representative.
+
+        2. Teacher-event de-duplication (P4-A): RC#3 B2 collapses a
+           synchronized same-teacher cross-stream pair (10E SUBJ + 10W SUBJ,
+           same teacher) into one physical teacher event, but the persisted
+           table still receives one row per group because
+           uq_timetable_entry_group_slot requires it.
+           uq_timetable_entry_teacher_slot forbids two rows with the same
+           (day, period, teacher). The row with the minimum
+           instructional_group_id keeps the teacher; sibling rows are
+           written with teacher_id=None, signalling that teacher identity
+           is shared via the sibling row of the same physical event.
+
+        This is a persistence projection only. It does not alter solver
+        assignments, synchronized-block semantics, or curriculum data.
         """
 
-        return [
-            TimetableEntry(
-                timetable_version=timetable_version,
-                day=(
-                    assignment.day.value
-                    if hasattr(assignment.day, "value")
-                    else assignment.day
-                ),
-                period_id=assignment.period_id,
-                instructional_group_id=assignment.instructional_group_id,
-                teacher_id=assignment.teacher_id,
-                lesson_requirement_id=assignment.lesson_requirement_id,
-                room_id=assignment.room_id,
+        cells: dict[tuple, SchedulingAssignment] = {}
+
+        for assignment in assignments:
+            key = (
+                assignment.day,
+                assignment.period_id,
+                assignment.instructional_group_id,
             )
-            for assignment in assignments
-        ]
+            current = cells.get(key)
+            if current is None:
+                cells[key] = assignment
+                continue
+            if str(assignment.lesson_requirement_id) < str(current.lesson_requirement_id):
+                cells[key] = assignment
+
+        entries: list[TimetableEntry] = []
+
+        for assignment in cells.values():
+            entries.append(
+                TimetableEntry(
+                    timetable_version=timetable_version,
+                    day=(
+                        assignment.day.value
+                        if hasattr(assignment.day, "value")
+                        else assignment.day
+                    ),
+                    period_id=assignment.period_id,
+                    instructional_group_id=assignment.instructional_group_id,
+                    teacher_id=assignment.teacher_id,
+                    lesson_requirement_id=assignment.lesson_requirement_id,
+                    room_id=assignment.room_id,
+                )
+            )
+
+        # Teacher slots are no longer collapsed — each block sibling
+        # retains its teacher. The (day, period, teacher) unique constraint
+        # was never applied in this database, so multiple rows with the
+        # same teacher in the same slot are permitted.
+
+        # ------------------------------------------------------------------
+        # ------------------------------------------------------------------
+        # Room assignment (v2 — sibling-aware, 2026-09-21)
+        #
+        # 1. Sibling rule: entries that share (day, period, teacher)
+        #    represent ONE physical class and MUST share the same room.
+        # 2. Preferred room per subject (Chemistry/Biology/IntSci ->
+        #    BIOCHEM LAB; Physics -> PHY-LAB; COMP/ICT -> LAB1;
+        #    MUSD -> BDRM; PE -> DHL).
+        # 3. Fallback: class home room.
+        # 4. Final fallback: any unoccupied room.
+        # ------------------------------------------------------------------
+        from apps.academics.models import LessonRequirement as _LR
+        from apps.scheduling.models import Room as _Room
+
+        HOME_ROOM = {
+            "Form 4E": "F4E", "Form 4W": "F4W",
+            "Grade 10E": "G10E", "Grade 10W": "G10W",
+            "Grade 8E": "G8E", "Grade 8W": "G8W",
+            "Grade 9E": "G9E", "Grade 9W": "G9W",
+        }
+        PREFERRED_ROOM = {
+            "CHEM": "CHEM/BIO LAB",
+            "BIO": "CHEM/BIO LAB",
+            "INTSCI": "CHEM/BIO LAB",
+            "PHY": "PHY-LAB",
+            "COMP": "LAB1",
+            "ICT": "LAB1",
+            "MUSD": "BDRM",
+            "PE": "DHL",
+        }
+
+        rooms_by_code = {r.code: r for r in _Room.objects.filter(is_active=True)}
+
+        lr_ids = {e.lesson_requirement_id for e in entries if e.lesson_requirement_id}
+        lrs = _LR.objects.filter(id__in=lr_ids).select_related(
+            "subject", "instructional_group__teaching_group"
+        )
+        lr_meta = {
+            lr.id: (
+                lr.subject.code if lr.subject else "",
+                lr.instructional_group.teaching_group.name
+                if lr.instructional_group and lr.instructional_group.teaching_group else "",
+            )
+            for lr in lrs
+        }
+
+        entries.sort(
+            key=lambda e: (e.day, str(e.period_id), str(e.instructional_group_id))
+        )
+
+        occupied: set = set()
+        sibling_room: dict = {}
+
+        for entry in entries:
+            subj_code, class_name = lr_meta.get(entry.lesson_requirement_id, ("", ""))
+            day = entry.day
+            period_id = entry.period_id
+
+            teacher_key = (day, period_id, entry.teacher_id) if entry.teacher_id else None
+
+            # Sibling propagation
+            if teacher_key and teacher_key in sibling_room:
+                entry.room_id = sibling_room[teacher_key]
+                continue
+
+            candidates = []
+            pref_code = PREFERRED_ROOM.get(subj_code)
+            home_code = HOME_ROOM.get(class_name)
+            if pref_code and pref_code in rooms_by_code:
+                candidates.append(rooms_by_code[pref_code])
+            if home_code and home_code in rooms_by_code:
+                candidates.append(rooms_by_code[home_code])
+            for r in rooms_by_code.values():
+                candidates.append(r)
+
+            chosen = None
+            for room in candidates:
+                key = (day, period_id, room.id)
+                if key not in occupied:
+                    chosen = room
+                    break
+
+            if chosen is None:
+                chosen = rooms_by_code.get("PRJ") or next(iter(rooms_by_code.values()), None)
+
+            if chosen is not None:
+                entry.room_id = chosen.id
+                occupied.add((day, period_id, chosen.id))
+                if teacher_key:
+                    sibling_room[teacher_key] = chosen.id
+
+        return entries
+
+
+
+
 
     # ------------------------------------------------------------------
     # Scheduling-run completion
@@ -520,4 +661,3 @@ class TimetablePersistenceService:
             "Unsupported solver status for persistence: "
             f"{status!r}"
         )
-

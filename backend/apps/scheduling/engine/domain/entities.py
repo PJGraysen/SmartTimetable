@@ -3,6 +3,8 @@ from datetime import time
 from typing import Optional
 from uuid import UUID
 
+from apps.academics.domain.lesson_requirement_types import LessonRequirementType
+
 from .enums import DayOfWeek, PartOfDay
 
 
@@ -56,6 +58,9 @@ class LessonRequirementEntity:
     """
     A requirement describing how much teaching a group/subject
     combination requires.
+
+    requirement_type is the authoritative curriculum classification:
+    STANDALONE, BLOCK, or PRACTICAL.
     """
 
     id: UUID
@@ -63,7 +68,10 @@ class LessonRequirementEntity:
     subject_id: UUID
     periods_per_week: int
     subject_code: str | None = None
+    requirement_type: str = LessonRequirementType.STANDALONE
     is_active: bool = True
+
+
 @dataclass(frozen=True, slots=True)
 class TeacherAssignmentEntity:
     """Assignment of a teacher to a lesson requirement."""
@@ -144,4 +152,3 @@ class SchedulingAssignment:
     period_id: UUID
     day: DayOfWeek
     room_id: Optional[UUID] = None
-

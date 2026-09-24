@@ -32,7 +32,7 @@ from apps.scheduling.engine.domain.entities import (
     TimetableSlot,
 )
 
-from apps.scheduling.engine.domain.enums import DayOfWeek
+from apps.scheduling.engine.domain.enums import DayOfWeek, PartOfDay
 
 from apps.scheduling.engine.domain.problem import (
     SchedulingProblem,
@@ -209,7 +209,7 @@ def load_periods(
             name=period.name,
             start_time=period.start_time,
             end_time=period.end_time,
-            part_of_day=period.part_of_day,
+            part_of_day=_coerce_part_of_day(period.part_of_day),
             is_teaching_period=period.is_teaching_period,
             is_active=period.is_active,
         )
@@ -316,6 +316,12 @@ def load_lesson_requirements(
     for requirement in requirements:
         subject = requirement.subject
 
+        if subject is None:
+            raise ValueError(
+                "LessonRequirement "
+                f"{requirement.id} has no related subject."
+            )
+
         result.append(
             LessonRequirementEntity(
                 id=requirement.id,
@@ -324,9 +330,9 @@ def load_lesson_requirements(
                 ),
                 subject_id=requirement.subject_id,
                 periods_per_week=requirement.lessons_per_week,
-            subject_code=requirement.subject.code,
+                subject_code=str(subject.code),
+                requirement_type=requirement.requirement_type,
                 is_active=requirement.is_active,
-
             )
         )
 
@@ -390,6 +396,21 @@ def _coerce_day(value) -> DayOfWeek:
     raise ValueError(
         f"Unsupported DayOfWeek value: {value!r}"
     )
+
+
+def _coerce_part_of_day(value) -> PartOfDay:
+    """Convert Django period-part values into the domain enum."""
+    if isinstance(value, PartOfDay):
+        return value
+
+    raw = str(value).strip().upper()
+
+    try:
+        return PartOfDay(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"Unsupported PartOfDay value: {value!r}"
+        ) from exc
 
 
 def load_teacher_free_afternoons(
@@ -538,4 +559,3 @@ def build_timetable_slots(
             )
 
     return tuple(slots)
-

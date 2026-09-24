@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from django.db import transaction
 from django.utils import timezone
@@ -126,7 +126,8 @@ class SchedulingApplicationService:
                 ),
             )
 
-        except ValueError:
+        except ValueError as exc:
+            self._mark_failed(scheduling_run, str(exc))
             raise
 
         except Exception as exc:
