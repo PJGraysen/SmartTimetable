@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 from datetime import time
 from uuid import uuid4
 
@@ -125,6 +125,7 @@ def build_constraint_problem(
             instructional_group_id=group.id,
             subject_id=uuid4(),
             periods_per_week=periods_per_week,
+          requirement_type="STANDALONE",
         )
         for group in instructional_groups
     )
@@ -531,6 +532,7 @@ def test_teacher_free_afternoon_is_hard_constraint():
             instructional_group_id=group_id,
             subject_id=uuid4(),
             periods_per_week=1,
+          requirement_type="STANDALONE",
         ),
     )
 
@@ -737,7 +739,8 @@ def test_inactive_lesson_requirement_is_not_scheduled():
         instructional_group_id=requirement.instructional_group_id,
         subject_id=requirement.subject_id,
         periods_per_week=requirement.periods_per_week,
-        is_active=False,
+          requirement_type=requirement.requirement_type,
+          is_active=False,
     )
 
     problem = SchedulingProblem.from_iterables(
@@ -758,23 +761,3 @@ def test_inactive_lesson_requirement_is_not_scheduled():
     assert result.is_successful
     assert result.assignments == ()
 
-
-target = Path(r"tests\scheduling\engine\solver\test_solver_constraints.py")
-backup = target.with_name(
-    target.stem + "_before_p1_restore.py"
-)
-
-if not backup.exists():
-    backup.write_text(
-        target.read_text(encoding="utf-8"),
-        encoding="utf-8",
-    )
-
-target.write_text(
-    Path(__file__).read_text(encoding="utf-8"),
-    encoding="utf-8",
-)
-
-print("BACKUP :", backup)
-print("REWRITE:", target)
-print("P1 RESTORED AS REAL PERIOD + SLOT")

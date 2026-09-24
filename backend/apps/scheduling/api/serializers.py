@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from rest_framework import serializers
 
@@ -44,8 +44,7 @@ class SchedulingRunSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SchedulingRun
-        fields = (
-            "id",
+        fields = ("id",
             "term",
             "term_name",
             "timetable_version",
@@ -59,8 +58,7 @@ class SchedulingRunSerializer(serializers.ModelSerializer):
             "error_message",
             "statistics",
             "created_at",
-            "updated_at",
-        )
+            "updated_at", 'approved_at', 'approved_by', 'approval_note')
 
         read_only_fields = (
             "id",
@@ -101,8 +99,14 @@ class TimetableEntryResultSerializer(serializers.ModelSerializer):
     """
     Detailed representation of one generated timetable entry.
 
-    The API exposes both the foreign-key IDs and useful human-readable
-    information for the frontend and other API consumers.
+    The API exposes both foreign-key IDs and human-readable fields for
+    the frontend and other consumers.
+
+    S1 addition: the ``block`` field exposes a synchronized-block display
+    DTO. It is present only on entries whose subject belongs to a
+    Grade 10 option block or a Senior School elective block. Otherwise it
+    is null, and consumers should fall back to ``subject_code`` and
+    ``teacher_code``.
     """
 
     day_display = serializers.CharField(
@@ -130,14 +134,12 @@ class TimetableEntryResultSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
-    teacher_name = serializers.CharField(
-        source="teacher.__str__",
-        read_only=True,
-    )
+    teacher_name = serializers.SerializerMethodField()
 
     teacher_code = serializers.CharField(
         source="teacher.employee_code",
         read_only=True,
+        allow_null=True,
     )
 
     teacher_number = serializers.IntegerField(
@@ -149,12 +151,10 @@ class TimetableEntryResultSerializer(serializers.ModelSerializer):
     employee_code = serializers.CharField(
         source="teacher.employee_code",
         read_only=True,
+        allow_null=True,
     )
 
-    instructional_group_name = serializers.CharField(
-        source="instructional_group.__str__",
-        read_only=True,
-    )
+    instructional_group_name = serializers.SerializerMethodField()
 
     lesson_requirement_name = serializers.CharField(
         source="lesson_requirement.__str__",
@@ -171,11 +171,190 @@ class TimetableEntryResultSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
-    room_name = serializers.CharField(
-        source="room.__str__",
+    room_name = serializers.SerializerMethodField()
+    learner_count = serializers.SerializerMethodField()
+
+    room_code = serializers.CharField(
+        source="room.code",
         read_only=True,
         allow_null=True,
     )
+
+    # S1: synchronized-block display DTO
+    block = serializers.SerializerMethodField()
+
+    @staticmethod
+    def get_teacher_name(entry):
+        return str(entry.teacher) if entry.teacher is not None else None
+
+    @staticmethod
+    def get_instructional_group_name(entry):
+        return (
+            str(entry.instructional_group)
+            if entry.instructional_group is not None
+            else None
+        )
+
+    @staticmethod
+    def get_room_name(entry):
+        return str(entry.room) if entry.room is not None else None
+
+    @staticmethod
+    def get_learner_count(entry):
+        ig = getattr(entry, "instructional_group", None)
+        if ig is None:
+            return None
+        for attr in ("learner_count", "student_count", "enrolment_count", "enrollment_count", "learners"):
+            v = getattr(ig, attr, None)
+            if isinstance(v, int) and v > 0:
+                return v
+        tg = getattr(ig, "teaching_group", None)
+        if tg is not None:
+            for attr in ("learner_count", "student_count", "enrolment_count", "enrollment_count"):
+                v = getattr(tg, attr, None)
+                if isinstance(v, int) and v > 0:
+                    return v
+        try:
+            n = ig.learners.count()
+            if n > 0:
+                return n
+        except Exception:
+            pass
+        try:
+            n = ig.students.count()
+            if n > 0:
+                return n
+        except Exception:
+            pass
+        return None
+        for attr in ("learner_count", "student_count", "learners", "capacity"):
+            v = getattr(ig, attr, None)
+            if isinstance(v, int) and v > 0:
+                return v
+        try:
+            return ig.learners.count()
+        except Exception:
+            return None
+
+    def get_block(self, entry):
+        """
+        Return the synchronized-block display DTO or None.
+
+        Cached per (namespace, block_code, group_code) in self.context so
+        the teacher map is resolved once per block/group rather than once
+        per entry.
+        """
+        from apps.scheduling.engine.application.block_display import (
+            build_display,
+            resolve_block_membership,
+        )
+
+        cache = self.context.setdefault("_s1_block_cache", {})
+
+        subject_code = None
+        if entry.lesson_requirement is not None:
+            subject = getattr(entry.lesson_requirement, "subject", None)
+            if subject is not None:
+                subject_code = getattr(subject, "code", None)
+
+        membership = resolve_block_membership(
+            subject_code=subject_code,
+            group=entry.instructional_group,
+        )
+        if membership is None:
+            return None
+
+        namespace, block_code, subject_codes = membership
+        group_code = str(
+            getattr(entry.instructional_group, "code", "")
+        ).strip().upper()
+        cache_key = (namespace, block_code, group_code)
+
+        if cache_key in cache:
+            return cache[cache_key]
+
+        teacher_map = self._resolve_member_teachers(
+            entry=entry,
+            subject_codes=subject_codes,
+        )
+
+        dto = build_display(
+            namespace=namespace,
+            block_code=block_code,
+            subject_codes=subject_codes,
+            teacher_map=teacher_map,
+        )
+        result = dto.to_dict()
+        cache[cache_key] = result
+        return result
+
+    def _resolve_member_teachers(self, *, entry, subject_codes):
+        """
+        Map each block member subject_code -> teacher employee_code | None.
+
+        Resolution order per member:
+          1. TeacherAssignment for this entry's own instructional group
+             and the same subject (active).
+          2. If none, TeacherAssignment for the paired stream's group
+             (10E<->10W, 3E<->3W, 4E<->4W) and the same subject.
+          3. Otherwise None. Never manufactured.
+        """
+        from apps.scheduling.models import TeacherAssignment
+
+        term = entry.timetable_version.term
+        group = entry.instructional_group
+        group_code = str(getattr(group, "code", "")).strip().upper()
+
+        pair_map = {
+            "10E": "10W",
+            "10W": "10E",
+            "3E": "3W",
+            "3W": "3E",
+            "4E": "4W",
+            "4W": "4E",
+        }
+        paired_code = pair_map.get(group_code)
+
+        normalized = [str(sc).strip().upper() for sc in subject_codes]
+        teacher_map: dict[str, str | None] = {sc: None for sc in normalized}
+
+        own_qs = (
+            TeacherAssignment.objects
+            .filter(
+                is_active=True,
+                lesson_requirement__is_active=True,
+                lesson_requirement__term=term,
+                lesson_requirement__instructional_group=group,
+                lesson_requirement__subject__code__in=normalized,
+            )
+            .select_related("teacher", "lesson_requirement__subject")
+        )
+        for ta in own_qs:
+            subj = ta.lesson_requirement.subject.code.strip().upper()
+            if ta.teacher is not None and ta.teacher.employee_code:
+                if teacher_map.get(subj) is None:
+                    teacher_map[subj] = ta.teacher.employee_code
+
+        missing = [sc for sc in normalized if teacher_map.get(sc) is None]
+        if paired_code and missing:
+            pair_qs = (
+                TeacherAssignment.objects
+                .filter(
+                    is_active=True,
+                    lesson_requirement__is_active=True,
+                    lesson_requirement__term=term,
+                    lesson_requirement__instructional_group__code=paired_code,
+                    lesson_requirement__subject__code__in=missing,
+                )
+                .select_related("teacher", "lesson_requirement__subject")
+            )
+            for ta in pair_qs:
+                subj = ta.lesson_requirement.subject.code.strip().upper()
+                if teacher_map.get(subj) is None:
+                    if ta.teacher is not None and ta.teacher.employee_code:
+                        teacher_map[subj] = ta.teacher.employee_code
+
+        return teacher_map
 
     class Meta:
         model = TimetableEntry
@@ -201,6 +380,9 @@ class TimetableEntryResultSerializer(serializers.ModelSerializer):
             "subject_code",
             "room",
             "room_name",
+            "room_code",
+            "learner_count",
+            "block",
             "created_at",
             "updated_at",
         )
@@ -301,4 +483,3 @@ class SchedulingRunResultSerializer(serializers.ModelSerializer):
         )
 
         read_only_fields = fields
-

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from unittest.mock import Mock, patch
 
@@ -394,4 +394,36 @@ def test_execute_propagates_infeasible_solver_diagnostic_to_scheduling_run(
     scheduler.generate.assert_called_once()
     persistence.persist.assert_not_called()
 
+# ============================================================================
+# P2 REGRESSION - ValueError inside execute() must mark run FAILED
+# ============================================================================
 
+@pytest.mark.django_db
+def test_execute_marks_run_failed_on_loader_value_error(scheduling_run, monkeypatch):
+    from apps.scheduling.engine.application import scheduling_application as sa
+    from apps.scheduling.models import SchedulingRunStatus
+
+    def raising_loader(*, term):
+        raise ValueError("synthetic loader failure")
+
+    monkeypatch.setattr(sa, "load_scheduling_problem", raising_loader)
+
+    class _StubScheduler:
+        def generate(self, problem):
+            raise AssertionError("scheduler must not be reached")
+
+    class _StubPersistence:
+        pass
+
+    service = sa.SchedulingApplicationService(
+        scheduler=_StubScheduler(),
+        persistence=_StubPersistence(),
+        loader=None,
+    )
+
+    with pytest.raises(ValueError, match="synthetic loader failure"):
+        service.execute(scheduling_run)
+
+    scheduling_run.refresh_from_db()
+    assert scheduling_run.status == SchedulingRunStatus.FAILED
+    assert "synthetic loader failure" in (scheduling_run.error_message or "")

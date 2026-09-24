@@ -1,0 +1,111 @@
+/* QAS · SmartSchoolPro — shared Report Form / Bulk Report styles */
+
+.report-page-wrap { padding: 2rem; max-width: 1100px; margin: 0 auto; }
+.report-page-wrap.tight { max-width: 900px; }
+
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  nav, aside, header, .sidebar, .topbar, .page-bar, .pagebar, .no-print { display: none !important; }
+  .app-shell, .main-area, .content, .ssp-page-transition, .report-page-wrap {
+    display: block !important; margin: 0 !important; padding: 0 !important;
+    width: 100% !important; max-width: 100% !important; background: #fff !important;
+  }
+  .ssp-page-transition { animation: none !important; }
+}
+
+.report-form {
+  position: relative; background: #fff; max-width: 900px; margin: 0 auto;
+  padding: 1.4rem 1.6rem 1.2rem; border: 1px solid #e5e7eb; border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(10,18,29,0.08); color: #111;
+  font-family: "Times New Roman", Georgia, serif; font-size: 12px; overflow: hidden;
+}
+.report-form > *:not(.rf-watermark) { position: relative; z-index: 1; }
+
+@media print {
+  .report-form {
+    max-width: 100% !important; margin: 0 !important; padding: 0 !important;
+    border: none !important; box-shadow: none !important; border-radius: 0 !important;
+    overflow: visible;
+  }
+  .rf-watermark { opacity: 0.09 !important; }
+}
+
+.rf-watermark {
+  position: absolute; inset: 0; z-index: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none; transform: rotate(-28deg);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 800; font-size: 64px; letter-spacing: 0.18em;
+  color: #2b1a0f; opacity: 0.06; user-select: none;
+  white-space: nowrap; overflow: hidden;
+}
+
+.rf-header { text-align: center; margin-bottom: 8px; }
+.rf-school { font-size: 15px; font-weight: 800; letter-spacing: 0.02em; color: #2b1a0f; }
+.rf-address { font-size: 10.5px; color: #333; margin-top: 1px; }
+.rf-title { font-size: 12px; font-weight: 700; margin-top: 4px; letter-spacing: 0.06em; }
+
+.rf-student-info { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 3px 10px; margin: 8px 0; font-size: 11.5px; }
+.rf-line { display: flex; align-items: baseline; gap: 4px; padding-bottom: 1px; }
+.rf-label { font-weight: 700; white-space: nowrap; }
+.rf-value { border-bottom: 1px dotted #888; flex: 1; min-height: 14px; padding: 0 4px; }
+
+table.rf-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+table.rf-table th, table.rf-table td { border: 1px solid #333; padding: 2px 4px; text-align: center; vertical-align: middle; }
+table.rf-table th { background: #f0f0f0; font-weight: 700; font-size: 10.5px; }
+table.rf-table td.subject { text-align: left; font-weight: 700; width: 70px; }
+table.rf-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.rf-table tr.total-row td { background: #f5f5f5; font-weight: 800; }
+
+table.rf-trend { width: 100%; border-collapse: collapse; font-size: 10.5px; margin-top: 12px; }
+table.rf-trend th, table.rf-trend td { border: 1px solid #333; padding: 2px 4px; text-align: center; }
+table.rf-trend th { background: #f0f0f0; font-weight: 700; }
+
+/* Comments: label sits on the first-line baseline */
+.rf-comments { margin-top: 10px; font-size: 11.5px; }
+.rf-comment-line { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+.rf-comment-label {
+  font-weight: 700; white-space: nowrap; padding-top: 4px; line-height: 1.5;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+.rf-comment-box {
+  border: 1px solid #333; flex: 1; min-height: 46px; padding: 3px 8px;
+  line-height: 1.5; font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 11.5px; white-space: pre-wrap; word-break: break-word;
+  background: rgba(255,255,255,0.85);
+}
+.rf-comment-box.tall { min-height: 58px; }
+
+.rf-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 11px; margin-top: 10px; }
+
+.rf-security {
+  margin-top: 16px; padding-top: 6px; border-top: 1px solid #333;
+  font-family: "Segoe UI", system-ui, sans-serif; font-size: 9px; color: #555;
+  text-align: center; letter-spacing: 0.06em; line-height: 1.4;
+}
+.rf-security strong { color: #2b1a0f; }
+.rf-security-code {
+  display: block; margin-top: 3px; font-family: "Courier New", monospace;
+  font-size: 8px; color: #777; letter-spacing: 0.04em;
+}
+
+.bulk-wrap { background: #f5f7fa; }
+.bulk-report-page {
+  position: relative; background: #fff; max-width: 900px; margin: 0 auto 1.5rem;
+  padding: 1.4rem 1.6rem 1.2rem; border: 1px solid #e5e7eb; border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(10,18,29,0.08); color: #111;
+  font-family: "Times New Roman", Georgia, serif; font-size: 12px; overflow: hidden;
+}
+.bulk-report-page > *:not(.rf-watermark) { position: relative; z-index: 1; }
+
+@media print {
+  .bulk-wrap { background: #fff !important; }
+  .bulk-report-page {
+    max-width: 100% !important; margin: 0 !important; padding: 0 !important;
+    border: none !important; box-shadow: none !important; border-radius: 0 !important;
+    overflow: visible; page-break-after: always; break-after: page;
+  }
+  .bulk-report-page:last-child { page-break-after: auto; break-after: auto; }
+  .bulk-report-page .rf-watermark { opacity: 0.09 !important; }
+}

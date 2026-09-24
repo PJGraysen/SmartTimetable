@@ -58,12 +58,12 @@ def test_load_periods_converts_django_models_to_domain_entities():
     assert entity.id == period.id
     assert entity.number == 1
     assert entity.name == "Monday Period 1"
-    assert entity.part_of_day == PartOfDay.MORNING
+    assert entity.part_of_day is PartOfDay.MORNING
     assert entity.is_teaching_period is True
     assert entity.is_active is True
 
 
-def test_build_timetable_slots_uses_the_authoritative_49_period_week():
+def test_build_timetable_slots_includes_the_reserved_assembly_slot():
     periods = tuple(
         PeriodEntity(
             id=uuid4(),
@@ -79,9 +79,14 @@ def test_build_timetable_slots_uses_the_authoritative_49_period_week():
 
     slots = build_timetable_slots(periods)
 
-    assert len(slots) == 49
-    assert len([slot for slot in slots if slot.day == DayOfWeek.MONDAY]) == 9
+    assert len(slots) == 50
+    assert len([slot for slot in slots if slot.day == DayOfWeek.MONDAY]) == 10
     assert len([slot for slot in slots if slot.day == DayOfWeek.TUESDAY]) == 10
+    assert any(
+        slot.day == DayOfWeek.MONDAY
+        and slot.period_number == 1
+        for slot in slots
+    )
 
 
 @pytest.mark.django_db

@@ -126,3 +126,16 @@ class TermSerializer(serializers.ModelSerializer):
             )
 
         return value
+
+
+from apps.core.models import SchoolEvent as _SchoolEvent
+
+
+class SchoolEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = _SchoolEvent
+        fields = [
+            "id", "title", "date", "end_date",
+            "start_time", "end_time",
+            "kind", "description", "is_active",
+        ]

@@ -1,4 +1,4 @@
-﻿"""
+"""
 URL configuration for SmartTimetable Pro.
 """
 
@@ -12,6 +12,8 @@ from drf_spectacular.views import (
 
 
 urlpatterns = [
+    path("api/library/", include("apps.library.urls")),
+    path("api/platform/", include("apps.platform.urls")),
     path("api/ai/", include("apps.core.api.ai_urls")),
 
     path(
@@ -64,3 +66,12 @@ urlpatterns = [
         include("apps.academics.api.management_urls"),
     ),
 ]
+
+
+# ---- school event API (calendar) ----
+from rest_framework.routers import DefaultRouter
+from apps.core.api.views import SchoolEventViewSet
+
+_events_router = DefaultRouter()
+_events_router.register("api/core/events", SchoolEventViewSet, basename="school-event")
+urlpatterns = urlpatterns + _events_router.urls

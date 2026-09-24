@@ -389,3 +389,243 @@ def test_persist_rolls_back_version_when_entry_creation_fails(
 
     assert TimetableVersion.objects.count() == 0
     assert TimetableEntry.objects.count() == 0
+
+# ============================================================================
+# P1 REGRESSION - teacher=None is schema-supported; non-None IDs still validated
+# ============================================================================
+
+@pytest.mark.django_db
+def test_validate_assignments_allows_none_teacher(lesson_requirement):
+    from datetime import time
+    from types import SimpleNamespace
+    from apps.scheduling.engine.application.timetable_persistence import (
+        TimetablePersistenceService,
+    )
+    from apps.scheduling.models import Period
+
+    period = Period.objects.first()
+    if period is None:
+        try:
+            period = Period.objects.create(
+                number=99, name="Test Period",
+                start_time=time(8, 0), end_time=time(8, 40),
+                part_of_day="MORNING",
+                is_teaching_period=True, is_active=True,
+            )
+        except Exception as exc:
+            pytest.skip(f"Cannot construct Period fixture: {exc}")
+
+    assignment = SimpleNamespace(
+        lesson_requirement_id=lesson_requirement.id,
+        teacher_id=None,
+        instructional_group_id=lesson_requirement.instructional_group_id,
+        period_id=period.id,
+    )
+    TimetablePersistenceService._validate_assignments([assignment])
+
+
+@pytest.mark.django_db
+def test_validate_assignments_still_rejects_bogus_teacher(lesson_requirement):
+    from datetime import time
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from apps.scheduling.engine.application.timetable_persistence import (
+        TimetablePersistenceService,
+    )
+    from apps.scheduling.models import Period
+
+    period = Period.objects.first()
+    if period is None:
+        try:
+            period = Period.objects.create(
+                number=99, name="Test Period",
+                start_time=time(8, 0), end_time=time(8, 40),
+                part_of_day="MORNING",
+                is_teaching_period=True, is_active=True,
+            )
+        except Exception as exc:
+            pytest.skip(f"Cannot construct Period fixture: {exc}")
+
+    assignment = SimpleNamespace(
+        lesson_requirement_id=lesson_requirement.id,
+        teacher_id=uuid4(),
+        instructional_group_id=lesson_requirement.instructional_group_id,
+        period_id=period.id,
+    )
+    with pytest.raises(ValueError, match="unknown teacher"):
+        TimetablePersistenceService._validate_assignments([assignment])
+
+
+# ==========================================================================
+# ==========================================================================
+# P3 R1 - physical-cell persistence projection
+# ==========================================================================
+
+def _unsaved_version():
+    # Unsaved model instance passes the FK isinstance check without DB.
+    from apps.scheduling.models import TimetableVersion
+    return TimetableVersion()
+
+
+def test_p3_r1_collapses_same_physical_cell():
+    from types import SimpleNamespace
+    from apps.scheduling.engine.application.timetable_persistence import (
+        TimetablePersistenceService,
+    )
+
+    def a(day, period_id, group_id, req_id, room_id):
+        return SimpleNamespace(
+            day=day, period_id=period_id, instructional_group_id=group_id,
+            lesson_requirement_id=req_id, teacher_id=None, room_id=room_id,
+        )
+
+    entries = TimetablePersistenceService._build_entries(
+        timetable_version=_unsaved_version(),
+        assignments=[
+            a("TUE", "P-5", "GRP-1", "REQ-Z", "ROOM-Z"),
+            a("TUE", "P-5", "GRP-1", "REQ-A", "ROOM-A"),
+            a("TUE", "P-5", "GRP-1", "REQ-M", "ROOM-M"),
+        ],
+    )
+
+    assert len(entries) == 1
+    assert str(entries[0].lesson_requirement_id) == "REQ-A"
+
+
+def test_p3_r1_representative_is_minimum_requirement_id():
+    from types import SimpleNamespace
+    from apps.scheduling.engine.application.timetable_persistence import (
+        TimetablePersistenceService,
+    )
+
+    def a(req_id):
+        return SimpleNamespace(
+            day="MON", period_id="P-1", instructional_group_id="GRP-1",
+            lesson_requirement_id=req_id, teacher_id=None, room_id="R",
+        )
+
+    entries = TimetablePersistenceService._build_entries(
+        timetable_version=_unsaved_version(),
+        assignments=[a("REQ-C"), a("REQ-B"), a("REQ-A")],
+    )
+
+    assert len(entries) == 1
+    assert str(entries[0].lesson_requirement_id) == "REQ-A"
+
+
+def test_p3_r1_preserves_distinct_physical_cells():
+    from types import SimpleNamespace
+    from apps.scheduling.engine.application.timetable_persistence import (
+        TimetablePersistenceService,
+    )
+
+    def a(day, period_id, req_id):
+        return SimpleNamespace(
+            day=day, period_id=period_id, instructional_group_id="GRP-1",
+            lesson_requirement_id=req_id, teacher_id=None, room_id="R",
+        )
+
+    entries = TimetablePersistenceService._build_entries(
+        timetable_version=_unsaved_version(),
+        assignments=[
+            a("MON", "P-1", "REQ-B"),
+            a("MON", "P-2", "REQ-A"),
+            a("TUE", "P-1", "REQ-C"),
+        ],
+    )
+
+    assert len(entries) == 3
+    keys = {(e.day, e.period_id, e.instructional_group_id) for e in entries}
+    assert keys == {
+        ("MON", "P-1", "GRP-1"),
+        ("MON", "P-2", "GRP-1"),
+        ("TUE", "P-1", "GRP-1"),
+    }
+
+# ==========================================================================
+# P4-A - teacher-event de-duplication
+# ==========================================================================
+
+def test_p4a_teacher_event_dedup():
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from apps.scheduling.engine.application.timetable_persistence import (
+        TimetablePersistenceService,
+    )
+    from apps.scheduling.models import TimetableVersion
+
+    teacher = uuid4()
+    grp_a, grp_b = uuid4(), uuid4()
+    req_a, req_b = uuid4(), uuid4()
+
+    def a(group_id, req_id):
+        return SimpleNamespace(
+            day="MON", period_id=uuid4(), instructional_group_id=group_id,
+            lesson_requirement_id=req_id, teacher_id=teacher, room_id=uuid4(),
+        )
+
+    period = uuid4()
+
+    def a2(group_id, req_id):
+        return SimpleNamespace(
+            day="MON", period_id=period, instructional_group_id=group_id,
+            lesson_requirement_id=req_id, teacher_id=teacher, room_id=uuid4(),
+        )
+
+    entries = TimetablePersistenceService._build_entries(
+        timetable_version=TimetableVersion(),
+        assignments=[a2(grp_a, req_a), a2(grp_b, req_b)],
+    )
+
+    assert len(entries) == 2
+    with_teacher = [e for e in entries if e.teacher_id is not None]
+    without_teacher = [e for e in entries if e.teacher_id is None]
+    assert len(with_teacher) == 1
+    assert len(without_teacher) == 1
+    assert with_teacher[0].teacher_id == teacher
+
+
+def test_p4a_single_teacher_row_untouched():
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from apps.scheduling.engine.application.timetable_persistence import (
+        TimetablePersistenceService,
+    )
+    from apps.scheduling.models import TimetableVersion
+
+    teacher = uuid4()
+    assignment = SimpleNamespace(
+        day="MON", period_id=uuid4(), instructional_group_id=uuid4(),
+        lesson_requirement_id=uuid4(), teacher_id=teacher, room_id=uuid4(),
+    )
+    entries = TimetablePersistenceService._build_entries(
+        timetable_version=TimetableVersion(),
+        assignments=[assignment],
+    )
+    assert len(entries) == 1
+    assert entries[0].teacher_id == teacher
+
+
+def test_p4a_different_teachers_same_slot_untouched():
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from apps.scheduling.engine.application.timetable_persistence import (
+        TimetablePersistenceService,
+    )
+    from apps.scheduling.models import TimetableVersion
+
+    period = uuid4()
+    t1, t2 = uuid4(), uuid4()
+
+    def a(group_id, req_id, teacher):
+        return SimpleNamespace(
+            day="MON", period_id=period, instructional_group_id=group_id,
+            lesson_requirement_id=req_id, teacher_id=teacher, room_id=uuid4(),
+        )
+
+    entries = TimetablePersistenceService._build_entries(
+        timetable_version=TimetableVersion(),
+        assignments=[a(uuid4(), uuid4(), t1), a(uuid4(), uuid4(), t2)],
+    )
+    assert len(entries) == 2
+    assert all(e.teacher_id is not None for e in entries)

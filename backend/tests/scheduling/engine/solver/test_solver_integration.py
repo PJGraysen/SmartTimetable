@@ -89,6 +89,7 @@ def build_test_problem() -> SchedulingProblem:
             instructional_group_id=group_id,
             subject_id=uuid4(),
             periods_per_week=2,
+        requirement_type="STANDALONE",
         ),
     )
 

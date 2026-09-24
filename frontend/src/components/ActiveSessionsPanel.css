@@ -1,0 +1,92 @@
+.as3-panel {
+  margin-top: 22px; padding: 18px 20px 20px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 60%, #ecfdf5 100%);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.05);
+}
+.as3-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.as3-live { display: flex; align-items: center; gap: 10px; }
+.as3-dot { width: 10px; height: 10px; border-radius: 50%; background: #94a3b8; box-shadow: 0 0 0 3px rgba(148,163,184,.15); }
+.as3-dot.is-live { background: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,.22); animation: as3-pulse 1.5s ease-in-out infinite; }
+@keyframes as3-pulse { 0%,100% { box-shadow: 0 0 0 3px rgba(22,163,74,.22); } 50% { box-shadow: 0 0 0 8px rgba(22,163,74,.05); } }
+.as3-status { font-weight: 800; font-size: 13px; letter-spacing: .08em; color: #0f172a; }
+.as3-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #475569; font-weight: 600; }
+.as3-clock { font-family: ui-monospace, Menlo, monospace; font-weight: 800; color: #0f172a; }
+.as3-sep { color: #cbd5e1; }
+.as3-range em { font-style: normal; color: #64748b; }
+
+.as3-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
+.as3-tabs { display: flex; flex-wrap: wrap; gap: 5px; }
+.as3-tab { appearance: none; cursor: pointer; padding: 5px 11px; border-radius: 999px; background: #fff; border: 1px solid #e2e8f0; color: #475569; font-weight: 700; font-size: 11px; transition: all .15s ease; }
+.as3-tab:hover { border-color: #86efac; color: #15803d; }
+.as3-tab.is-active { background: #15803d; color: #fff; border-color: #15803d; box-shadow: 0 2px 6px rgba(21,128,61,.25); }
+.as3-tab.is-live:not(.is-active) { border-color: #16a34a; color: #16a34a; }
+.as3-tab-clear { background: #fff7ed; border-color: #fdba74; color: #c2410c; }
+
+.as3-views { display: flex; align-items: center; gap: 6px; }
+.as3-views-label { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #94a3b8; font-weight: 800; margin-right: 4px; }
+.as3-view { appearance: none; cursor: pointer; padding: 5px 10px; border-radius: 6px; background: #fff; border: 1px solid #e2e8f0; color: #475569; font-weight: 700; font-size: 11px; transition: all .15s ease; }
+.as3-view:hover { border-color: #a5b4fc; color: #4338ca; }
+.as3-view.is-active { background: #1e293b; color: #fff; border-color: #1e293b; }
+
+.as3-stats { display: flex; gap: 18px; margin-bottom: 12px; font-size: 12px; color: #475569; }
+.as3-stat b { font-family: ui-monospace, Menlo, monospace; font-size: 15px; font-weight: 800; color: #0f172a; margin-right: 4px; }
+
+.as3-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.as3-card { background: #fff; border: 1px solid #e2e8f0; border-left: 4px solid #16a34a; border-radius: 10px; padding: 10px 12px 11px; box-shadow: 0 1px 2px rgba(15,23,42,.04); opacity: 0; transform: translateY(6px); animation: as3-rise .35s cubic-bezier(.2,.9,.3,1) forwards; transition: box-shadow .18s ease, transform .18s ease; }
+.as3-card:hover { box-shadow: 0 4px 14px rgba(15,23,42,.08); transform: translateY(-1px); }
+@keyframes as3-rise { to { opacity: 1; transform: translateY(0); } }
+.as3-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed #e2e8f0; }
+.as3-key { font-size: 13px; font-weight: 800; color: #0f172a; letter-spacing: .01em; }
+.as3-badge { font-size: 10px; font-weight: 700; letter-spacing: .04em; color: #15803d; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 2px 7px; border-radius: 999px; }
+.as3-rows { display: flex; flex-direction: column; gap: 6px; }
+.as3-row { display: flex; flex-direction: column; gap: 3px; padding: 4px 0; }
+.as3-row-main { display: flex; align-items: baseline; gap: 6px; }
+.as3-subj { font-family: ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 800; color: #1e293b; }
+.as3-subj-name { font-size: 10.5px; color: #94a3b8; font-style: italic; }
+.as3-row-meta { display: flex; flex-wrap: wrap; gap: 5px; }
+.as3-chip { font-family: ui-monospace, Menlo, monospace; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; letter-spacing: .02em; }
+.as3-cls { background: #eef2ff; color: #4338ca; }
+.as3-teach { background: #fef3c7; color: #b45309; }
+.as3-room { background: #f0fdf4; color: #15803d; }
+.as3-count { background: #f1f5f9; color: #475569; }
+
+.as3-empty { padding: 16px 14px; color: #64748b; font-size: 13px; text-align: center; border: 1px dashed #cbd5e1; border-radius: 10px; background: rgba(255,255,255,.6); }
+@media print { .as3-panel { display: none !important; } }
+
+
+/* ---------- free afternoons ---------- */
+.as3-daysel { display: flex; align-items: center; gap: 6px; margin-right: 8px; }
+.as3-daysel-select {
+  appearance: none; cursor: pointer;
+  padding: 5px 10px; border-radius: 6px;
+  background: #fff; border: 1px solid #e2e8f0;
+  color: #0f172a; font-weight: 700; font-size: 11px;
+}
+.as3-daysel-select:hover { border-color: #a5b4fc; }
+
+.as3-free-wrap { display: flex; flex-direction: column; gap: 10px; }
+.as3-free-note {
+  font-size: 12px; color: #475569; padding: 8px 12px;
+  background: #eff6ff; border-radius: 8px; border-left: 3px solid #3b82f6;
+}
+.as3-free-note b { color: #0f172a; }
+.as3-free-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.as3-free-chip {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 13px; font-weight: 800;
+  padding: 10px 12px; text-align: center;
+  background: #fff; border: 1px solid #e2e8f0; border-left: 4px solid #10b981;
+  border-radius: 8px; color: #0f172a; letter-spacing: .03em;
+  opacity: 0; transform: translateY(6px);
+  animation: as3-rise .35s cubic-bezier(.2,.9,.3,1) forwards;
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+.as3-free-chip:hover {
+  box-shadow: 0 4px 12px rgba(16,185,129,.15);
+  transform: translateY(-1px);
+}

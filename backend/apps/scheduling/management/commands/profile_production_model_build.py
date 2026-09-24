@@ -244,21 +244,17 @@ class Command(BaseCommand):
         print(f"TOTAL BUILD TIME: {total_time:.6f}s")
         print()
 
-        expected_variables = (
-            len(problem.lesson_requirements)
-            * len(problem.slots)
-            * len(problem.rooms)
-        )
-
         print("DIMENSION CHECK")
         print("-" * 110)
-        print(f"EXPECTED VARIABLES: {expected_variables}")
-        print(f"ACTUAL VARIABLES:   {variable_count()}")
-
-        if expected_variables != variable_count():
-            raise RuntimeError(
-                "Production model variable dimension mismatch."
-            )
+        print(f"ASSIGNMENT VARIABLES: {len(variables)}")
+        print(
+            f"AUXILIARY VARIABLES: "
+            f"{variable_count() - len(variables)}"
+        )
+        print(
+            "ROOMS ARE MODELED AS PER-SLOT CAPACITY, NOT AS "
+            "INTERCHANGEABLE ASSIGNMENT-VARIABLE DIMENSIONS."
+        )
 
         print()
         print("RESULT: PASS")
@@ -270,5 +266,4 @@ class Command(BaseCommand):
         print("READ-ONLY COMPLETE")
         print("=" * 110)
         print()
-
 

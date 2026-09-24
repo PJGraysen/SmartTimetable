@@ -58,6 +58,8 @@ INSTALLED_APPS = [
     'apps.academics',
     'apps.scheduling',
     'apps.users',
+    "apps.platform",
+    "apps.library",
     'apps.audit',
 ]
 
@@ -168,3 +170,11 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+# CSRF trusted origins for the frontend dev server
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]

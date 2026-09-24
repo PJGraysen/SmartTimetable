@@ -1,51 +1,62 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
-*$py.class
-
-# Virtual environments
+*.egg-info/
 .venv/
 venv/
 env/
+.pytest_cache/
+.mypy_cache/
+*.log
 
 # Django
-*.log
 db.sqlite3
+db.sqlite3-journal
 media/
 staticfiles/
 
-# Environment variables
-.env
+# Node
+node_modules/
+dist/
+.vite/
 
-# IDE
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
+# Backups & scratch (aggressive — project rule)
+*.bak
+*.bak_*
+*.before_*
+*.pre-*
+*.pre_*
+*.broken
+*.broken-*
+*.broken_*
+*.headrevert-*
+*.wholefile_*
+*.queue5-backup
+*.pre_restore_*
+*.pre-v*
+*.pre_actions*
+audit_backups/
+_archive/
+backend/audit_backups/
+backend/diagnostics/
+*.tmp
+_smarttimetable_backups/
+
+# Root/backend scratch scripts (leading underscore)
+/_*.py
+/backend/_*.py
+/backend/_*.txt
+/backend/_*.py.txt
+check_timetable.py
+_patch_A_el01_only.py
+_apply_*.py
+_inject_*.py
+_install_*.py
+_recover_*.py
+_restore_*.py
+_set_*.py
+_fix_*.py
 
 # OS
 .DS_Store
 Thumbs.db
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# Node / Frontend
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
-
-# Secrets
-*.pem
-*.key
-
-# Local database backups
-*.sql
-*.dump

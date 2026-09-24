@@ -91,3 +91,22 @@ class LessonRequirementAdmin(admin.ModelAdmin):
         "instructional_group__name",
         "subject__name",
     )
+
+
+
+from django.contrib import admin
+from apps.academics.models import Student, StudentEnrollment
+
+
+@admin.register(Student)
+class StudentAdmin(admin.ModelAdmin):
+    list_display = ("admission_number", "full_name", "status", "is_active")
+    search_fields = ("admission_number", "first_name", "middle_name", "last_name")
+    list_filter = ("status", "is_active", "gender")
+
+
+@admin.register(StudentEnrollment)
+class StudentEnrollmentAdmin(admin.ModelAdmin):
+    list_display = ("student", "teaching_group", "academic_year", "is_current")
+    list_filter = ("is_current", "academic_year", "teaching_group")
+    search_fields = ("student__admission_number", "student__last_name")

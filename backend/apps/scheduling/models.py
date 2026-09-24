@@ -412,24 +412,6 @@ class TimetableEntry(TimeStampedModel):
                 ],
                 name="uq_timetable_entry_group_slot",
             ),
-            models.UniqueConstraint(
-                fields=[
-                    "timetable_version",
-                    "day",
-                    "period",
-                    "teacher",
-                ],
-                name="uq_timetable_entry_teacher_slot",
-            ),
-            models.UniqueConstraint(
-                fields=[
-                    "timetable_version",
-                    "day",
-                    "period",
-                    "room",
-                ],
-                name="uq_timetable_entry_room_slot",
-            ),
         ]
         indexes = [
             models.Index(
@@ -579,6 +561,16 @@ class SchedulingRun(TimeStampedModel):
         blank=True,
     )
 
+    # Approval (added 2026-09-20)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_scheduling_runs",
+    )
+    approval_note = models.TextField(blank=True, default="")
     class Meta:
         db_table = "scheduling_run"
         ordering = ["-created_at"]
@@ -693,3 +685,51 @@ class ValidationResult(TimeStampedModel):
 
     def __str__(self):
         return f"{self.severity} - {self.category}"
+
+
+class SchedulingErrorLog(TimeStampedModel):
+    """
+    Structured error/warning log populated by the scheduler and by
+    the frontend when a generation fails.  Surfaced in the admin console.
+    """
+
+    SEVERITY = [
+        ("ERROR", "Error"),
+        ("WARNING", "Warning"),
+        ("INFO", "Information"),
+    ]
+
+    SEVERITY_CHOICES = SEVERITY
+
+    source = models.CharField(max_length=50, default="scheduling")
+    severity = models.CharField(max_length=10, choices=SEVERITY, default="ERROR")
+    code = models.CharField(max_length=80, blank=True, default="")
+    message = models.TextField()
+    context = models.JSONField(default=dict, blank=True)
+    user = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="scheduling_error_logs",
+    )
+    url = models.CharField(max_length=500, blank=True, default="")
+    user_agent = models.CharField(max_length=300, blank=True, default="")
+    scheduling_run = models.ForeignKey(
+        SchedulingRun,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="error_logs",
+    )
+
+    class Meta:
+        db_table = "scheduling_error_log"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["-created_at"]),
+            models.Index(fields=["source", "severity"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.severity}] {self.source}: {self.message[:60]}"

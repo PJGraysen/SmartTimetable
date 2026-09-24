@@ -1,0 +1,290 @@
+﻿TOTAL: 1205 lines
+
+=== Every occurrence of CLASSES and visibleClasses ===
+  L574: const visibleClasses = useMemo(() => {
+  L1001: {CLASSES.map((c) => <option key={c.label} value={c.label}>{c.label}</option>)}
+  L1013: Showing {visibleClasses.length} of {CLASSES.length} classes ╖ {scheduledEntries} of {entries.length} lessons
+  L1048: visibleClasses.map((classDefinition, classIndex) => (
+
+=== The render section from line 620 to end (table) ===
+ 620:   ): TimetableEntryResult[] {
+ 621:     const slot = entriesBySlot.get(`${dayCode}:${period}`) || [];
+ 622: 
+ 623:     return slot.filter((entry) => classMatches(entry, definition));
+ 624:   }
+ 625: 
+ 626:   return (
+ 627:     <>
+ 628:       <style>{`
+ 629:         .tt-page {
+ 630:           min-width: 0;
+ 631:           width: 100%;
+ 632:           padding: 18px;
+ 633:           box-sizing: border-box;
+ 634:           background: #ffffff;
+ 635:         }
+ 636: 
+ 637:         .tt-header {
+ 638:           display: flex;
+ 639:           align-items: flex-start;
+ 640:           justify-content: space-between;
+ 641:           gap: 18px;
+ 642:           margin-bottom: 14px;
+ 643:         }
+ 644: 
+ 645:         .tt-title {
+ 646:           margin: 0;
+ 647:           font-size: 24px;
+ 648:           line-height: 1.1;
+ 649:           font-weight: 800;
+ 650:           letter-spacing: -0.4px;
+ 651:           color: #12315b;
+ 652:         }
+ 653: 
+ 654:         .tt-subtitle {
+ 655:           margin: 5px 0 0;
+ 656:           color: #718096;
+ 657:           font-size: 13px;
+ 658:         }
+ 659: 
+ 660:         .tt-live {
+ 661:           display: inline-flex;
+ 662:           align-items: center;
+ 663:           margin-left: 8px;
+ 664:           padding: 3px 8px;
+ 665:           border-radius: 5px;
+ 666:           background: #22a447;
+ 667:           color: white;
+ 668:           font-size: 11px;
+ 669:           font-weight: 800;
+ 670:           vertical-align: middle;
+ 671:         }
+ 672: 
+ 673:         .tt-actions {
+ 674:           display: flex;
+ 675:           align-items: center;
+ 676:           gap: 10px;
+ 677:         }
+ 678: 
+ 679:         .tt-status {
+ 680:           display: inline-flex;
+ 681:           align-items: center;
+ 682:           gap: 8px;
+ 683:           padding: 10px 16px;
+ 684:           border: 1px solid #cfe5d5;
+ 685:           border-radius: 5px;
+ 686:           background: #f5fbf6;
+ 687:           color: #27783b;
+ 688:           font-size: 13px;
+ 689:           white-space: nowrap;
+ 690:         }
+ 691: 
+ 692:         .tt-status-dot {
+ 693:           width: 9px;
+ 694:           height: 9px;
+ 695:           border-radius: 50%;
+ 696:           background: #20a347;
+ 697:         }
+ 698: 
+ 699:         .tt-button {
+ 700:           display: inline-flex;
+ 701:           align-items: center;
+ 702:           gap: 7px;
+ 703:           height: 40px;
+ 704:           padding: 0 16px;
+ 705:           border: 1px solid #2878dc;
+ 706:           border-radius: 5px;
+ 707:           background: white;
+ 708:           color: #1262bd;
+ 709:           font-weight: 700;
+ 710:           cursor: pointer;
+ 711:         }
+ 712: 
+ 713:         .tt-button:disabled {
+ 714:           opacity: 0.6;
+ 715:           cursor: wait;
+ 716:         }
+ 717: 
+ 718:         .tt-table-wrap {
+ 719:           width: 100%;
+ 720:           overflow-x: auto;
+ 721:           border: 1px solid #b9cbe0;
+ 722:           box-sizing: border-box;
+ 723:         }
+ 724: 
+ 725:         .tt-table {
+ 726:           width: 100%;
+ 727:           min-width: 1760px;
+ 728:           table-layout: fixed;
+ 729:           border-collapse: collapse;
+ 730:           background: white;
+ 731:         }
+ 732: 
+ 733:         .tt-table th,
+ 734:         .tt-table td {
+ 735:           border-right: 1px solid #d3dfeb;
+ 736:           border-bottom: 1px solid #d3dfeb;
+ 737:           padding: 0;
+ 738:           box-sizing: border-box;
+ 739:         }
+ 740: 
+ 741:         .tt-day-head,
+ 742:         .tt-class-head {
+ 743:           height: 54px;
+ 744:           background: #244b72;
+ 745:           color: white;
+ 746:           text-align: center;
+ 747:           font-size: 14px;
+ 748:           font-weight: 800;
+ 749:         }
+ 750: 
+ 751:         .tt-day-head {
+ 752:           width: 112px;
+ 753:         }
+ 754: 
+ 755:         .tt-class-head {
+ 756:           width: 112px;
+ 757:         }
+ 758: 
+ 759:         .tt-period-head {
+ 760:           height: 54px;
+ 761:           background: #edf4fa;
+ 762:           color: #16263a;
+ 763:           text-align: center;
+ 764:           vertical-align: middle;
+ 765:           font-weight: 800;
+ 766:         }
+ 767: 
+ 768:         .tt-period-head .tt-period-label {
+ 769:           display: block;
+ 770:           font-size: 14px;
+ 771:           line-height: 18px;
+ 772:         }
+ 773: 
+ 774:         .tt-period-head .tt-period-time {
+ 775:           display: block;
+ 776:           margin-top: 2px;
+ 777:           font-size: 10px;
+ 778:           font-weight: 500;
+ 779:           white-space: nowrap;
+ 780:         }
+ 781: 
+ 782:         .tt-period-head.tt-tea {
+ 783:           background: #fff8dd;
+ 784:         }
+ 785: 
+ 786:         .tt-period-head.tt-lunch {
+ 787:           background: #eff9e9;
+ 788:         }
+ 789: 
+ 790:         .tt-period-head.tt-prayers,
+ 791:         .tt-period-head.tt-activities {
+ 792:           background: #f0edf9;
+ 793:         }
+ 794: 
+ 795:         .tt-day {
+ 796:           width: 112px;
+ 797:           min-width: 112px;
+ 798:           text-align: center;
+ 799:           vertical-align: middle;
+ 800:           background: #f5f9fd;
+ 801:           color: #17366a;
+ 802:           font-size: 16px;
+ 803:           font-weight: 800;
+ 804:         }
+ 805: 
+ 806:         .tt-class {
+ 807:           width: 112px;
+ 808:           min-width: 112px;
+ 809:           height: 28px;
+ 810:           padding-left: 8px !important;
+ 811:           background: #ffffff;
+ 812:           color: #1c2735;
+ 813:           font-size: 12px;
+ 814:           font-weight: 700;
+ 815:           text-align: left;
+ 816:           white-space: nowrap;
+ 817:         }
+ 818: 
+ 819:         .tt-cell {
+ 820:           height: 28px;
+ 821:           min-height: 28px;
+ 822:           background: #ffffff;
+ 823:           color: #4b5563;
+ 824:           text-align: center;
+ 825:           vertical-align: middle;
+ 826:           font-size: 10px;
+ 827:           font-weight: 600;
+ 828:           white-space: nowrap;
+ 829:         }
+ 830: 
+ 831:         .tt-cell.tt-tea {
+ 832:           background: #fff9df;
+ 833:           color: #1f2937;
+ 834:           font-weight: 800;
+ 835:         }
+ 836: 
+ 837:         .tt-cell.tt-lunch {
+ 838:           background: #eff9e9;
+ 839:           color: #1f2937;
+ 840:           font-weight: 800;
+ 841:         }
+ 842: 
+ 843:         .tt-cell.tt-prayers,
+ 844:         .tt-cell.tt-activities {
+ 845:           background: #f2effa;
+ 846:           color: #1f2937;
+ 847:           font-weight: 800;
+ 848:         }
+ 849: 
+ 850:         .tt-lesson {
+ 851:           display: flex;
+ 852:           flex-direction: column;
+ 853:           align-items: center;
+ 854:           justify-content: center;
+ 855:           min-height: 28px;
+ 856:           line-height: 12px;
+ 857:         }
+ 858: 
+ 859:         .tt-subject {
+ 860:           font-weight: 800;
+ 861:           color: #18395f;
+ 862:         }
+ 863: 
+ 864:         .tt-subject-name {
+ 865:           max-width: 100%;
+ 866:           overflow: hidden;
+ 867:           text-overflow: ellipsis;
+ 868:           font-size: 8px;
+ 869:           color: #59697b;
+ 870:           font-weight: 600;
+ 871:         }
+ 872: 
+ 873:         .tt-teacher {
+ 874:           font-size: 9px;
+ 875:           color: #68778a;
+ 876:           font-weight: 700;
+ 877:         }
+ 878: 
+ 879:         .tt-elective {
+ 880:           margin-top: 1px;
+ 881:           padding: 1px 4px;
+ 882:           border-radius: 3px;
+ 883:           background: #eef3ff;
+ 884:           color: #35558c;
+ 885:           font-size: 7px;
+ 886:           font-weight: 800;
+ 887:           text-transform: uppercase;
+ 888:         }
+ 889: 
+ 890:         .tt-footer {
+ 891:           display: flex;
+ 892:           justify-content: space-between;
+ 893:           align-items: center;
+ 894:           padding: 8px 4px;
+ 895:           color: #718096;
+ 896:           font-size: 11px;
+ 897:         }
+ 898: 
+ 899:         .tt-error {
+ 900:           margin: 10px 0;

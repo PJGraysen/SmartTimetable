@@ -1,0 +1,193 @@
+﻿from __future__ import annotations
+
+from django.utils import timezone
+from rest_framework import serializers
+
+from apps.library.models import (
+    Author, Book, Category, Copy, Loan, LoanRule, Member, Publisher, Shelf,
+)
+
+
+class AuthorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Author
+        fields = ["id", "name", "sort_name"]
+
+
+class PublisherSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Publisher
+        fields = ["id", "name", "address", "contact_email", "contact_phone"]
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ["id", "name", "code", "description"]
+
+
+class ShelfSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Shelf
+        fields = ["id", "code", "name", "description", "location_hint"]
+
+
+class BookSerializer(serializers.ModelSerializer):
+    authors = AuthorSerializer(many=True, read_only=True)
+    categories = CategorySerializer(many=True, read_only=True)
+    publisher = PublisherSerializer(read_only=True)
+    copy_count = serializers.SerializerMethodField()
+    available_copy_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Book
+        fields = [
+            "id", "isbn", "title", "subtitle", "edition", "language",
+            "description", "publisher", "published_year", "cover_url",
+            "authors", "categories", "is_active",
+            "copy_count", "available_copy_count",
+            "created_at", "updated_at",
+        ]
+
+    def get_copy_count(self, obj):
+        return obj.copies.count()
+
+    def get_available_copy_count(self, obj):
+        return obj.copies.filter(status=Copy.Status.AVAILABLE).count()
+
+
+class CopySerializer(serializers.ModelSerializer):
+    book_title = serializers.CharField(source="book.title", read_only=True)
+
+    class Meta:
+        model = Copy
+        fields = [
+            "id", "book", "book_title", "barcode", "accession_number",
+            "shelf", "status", "condition", "acquired_at",
+            "acquisition_cost", "replacement_cost", "notes",
+            "created_at", "updated_at",
+        ]
+
+
+class MemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Member
+        fields = [
+            "id", "member_number", "user", "full_name", "email", "phone",
+            "member_type", "is_active", "joined_at", "notes",
+            "created_at", "updated_at",
+        ]
+
+
+class LoanRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoanRule
+        fields = [
+            "id", "member_type", "max_concurrent_loans", "loan_days",
+            "max_renewals", "fine_per_day", "grace_days", "max_fine",
+        ]
+
+
+class LoanSerializer(serializers.ModelSerializer):
+    copy_barcode = serializers.CharField(source="copy.barcode", read_only=True)
+    book_title = serializers.CharField(source="copy.book.title", read_only=True)
+    member_number = serializers.CharField(source="member.member_number", read_only=True)
+    member_name = serializers.CharField(source="member.full_name", read_only=True)
+    is_overdue = serializers.SerializerMethodField()
+    overdue_days = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Loan
+        fields = [
+            "id", "copy", "copy_barcode", "book_title",
+            "member", "member_number", "member_name",
+            "issued_at", "due_at", "returned_at", "status",
+            "renewal_count", "fine_accrued", "fine_paid",
+            "is_overdue", "overdue_days", "notes",
+            "issued_by", "received_by",
+            "created_at", "updated_at",
+        ]
+
+    def get_is_overdue(self, obj):
+        if obj.status != Loan.Status.ACTIVE:
+            return False
+        return obj.due_at < timezone.now()
+
+    def get_overdue_days(self, obj):
+        if obj.status != Loan.Status.ACTIVE:
+            return 0
+        return max(0, (timezone.now() - obj.due_at).days)
+
+
+# =========================================================================
+# PHASE 2 serializers
+# =========================================================================
+from apps.library.models import (
+    FinePayment as _FinePayment,
+    ReadingList as _ReadingList,
+    ReadingListItem as _ReadingListItem,
+    Reservation as _Reservation,
+)
+from apps.library.services.blocking import member_status as _member_status
+
+
+class MemberStatusMixin:
+    def get_status(self, obj):
+        return _member_status(obj)
+
+
+class ReservationSerializer(serializers.ModelSerializer):
+    book_title = serializers.CharField(source="book.title", read_only=True)
+    member_number = serializers.CharField(source="member.member_number", read_only=True)
+    member_name = serializers.CharField(source="member.full_name", read_only=True)
+
+    class Meta:
+        model = _Reservation
+        fields = [
+            "id", "book", "book_title",
+            "member", "member_number", "member_name",
+            "status", "position",
+            "requested_at", "notified_at", "expires_at", "notes",
+        ]
+
+
+class FinePaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = _FinePayment
+        fields = [
+            "id", "loan", "amount", "kind", "reason",
+            "recorded_by", "recorded_at",
+        ]
+
+
+class ReadingListItemSerializer(serializers.ModelSerializer):
+    book_title = serializers.CharField(source="book.title", read_only=True)
+
+    class Meta:
+        model = _ReadingListItem
+        fields = ["id", "book", "book_title", "position", "notes"]
+
+
+class ReadingListSerializer(serializers.ModelSerializer):
+    subject_name = serializers.CharField(source="subject.name", read_only=True, allow_null=True)
+    items = ReadingListItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = _ReadingList
+        fields = [
+            "id", "name", "subject", "subject_name",
+            "description", "is_active", "items",
+            "created_at", "updated_at",
+        ]
+
+
+# Extend MemberSerializer by redefining (django rest framework lets us
+# add SerializerMethodFields by declaring a subclass)
+class MemberWithStatusSerializer(MemberSerializer):
+    library_status = serializers.SerializerMethodField()
+
+    class Meta(MemberSerializer.Meta):
+        fields = MemberSerializer.Meta.fields + ["library_status"]
+
+    def get_library_status(self, obj):
+        return _member_status(obj)

@@ -18,19 +18,19 @@
     "missing_constraint_methods": []
   },
   "constraint_method_set_matches_verified_profile": true,
-  "dimensions_match_verified_profile": true,
+  "dimensions_match_verified_profile": false,
   "problem_dimensions": {
     "groups": 10,
     "periods": 15,
-    "requirements": 40,
-    "rooms": 4,
-    "slots": 49,
+    "requirements": 122,
+    "rooms": 12,
+    "slots": 50,
     "teachers": 20
   },
   "production_model": {
-    "constraints": 4069,
+    "constraints": 19056,
     "has_objective": true,
-    "variables": 7840
+    "variables": 6076
   },
   "term": "2026 - Term 1",
   "term_id": "8ba158ac-4526-41d6-bf40-cb30023e09eb",

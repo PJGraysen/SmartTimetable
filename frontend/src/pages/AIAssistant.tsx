@@ -1,10 +1,17 @@
-﻿import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Bot, Send, Sparkles, User, Loader2 } from "lucide-react";
+import {
+  Bot, Code2, Copy, Check, Loader2, MessageSquare, Send, Shield, Sparkles, User, X,
+} from "lucide-react";
+import { useAuth } from "../auth/AuthContext";
+import "../styles/analysis.css";
+
+type Mode = "chat" | "code";
 
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  mode?: Mode;
 };
 
 type ChatResponse = {
@@ -12,438 +19,380 @@ type ChatResponse = {
   content?: string;
   error?: string;
   model?: string;
-  conversation_id?: string | null;
+  mode?: Mode;
 };
 
-async function sendAIMessage(messages: ChatMessage[]): Promise<ChatResponse> {
+const BROWN = "#2b1a0f", BROWN2 = "#5a3a1e", SKY = "#22b4f0", CREAM = "#f5eee2";
+
+const cardStyle: React.CSSProperties = {
+  background: "#fff", border: "1px solid #e5e7eb", borderRadius: "14px",
+  boxShadow: "0 4px 14px rgba(10,18,29,0.05)",
+};
+
+async function sendAIMessage(mode: Mode, messages: ChatMessage[]): Promise<ChatResponse> {
   const response = await fetch("/api/ai/chat/", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({
-      messages,
+      mode,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
     }),
   });
 
   let data: ChatResponse;
-
   try {
     data = (await response.json()) as ChatResponse;
   } catch {
-    throw new Error(
-      `AI gateway returned an invalid response (${response.status}).`,
-    );
+    throw new Error(`AI gateway returned an invalid response (HTTP ${response.status}).`);
   }
-
   if (!response.ok || data.success !== true) {
-    throw new Error(
-      data.error ||
-        `AI gateway request failed with HTTP ${response.status}.`,
-    );
+    throw new Error(data.error || `AI gateway request failed with HTTP ${response.status}.`);
   }
-
   return data;
 }
 
-function AIAssistant() {
+function CodeBlock({ children }: { children: string }) {
+  const [copied, setCopied] = useState(false);
+  const hasFence = children.includes("```");
+  if (!hasFence) {
+    return <div style={{ whiteSpace: "pre-wrap" }}>{children}</div>;
+  }
+  // Split into segments: text and fenced code
+  const parts: Array<{ type: "text" | "code"; lang?: string; body: string }> = [];
+  const regex = /```([a-zA-Z0-9_+\-]*)\n([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(children)) !== null) {
+    if (m.index > lastIndex) {
+      parts.push({ type: "text", body: children.slice(lastIndex, m.index) });
+    }
+    parts.push({ type: "code", lang: m[1], body: m[2] });
+    lastIndex = m.index + m[0].length;
+  }
+  if (lastIndex < children.length) {
+    parts.push({ type: "text", body: children.slice(lastIndex) });
+  }
+
+  function copy(text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  return (
+    <div>
+      {parts.map((p, i) => {
+        if (p.type === "text") {
+          return <div key={i} style={{ whiteSpace: "pre-wrap" }}>{p.body}</div>;
+        }
+        return (
+          <div key={i} style={{ position: "relative", margin: "0.5rem 0" }}>
+            <pre style={{
+              background: "#1e293b", color: "#e2e8f0", padding: "0.85rem 1rem",
+              borderRadius: "8px", overflow: "auto", fontSize: "0.82rem",
+              fontFamily: "ui-monospace, Consolas, monospace", margin: 0,
+            }}>
+              <code>{p.body}</code>
+            </pre>
+            <button
+              type="button"
+              onClick={() => copy(p.body)}
+              style={{
+                position: "absolute", top: "6px", right: "6px",
+                display: "inline-flex", alignItems: "center", gap: "4px",
+                background: copied ? "#10b981" : "rgba(255,255,255,0.1)",
+                color: "#fff", border: "none", padding: "3px 8px",
+                borderRadius: "5px", cursor: "pointer", fontSize: "0.7rem",
+                fontWeight: 600,
+              }}
+              title="Copy code"
+            >
+              {copied ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy</>}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function AIAssistant() {
+  const { user } = useAuth();
+  const u = user as { is_staff?: boolean; is_superuser?: boolean; display_name?: string; username?: string } | null;
+  const isAdmin = !!(u && (u.is_staff || u.is_superuser));
+
+  const [mode, setMode] = useState<Mode>("chat");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content:
-        "Hello. I am the SmartTimetable AI Assistant. Ask me about timetable generation, scheduling, classes, teachers, subjects, constraints, or the school timetable.",
+      content: "Hello. I am the SmartTimetable AI Assistant. Ask me about timetable generation, scheduling, classes, teachers, subjects, constraints, or school timetable data.",
+      mode: "chat",
     },
   ]);
-
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, sending]);
+
+  const placeholder = useMemo(() => {
+    return mode === "code"
+      ? "Ask about code — e.g. 'write a helper that formats a phone number'"
+      : "Ask anything about your school's data or how to use the app…";
+  }, [mode]);
+
+  function switchMode(next: Mode) {
+    if (next === mode) return;
+    if (next === "code" && !isAdmin) return;
+    setMode(next);
+    setMessages([
+      {
+        role: "assistant",
+        content: next === "code"
+          ? "Code mode active. I'm using the deepseek-coder model. Paste code or ask for a function; I'll return formatted snippets with copy buttons."
+          : "Chat mode active. I'm using the qwen2.5 chat model. Ask me anything about the school or the app.",
+        mode: next,
+      },
+    ]);
+    setError("");
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     const message = input.trim();
-
-    if (!message || sending) {
-      return;
-    }
+    if (!message || sending) return;
 
     setError("");
-
-    const conversation = [
-      ...messages,
-      {
-        role: "user" as const,
-        content: message,
-      },
-    ];
-
+    const conversation: ChatMessage[] = [...messages, { role: "user", content: message, mode }];
     setMessages(conversation);
     setInput("");
     setSending(true);
 
     try {
-      const result = await sendAIMessage(conversation);
-
-      const assistantContent =
-        result.content?.trim() || "The AI returned an empty response.";
-
-      setMessages((current) => [
-        ...current,
-        {
-          role: "assistant",
-          content: assistantContent,
-        },
+      const data = await sendAIMessage(mode, conversation);
+      setMessages([
+        ...conversation,
+        { role: "assistant", content: data.content || "(no reply)", mode },
       ]);
-    } catch (err) {
-      const messageText =
-        err instanceof Error
-          ? err.message
-          : "Unable to contact the SmartTimetable AI gateway.";
-
-      setError(messageText);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setSending(false);
     }
   }
 
+  function clearChat() {
+    setMessages([
+      {
+        role: "assistant",
+        content: mode === "code"
+          ? "Code mode reset. What would you like to build?"
+          : "Chat reset. What would you like to know?",
+        mode,
+      },
+    ]);
+    setError("");
+  }
+
   return (
-    <>
-      <style>{`
-        .ai-page {
-          min-height: calc(100vh - 40px);
-          padding: 24px;
-          box-sizing: border-box;
-          background: #f5f8fc;
-        }
+    <div style={{ padding: "2rem", maxWidth: "1100px", margin: "0 auto", display: "flex", flexDirection: "column", height: "calc(100vh - 2rem)" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "1.25rem", flexWrap: "wrap" }}>
+        <div style={{
+          width: "52px", height: "52px", borderRadius: "14px",
+          background: `linear-gradient(135deg, ${SKY}, #0b5d8c)`,
+          color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 6px 18px rgba(34,180,240,0.35)",
+        }}>
+          {mode === "code" ? <Code2 size={26} /> : <Bot size={26} />}
+        </div>
+        <div style={{ flex: 1, minWidth: "200px" }}>
+          <h1 style={{ margin: 0, fontSize: "1.7rem", color: "#1e2e40", fontWeight: 800 }}>
+            AI Assistant
+          </h1>
+          <p style={{ margin: "2px 0 0", color: "#748095", fontSize: "0.9rem" }}>
+            Local models via Ollama — nothing leaves the school network.
+          </p>
+        </div>
 
-        .ai-shell {
-          width: 100%;
-          max-width: 1180px;
-          margin: 0 auto;
-          display: flex;
-          flex-direction: column;
-          min-height: calc(100vh - 88px);
-          background: #ffffff;
-          border: 1px solid #d8e2ee;
-          border-radius: 10px;
-          overflow: hidden;
-          box-shadow: 0 4px 18px rgba(26, 55, 87, 0.08);
-        }
+        {/* Mode tabs */}
+        <div style={{ display: "flex", gap: "6px", background: "#f1f5f9", borderRadius: "10px", padding: "4px" }}>
+          <button
+            type="button"
+            onClick={() => switchMode("chat")}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              background: mode === "chat" ? "#fff" : "transparent",
+              color: mode === "chat" ? BROWN2 : "#64748b",
+              border: "none", padding: "7px 14px", borderRadius: "7px",
+              cursor: "pointer", fontWeight: 700, fontSize: "0.85rem",
+              boxShadow: mode === "chat" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+            }}
+          >
+            <MessageSquare size={15} /> Chat
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => switchMode("code")}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "6px",
+                background: mode === "code" ? "#fff" : "transparent",
+                color: mode === "code" ? BROWN2 : "#64748b",
+                border: "none", padding: "7px 14px", borderRadius: "7px",
+                cursor: "pointer", fontWeight: 700, fontSize: "0.85rem",
+                boxShadow: mode === "code" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+              }}
+            >
+              <Code2 size={15} /> Code
+              <span style={{
+                fontSize: "0.62rem", background: "#fef3c7", color: "#92400e",
+                padding: "1px 6px", borderRadius: "999px", fontWeight: 800,
+                letterSpacing: "0.04em",
+              }}>ADMIN</span>
+            </button>
+          )}
+        </div>
 
-        .ai-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 20px;
-          padding: 20px 24px;
-          background: #173d67;
-          color: white;
-        }
+        <button
+          type="button"
+          onClick={clearChat}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: "6px",
+            background: "transparent", border: "1px solid #cbd5e1",
+            color: "#64748b", padding: "7px 12px", borderRadius: "9px",
+            cursor: "pointer", fontWeight: 600, fontSize: "0.82rem",
+          }}
+        >
+          <X size={13} /> Clear
+        </button>
+      </div>
 
-        .ai-brand {
-          display: flex;
-          align-items: center;
-          gap: 13px;
-        }
+      {/* Banner for code mode */}
+      {mode === "code" && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: "10px",
+          padding: "0.7rem 1rem", borderRadius: "10px",
+          background: "#fef3c7", color: "#92400e",
+          border: "1px solid #fde68a", marginBottom: "1rem",
+          fontSize: "0.85rem", fontWeight: 600,
+        }}>
+          <Shield size={16} />
+          Code mode · administrator only. Every request is logged to the audit trail.
+        </div>
+      )}
 
-        .ai-icon {
-          width: 42px;
-          height: 42px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 9px;
-          background: rgba(255, 255, 255, 0.14);
-        }
-
-        .ai-title {
-          margin: 0;
-          font-size: 21px;
-          font-weight: 800;
-        }
-
-        .ai-subtitle {
-          margin: 4px 0 0;
-          font-size: 12px;
-          color: #d9e7f5;
-        }
-
-        .ai-live {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 10px;
-          border-radius: 5px;
-          background: #218c48;
-          color: white;
-          font-size: 11px;
-          font-weight: 800;
-        }
-
-        .ai-live-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          background: white;
-        }
-
-        .ai-messages {
-          flex: 1;
-          overflow-y: auto;
-          padding: 24px;
-          background: #f8fafc;
-        }
-
-        .ai-message {
-          display: flex;
-          gap: 11px;
-          margin-bottom: 18px;
-        }
-
-        .ai-message.user {
-          flex-direction: row-reverse;
-        }
-
-        .ai-avatar {
-          flex: 0 0 34px;
-          width: 34px;
-          height: 34px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 50%;
-          background: #e5edf6;
-          color: #234f79;
-        }
-
-        .ai-message.user .ai-avatar {
-          background: #234f79;
-          color: white;
-        }
-
-        .ai-bubble {
-          max-width: min(78%, 800px);
-          padding: 12px 15px;
-          border-radius: 9px;
-          background: white;
-          border: 1px solid #dce5ef;
-          color: #26384c;
-          font-size: 14px;
-          line-height: 1.55;
-          white-space: pre-wrap;
-        }
-
-        .ai-message.user .ai-bubble {
-          background: #e9f2fc;
-          border-color: #c8dbef;
-        }
-
-        .ai-error {
-          margin: 0 24px 12px;
-          padding: 10px 13px;
-          border: 1px solid #efb7b7;
-          border-radius: 6px;
-          background: #fff5f5;
-          color: #a43a3a;
-          font-size: 13px;
-        }
-
-        .ai-composer {
-          padding: 16px 20px 20px;
-          border-top: 1px solid #dce5ef;
-          background: white;
-        }
-
-        .ai-form {
-          display: flex;
-          align-items: flex-end;
-          gap: 10px;
-        }
-
-        .ai-input {
-          flex: 1;
-          min-height: 48px;
-          max-height: 150px;
-          resize: vertical;
-          padding: 13px 14px;
-          box-sizing: border-box;
-          border: 1px solid #bdccdc;
-          border-radius: 7px;
-          outline: none;
-          font: inherit;
-          color: #243447;
-          background: white;
-        }
-
-        .ai-input:focus {
-          border-color: #3579b9;
-          box-shadow: 0 0 0 3px rgba(53, 121, 185, 0.12);
-        }
-
-        .ai-send {
-          height: 48px;
-          padding: 0 18px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          border: 1px solid #1e639d;
-          border-radius: 7px;
-          background: #1f6eae;
-          color: white;
-          font-weight: 800;
-          cursor: pointer;
-        }
-
-        .ai-send:disabled {
-          opacity: 0.55;
-          cursor: wait;
-        }
-
-        .ai-hint {
-          margin: 8px 2px 0;
-          color: #7b8795;
-          font-size: 11px;
-        }
-
-        @keyframes ai-spin {
-          from {
-            transform: rotate(0deg);
-          }
-
-          to {
-            transform: rotate(360deg);
-          }
-        }
-
-        .ai-spinner {
-          animation: ai-spin 1s linear infinite;
-        }
-
-        @media (max-width: 700px) {
-          .ai-page {
-            padding: 10px;
-          }
-
-          .ai-shell {
-            min-height: calc(100vh - 20px);
-          }
-
-          .ai-header {
-            padding: 15px;
-          }
-
-          .ai-live {
-            display: none;
-          }
-
-          .ai-messages {
-            padding: 15px;
-          }
-
-          .ai-bubble {
-            max-width: 86%;
-          }
-        }
-
-        @media print {
-          .ai-page {
-            display: none;
-          }
-        }
-      `}</style>
-
-      <main className="ai-page">
-        <section className="ai-shell">
-          <header className="ai-header">
-            <div className="ai-brand">
-              <div className="ai-icon">
-                <Bot size={23} />
+      {/* Messages */}
+      <div
+        ref={scrollRef}
+        style={{
+          ...cardStyle,
+          flex: 1, overflowY: "auto",
+          padding: "1.25rem", marginBottom: "1rem",
+          display: "flex", flexDirection: "column", gap: "12px",
+        }}
+      >
+        {messages.map((m, i) => {
+          const isUser = m.role === "user";
+          return (
+            <div key={i} className="anim-rise" style={{
+              display: "flex", gap: "10px", alignItems: "flex-start",
+              flexDirection: isUser ? "row-reverse" : "row",
+            }}>
+              <div style={{
+                width: "34px", height: "34px", borderRadius: "10px", flexShrink: 0,
+                background: isUser ? "#f1f5f9" : `linear-gradient(135deg, ${SKY}, #0b5d8c)`,
+                color: isUser ? "#475569" : "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {isUser ? <User size={17} /> : (m.mode === "code" ? <Code2 size={17} /> : <Bot size={17} />)}
               </div>
-
-              <div>
-                <h1 className="ai-title">SmartTimetable AI Assistant</h1>
-                <p className="ai-subtitle">
-                  Local DeepSeek gateway • SmartTimetable Pro
-                </p>
-              </div>
-            </div>
-
-            <div className="ai-live">
-              <span className="ai-live-dot" />
-              AI ONLINE
-            </div>
-          </header>
-
-          <div className="ai-messages">
-            {messages.map((message, index) => (
-              <div
-                className={`ai-message ${message.role}`}
-                key={`${message.role}-${index}`}
-              >
-                <div className="ai-avatar">
-                  {message.role === "assistant" ? (
-                    <Sparkles size={16} />
-                  ) : (
-                    <User size={16} />
-                  )}
-                </div>
-
-                <div className="ai-bubble">{message.content}</div>
-              </div>
-            ))}
-
-            {sending ? (
-              <div className="ai-message assistant">
-                <div className="ai-avatar">
-                  <Sparkles size={16} />
-                </div>
-
-                <div className="ai-bubble">
-                  <Loader2 size={16} className="ai-spinner" />
-                  {" "}Thinking...
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          {error ? <div className="ai-error">{error}</div> : null}
-
-          <div className="ai-composer">
-            <form className="ai-form" onSubmit={handleSubmit}>
-              <textarea
-                className="ai-input"
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder="Ask the SmartTimetable AI Assistant..."
-                disabled={sending}
-                rows={2}
-              />
-
-              <button
-                type="submit"
-                className="ai-send"
-                disabled={sending || !input.trim()}
-              >
-                {sending ? (
-                  <Loader2 size={17} className="ai-spinner" />
+              <div style={{
+                flex: "0 1 auto", maxWidth: "78%",
+                background: isUser ? "#f1f5f9" : "#fff",
+                border: isUser ? "1px solid #e2e8f0" : `1px solid #e5e7eb`,
+                borderRadius: "12px", padding: "0.75rem 1rem",
+                fontSize: "0.9rem", color: "#1e2e40", lineHeight: 1.5,
+                fontFamily: !isUser && m.mode === "code"
+                  ? "ui-monospace, Consolas, monospace"
+                  : "inherit",
+              }}>
+                {isUser ? (
+                  <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
                 ) : (
-                  <Send size={17} />
+                  <CodeBlock>{m.content}</CodeBlock>
                 )}
-                Send
-              </button>
-            </form>
-
-            <p className="ai-hint">
-              Conversation context is retained for the current AI session.
-              Requests use the local SmartTimetable AI gateway.
-            </p>
+              </div>
+            </div>
+          );
+        })}
+        {sending && (
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", paddingLeft: "44px", color: "#94a3b8", fontSize: "0.85rem" }}>
+            <Loader2 size={16} className="spin" style={{ animation: "spin 1s linear infinite" }} />
+            Thinking…
           </div>
-        </section>
-      </main>
-    </>
+        )}
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div style={{
+          padding: "0.7rem 1rem", borderRadius: "10px",
+          background: "#fee2e2", color: "#991b1b", marginBottom: "0.75rem",
+          fontSize: "0.86rem", fontWeight: 600,
+        }}>
+          {error}
+        </div>
+      )}
+
+      {/* Composer */}
+      <form onSubmit={handleSubmit} style={{
+        ...cardStyle,
+        display: "flex", gap: "10px", alignItems: "flex-end",
+        padding: "0.75rem",
+      }}>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={placeholder}
+          rows={2}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit(e as unknown as FormEvent<HTMLFormElement>);
+            }
+          }}
+          style={{
+            flex: 1, resize: "none", border: "1px solid #e5e7eb",
+            borderRadius: "10px", padding: "0.65rem 0.9rem",
+            fontSize: "0.92rem", fontFamily: "inherit",
+            outline: "none", color: "#1e2e40",
+          }}
+        />
+        <button
+          type="submit"
+          disabled={sending || !input.trim()}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: "6px",
+            background: sending || !input.trim() ? "#cbd5e1" : SKY,
+            color: "#fff", border: "none",
+            padding: "0.7rem 1.15rem", borderRadius: "10px",
+            cursor: sending || !input.trim() ? "not-allowed" : "pointer",
+            fontWeight: 700, fontSize: "0.88rem",
+          }}
+        >
+          <Send size={15} /> Send
+        </button>
+      </form>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
   );
 }
-
-export default AIAssistant;

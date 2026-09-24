@@ -110,3 +110,36 @@ class Term(TimeStampedModel):
 
     def __str__(self):
         return f"{self.academic_year.name} - {self.name}"
+
+# =========================================================================
+# School events — for the home calendar widget
+# =========================================================================
+class SchoolEvent(models.Model):
+    class Kind(models.TextChoices):
+        HOLIDAY = "HOLIDAY", "Holiday"
+        EXAM = "EXAM", "Exam"
+        MEETING = "MEETING", "Meeting"
+        SPORTS = "SPORTS", "Sports"
+        ACTIVITY = "ACTIVITY", "Activity"
+        OTHER = "OTHER", "Other"
+
+    id = models.UUIDField(primary_key=True, default=__import__("uuid").uuid4, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    title = models.CharField(max_length=200)
+    date = models.DateField(db_index=True)
+    end_date = models.DateField(null=True, blank=True)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.OTHER, db_index=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        ordering = ["date", "start_time"]
+        verbose_name = "School event"
+        verbose_name_plural = "School events"
+
+    def __str__(self):
+        return f"{self.date} - {self.title}"

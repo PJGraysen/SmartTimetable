@@ -6,9 +6,9 @@
     "name": "2026 - Term 1"
   },
   "model": {
-    "assignment_variables": 7840,
-    "cp_sat_variables": 7840,
-    "constraints": 4069,
+    "assignment_variables": 6076,
+    "cp_sat_variables": 13230,
+    "constraints": 19056,
     "has_objective": true
   },
   "solver": {

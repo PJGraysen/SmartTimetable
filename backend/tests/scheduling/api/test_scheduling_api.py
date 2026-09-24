@@ -8,9 +8,12 @@ from rest_framework.test import APIClient
 
 from apps.scheduling.engine.domain.enums import SolverStatus
 from apps.scheduling.models import (
+    DayOfWeek,
+    Period,
     SchedulingRun,
     SchedulingRunStatus,
     SolverStatus as DjangoSolverStatus,
+    TimetableEntry,
     TimetableVersion,
 )
 
@@ -375,6 +378,59 @@ def test_get_scheduling_run_results_with_timetable(
     assert timetable_data["version_number"] == 1
     assert timetable_data["entries_count"] == 0
     assert timetable_data["entries"] == []
+
+
+@pytest.mark.django_db
+def test_get_scheduling_run_results_serializes_entry_without_teacher(
+    api_client,
+    term,
+    instructional_group,
+    lesson_requirement,
+):
+    period = Period.objects.create(
+        name="Period 1",
+        number=1,
+        start_time="08:00",
+        end_time="08:40",
+        is_teaching_period=True,
+        part_of_day="MORNING",
+    )
+    timetable_version = TimetableVersion.objects.create(
+        term=term,
+        name="Teacherless API Results Test",
+        version_number=1,
+        is_published=False,
+        is_active=True,
+    )
+    scheduling_run = SchedulingRun.objects.create(
+        term=term,
+        timetable_version=timetable_version,
+        status=SchedulingRunStatus.COMPLETED,
+        solver_status=DjangoSolverStatus.OPTIMAL,
+    )
+    TimetableEntry.objects.create(
+        timetable_version=timetable_version,
+        day=DayOfWeek.MONDAY,
+        period=period,
+        instructional_group=instructional_group,
+        teacher=None,
+        lesson_requirement=lesson_requirement,
+        room=None,
+    )
+
+    response = api_client.get(
+        f"/api/scheduling/runs/{scheduling_run.id}/results/",
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+
+    entry_data = response.json()["timetable_version"]["entries"][0]
+
+    assert entry_data["teacher"] is None
+    assert entry_data["teacher_name"] is None
+    assert entry_data["teacher_code"] is None
+    assert entry_data["employee_code"] is None
+    assert entry_data["room_name"] is None
 
 
 @pytest.mark.django_db

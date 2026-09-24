@@ -77,3 +77,144 @@ urlpatterns = [
         name="lesson-requirement-detail",
     ),
 ]
+
+
+
+# ---------------------------------------------------------------------
+# Student API registration (added 2026-09-16)
+# ViewSet lives in apps.academics.views (appended by the seed script).
+# ---------------------------------------------------------------------
+from rest_framework.routers import DefaultRouter as _StudentDR
+from apps.academics.views import StudentViewSet as _StudentVS
+
+_student_router = _StudentDR()
+_student_router.register(r"students", _StudentVS, basename="student")
+
+try:
+    urlpatterns = list(urlpatterns) + list(_student_router.urls)
+except NameError:
+    urlpatterns = list(_student_router.urls)
+
+
+
+# ---------------------------------------------------------------------
+# Analysis API (added 2026-09-16)
+# ---------------------------------------------------------------------
+from django.urls import path as _apath
+from apps.academics.views import (
+    AnalysisAssessmentsView as _AAV,
+    AnalysisDashboardView as _ADV,
+    AnalysisStudentView as _ASV,
+)
+
+urlpatterns += [
+    _apath("analysis/assessments/", _AAV.as_view(), name="analysis-assessments"),
+    _apath("analysis/dashboard/", _ADV.as_view(), name="analysis-dashboard"),
+    _apath("analysis/student/<uuid:student_id>/", _ASV.as_view(), name="analysis-student"),
+]
+
+
+
+from apps.academics.views import AnalysisStudentDeepView as _ASDV
+urlpatterns += [
+    _apath("analysis/student-deep/<uuid:student_id>/", _ASDV.as_view(), name="analysis-student-deep"),
+]
+
+
+
+# ---------------------------------------------------------------------
+# Assessments + Results routers (added 2026-09-17)
+# ---------------------------------------------------------------------
+from rest_framework.routers import DefaultRouter as _DR2
+from apps.academics.views import (
+    AssessmentViewSet as _AVS,
+    ResultViewSet as _RVS,
+)
+
+_marks_router = _DR2()
+_marks_router.register(r"assessments", _AVS, basename="assessment")
+_marks_router.register(r"results", _RVS, basename="result")
+urlpatterns += _marks_router.urls
+
+
+
+from apps.academics.views import AnalysisClassComparisonView as _ACCV
+urlpatterns += [
+    _apath("analysis/classes/", _ACCV.as_view(), name="analysis-classes"),
+]
+
+
+
+from apps.academics.views import ReportFormView as _RFV
+urlpatterns += [
+    _apath("analysis/report-form/<uuid:student_id>/", _RFV.as_view(), name="analysis-report-form"),
+]
+
+
+
+from apps.academics.views import ReportFormBulkView as _RFBV
+urlpatterns += [
+    _apath("analysis/report-form-bulk/", _RFBV.as_view(), name="analysis-report-form-bulk"),
+]
+
+
+
+from rest_framework.routers import DefaultRouter as _DR_Audit
+from apps.academics.views import AcademicAuditViewSet as _AuditVS
+
+_audit_router = _DR_Audit()
+_audit_router.register(r"audit-events", _AuditVS, basename="audit-event")
+urlpatterns += _audit_router.urls
+
+
+
+from rest_framework.routers import DefaultRouter as _DR_Extra
+from apps.academics.views import (
+    ReportCommentViewSet as _RC_VS,
+    GradingSchemeViewSet as _GS_VS,
+    GradingBandViewSet as _GB_VS,
+)
+
+_extra_router = _DR_Extra()
+_extra_router.register(r"report-comments", _RC_VS, basename="report-comment")
+_extra_router.register(r"grading-schemes", _GS_VS, basename="grading-scheme")
+_extra_router.register(r"grading-bands", _GB_VS, basename="grading-band")
+urlpatterns += _extra_router.urls
+
+
+
+from rest_framework.routers import DefaultRouter as _DR_Rank
+from apps.academics.views import (
+    RankingRuleViewSet as _RRVS,
+    RankingRunViewSet as _RRunVS,
+    RankingPreviewView as _RPV,
+)
+
+_rank_router = _DR_Rank()
+_rank_router.register(r"ranking-rules", _RRVS, basename="ranking-rule")
+_rank_router.register(r"ranking-runs", _RRunVS, basename="ranking-run")
+urlpatterns += _rank_router.urls
+urlpatterns += [
+    _apath("ranking/preview/", _RPV.as_view(), name="ranking-preview"),
+]
+
+
+
+from apps.academics.views import MarksEntryContextView as _MECV
+urlpatterns += [
+    _apath("marks-entry/context/", _MECV.as_view(), name="marks-entry-context"),
+]
+
+
+
+from apps.academics.views import StreamSummaryView as _SSV
+urlpatterns += [
+    _apath("analysis/stream-summary/", _SSV.as_view(), name="analysis-stream-summary"),
+]
+
+
+
+from apps.academics.views import StreamTrendView as _STV
+urlpatterns += [
+    _apath("analysis/stream-trend/", _STV.as_view(), name="analysis-stream-trend"),
+]

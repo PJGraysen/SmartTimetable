@@ -1,4 +1,5 @@
-﻿import { NavLink, Outlet } from "react-router-dom";
+import PageTransition from "../components/PageTransition";
+import { NavLink, Outlet } from "react-router-dom";
 import {
   CalendarDays,
   ClipboardList,
@@ -82,7 +83,7 @@ export default function AppLayout() {
         </header>
 
         <section className="page-content">
-          <Outlet />
+          <PageTransition><Outlet /></PageTransition>
         </section>
       </main>
     </div>

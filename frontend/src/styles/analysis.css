@@ -1,0 +1,32 @@
+/* QAS · SmartSchoolPro — analysis motion + polish */
+
+@keyframes ssp-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ssp-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ssp-pulse {
+  0%, 100% { box-shadow: 0 6px 16px rgba(34,180,240,0.35); }
+  50%      { box-shadow: 0 6px 24px rgba(34,180,240,0.65); }
+}
+
+.anim-rise {
+  animation: ssp-rise 380ms cubic-bezier(.16, 1, .3, 1) both;
+}
+.anim-fade {
+  animation: ssp-fade 320ms ease-out both;
+}
+.anim-pulse {
+  animation: ssp-pulse 2400ms ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-rise, .anim-fade, .anim-pulse { animation: none !important; }
+}
+
+/* Recharts subtle hover */
+.recharts-bar-rectangle:hover { filter: brightness(1.08); transition: filter 140ms ease; }
+.recharts-sector:hover { filter: brightness(1.06); transition: filter 140ms ease; }

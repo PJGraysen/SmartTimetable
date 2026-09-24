@@ -1,4 +1,4 @@
-﻿from django.contrib.auth.models import User
+from django.contrib.auth.models import User
 from django.db import models
 
 from apps.core.models import TimeStampedModel
@@ -45,6 +45,8 @@ class Teacher(TimeStampedModel):
     is_active = models.BooleanField(
         default=True,
     )
+
+    is_frozen = models.BooleanField(default=False)
 
     class Meta:
         db_table = "teacher"

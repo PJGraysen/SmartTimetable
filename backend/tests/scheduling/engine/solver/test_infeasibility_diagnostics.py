@@ -570,3 +570,66 @@ def test_grade10_effective_demand_is_49_not_84():
     ]
 
     assert not capacity_diagnostics
+
+
+def test_grade10_group_capacity_uses_49_weekly_slots():
+    problem = build_grade10_parallel_problem()
+    group = problem.instructional_groups[0]
+
+    extra_requirement = LessonRequirementEntity(
+        id=uuid4(),
+        instructional_group_id=group.id,
+        subject_id=uuid4(),
+        periods_per_week=1,
+        subject_code="ART",
+    )
+
+    problem = SchedulingProblem.from_iterables(
+        periods=problem.periods,
+        teachers=problem.teachers,
+        instructional_groups=problem.instructional_groups,
+        rooms=problem.rooms,
+        lesson_requirements=(
+            *problem.lesson_requirements,
+            extra_requirement,
+        ),
+        teacher_assignments=problem.teacher_assignments,
+        teacher_availability=problem.teacher_availability,
+        teacher_free_afternoons=problem.teacher_free_afternoons,
+        room_availability=problem.room_availability,
+        slots=problem.slots,
+    )
+
+    report = analyze_infeasibility(problem)
+    capacity_diagnostics = [
+        diagnostic
+        for diagnostic in report.diagnostics
+        if diagnostic.code == "INSTRUCTIONAL_GROUP_CAPACITY"
+    ]
+
+    assert len(capacity_diagnostics) == 1
+    assert capacity_diagnostics[0].details == {
+        "instructional_group_id": str(group.id),
+        "required_periods": 50,
+        "available_group_slots": 49,
+    }
+
+
+def test_room_capacity_excludes_the_reserved_monday_assembly_slot():
+    problem = build_problem(
+        periods_per_week=2,
+        teaching_period_count=2,
+        room_count=1,
+    )
+
+    report = analyze_infeasibility(problem)
+    room_capacity_diagnostics = [
+        diagnostic
+        for diagnostic in report.diagnostics
+        if diagnostic.code == "ROOM_CAPACITY"
+    ]
+
+    assert len(room_capacity_diagnostics) == 1
+    assert room_capacity_diagnostics[0].details[
+        "available_room_slots"
+    ] == 1

@@ -248,6 +248,22 @@ class Command(BaseCommand):
             model=model,
             problem=problem,
         )
+        eligible_slot_count = sum(
+            1
+            for slot in problem.slots
+            if (
+                builder._available_room_ids_by_slot.get(
+                    (
+                        slot.day.value,
+                        slot.period_id,
+                    )
+                )
+                and not (
+                    slot.day.value == "MON"
+                    and slot.period_number == 1
+                )
+            )
+        )
 
         print("5. RAW PRODUCTION VARIABLES")
         print("-" * 110)
@@ -285,10 +301,11 @@ class Command(BaseCommand):
                 key=str,
             )
 
-            # This mirrors the intended variable-domain rule:
+            # This mirrors the production variable-domain rule:
             #
             # assigned teachers -> one variable domain per assigned teacher
             # no assignment     -> teacherless variable
+            # rooms             -> capacity checked per timetable slot
             #
             teacher_option_count = (
                 len(assigned_teachers)
@@ -298,8 +315,7 @@ class Command(BaseCommand):
 
             expected_count = (
                 teacher_option_count
-                * len(problem.slots)
-                * len(problem.rooms)
+                * eligible_slot_count
             )
 
             actual_variables = variables_by_requirement.get(
@@ -408,6 +424,7 @@ class Command(BaseCommand):
         print("8. RECONCILIATION")
         print("-" * 110)
 
+        print(f"ELIGIBLE TIMETABLE SLOTS: {eligible_slot_count}")
         print(f"EXPECTED VARIABLES: {expected_total}")
         print(f"ACTUAL VARIABLES:   {actual_total}")
         print(f"MISMATCHED REQS:    {mismatches}")
@@ -425,11 +442,6 @@ class Command(BaseCommand):
             )
 
         print()
-
-        if actual_total == 7840:
-            print(
-                "NOTE: 7,840 = 40 requirements × 49 slots × 4 rooms."
-            )
 
         print()
         print("=" * 110)
