@@ -18,11 +18,19 @@ export default function Items() {
     fields={[
       { key: "code", label: "Code", required: true },
       { key: "name", label: "Name", required: true },
+      { key: "category", label: "Category", type: "select", loadOptions: async () => {
+          const d = await inventoryApi.categories.list();
+          return (d || []).map((c: any) => ({ value: c.id, label: `${c.code} — ${c.name}` }));
+        }},
       { key: "unit", label: "Unit (pcs, kg, L)" },
       { key: "tracking_mode", label: "Tracking", type: "select", options: [
         { value: "INDIVIDUAL", label: "Individual (serialized)" },
         { value: "QUANTITY", label: "Quantity (bulk)" },
       ]},
+      { key: "default_supplier", label: "Default Supplier", type: "select", loadOptions: async () => {
+          const d = await inventoryApi.suppliers.list();
+          return (d || []).map((s: any) => ({ value: s.id, label: s.name }));
+        }},
       { key: "unit_cost", label: "Unit Cost", type: "number" },
       { key: "min_stock", label: "Min Stock", type: "number" },
       { key: "reorder_stock", label: "Reorder Stock", type: "number" },

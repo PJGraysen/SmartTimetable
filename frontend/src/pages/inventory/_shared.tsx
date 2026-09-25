@@ -245,3 +245,124 @@ export function FilterBar({
     </div>
   );
 }
+
+
+// ---------------- Pro additions ----------------
+
+export function Drawer({
+  open, onClose, title, subtitle, children, width = 560,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  width?: number;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
+        zIndex: 300, display: "flex", justifyContent: "flex-end",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff", width, height: "100vh", overflowY: "auto",
+          boxShadow: "-10px 0 30px rgba(0,0,0,0.2)",
+          animation: "slideIn 200ms ease",
+        }}
+      >
+        <div style={{
+          padding: "1rem 1.2rem", borderBottom: `1px solid ${C.BORDER}`,
+          display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+          position: "sticky", top: 0, background: "#fff", zIndex: 2,
+        }}>
+          <div>
+            <h3 style={{ margin: 0, color: C.BROWN, fontSize: "1.05rem", fontWeight: 700 }}>{title}</h3>
+            {subtitle ? <div style={{ fontSize: "0.8rem", color: C.MUTED, marginTop: 2 }}>{subtitle}</div> : null}
+          </div>
+          <button onClick={onClose} style={{ ...btnSecondary, padding: "0.2rem 0.55rem" }}>✕</button>
+        </div>
+        <div style={{ padding: "1rem 1.2rem" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+
+export function StatusPill({ value }: { value: string }) {
+  const v = String(value || "").toUpperCase();
+  const map: Record<string, string> = {
+    AVAILABLE: "#22C55E", IN_USE: "#3B82F6", MAINTENANCE: "#F59E0B",
+    LOANED: "#3B82F6", LOST: "#EF4444", DISPOSED: "#6B7280",
+    NEW: "#22C55E", GOOD: "#10B981", FAIR: "#F59E0B", POOR: "#F97316",
+    DAMAGED: "#EF4444", OPEN: "#F59E0B", CLOSED: "#10B981",
+  };
+  const bg = map[v] || "#6B7280";
+  return (
+    <span style={{
+      display: "inline-block", padding: "2px 8px", borderRadius: 999,
+      background: bg + "22", color: bg, fontSize: "0.72rem",
+      fontWeight: 700, letterSpacing: "0.03em",
+    }}>{v || "—"}</span>
+  );
+}
+
+
+export function BulkBar({
+  count, onClear, children,
+}: {
+  count: number;
+  onClear: () => void;
+  children: ReactNode;
+}) {
+  if (count === 0) return null;
+  return (
+    <div style={{
+      position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)",
+      background: C.BROWN, color: "#fff", padding: "0.7rem 1.1rem",
+      borderRadius: 12, boxShadow: "0 12px 32px rgba(0,0,0,0.3)",
+      display: "flex", gap: 10, alignItems: "center", zIndex: 250,
+      fontSize: "0.85rem", flexWrap: "wrap",
+    }}>
+      <b>{count} selected</b>
+      <span style={{ opacity: 0.6 }}>|</span>
+      {children}
+      <button onClick={onClear} style={{
+        padding: "0.3rem 0.6rem", borderRadius: 6, border: "1px solid rgba(255,255,255,0.4)",
+        background: "transparent", color: "#fff", cursor: "pointer", fontSize: "0.8rem",
+      }}>Clear</button>
+    </div>
+  );
+}
+
+
+export function KV({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={{ display: "flex", gap: 8, padding: "0.35rem 0", fontSize: "0.85rem",
+                  borderBottom: `1px solid #f1f5f9` }}>
+      <div style={{ color: C.MUTED, minWidth: 130 }}>{label}</div>
+      <div style={{ fontWeight: 500, flex: 1, wordBreak: "break-word" }}>{value ?? "—"}</div>
+    </div>
+  );
+}
+
+
+export function SectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <h4 style={{
+      margin: "14px 0 6px", fontSize: "0.85rem", color: C.BROWN,
+      textTransform: "uppercase", letterSpacing: "0.05em",
+    }}>{children}</h4>
+  );
+}
+
+export const smallBtn: React.CSSProperties = {
+  padding: "0.35rem 0.7rem", borderRadius: 6,
+  border: `1px solid ${C.BORDER}`, background: "#fff",
+  cursor: "pointer", fontSize: "0.78rem", fontWeight: 600,
+};

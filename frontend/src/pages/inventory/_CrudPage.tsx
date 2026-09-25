@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, C, ErrorBox, PageShell, SimpleTable, btnPrimary, btnSecondary, inputStyle, useLoad, InventoryTabs, downloadCSV, FilterBar } from "./_shared";
 
 export type Field = {
@@ -6,6 +6,7 @@ export type Field = {
   label: string;
   type?: "text" | "number" | "checkbox" | "select";
   options?: { value: any; label: string }[];
+  loadOptions?: () => Promise<{ value: any; label: string }[]>;
   required?: boolean;
 };
 
@@ -25,6 +26,7 @@ export function CrudPage({
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState("");
   const [search, setSearch] = useState("");
+  const [dynamicOptions, setDynamicOptions] = useState<Record<string, { value: any; label: string }[]>>({});
 
   function startNew() {
     const empty: any = {};
@@ -52,6 +54,22 @@ export function CrudPage({
     try { await api.remove(id); await reload(); }
     catch (e: any) { alert(String(e)); }
   }
+
+  useEffect(() => {
+    (async () => {
+      const next: Record<string, { value: any; label: string }[]> = {};
+      for (const f of fields) {
+        if (f.type === "select" && f.loadOptions) {
+          try { next[f.key] = await f.loadOptions(); }
+          catch (e) { next[f.key] = []; }
+        } else if (f.type === "select" && f.options) {
+          next[f.key] = f.options;
+        }
+      }
+      setDynamicOptions(next);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredRows = (data || []).filter((row: any) => {
     if (!search) return true;
@@ -115,7 +133,7 @@ export function CrudPage({
                   ) : f.type === "select" ? (
                     <select style={inputStyle} value={editing[f.key] ?? ""} onChange={e => setEditing({ ...editing, [f.key]: e.target.value })}>
                       <option value="">— select —</option>
-                      {(f.options || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      {(dynamicOptions[f.key] || f.options || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   ) : (
                     <input

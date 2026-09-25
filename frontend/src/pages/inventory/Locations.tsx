@@ -19,6 +19,10 @@ export default function Locations() {
       { key: "code", label: "Code", required: true },
       { key: "name", label: "Name", required: true },
       { key: "location_type", label: "Type", type: "select", options: TYPES.map(t => ({ value: t, label: t })) },
+      { key: "department", label: "Department", type: "select", loadOptions: async () => {
+          const d = await inventoryApi.departments.list();
+          return (d || []).map((x: any) => ({ value: x.id, label: x.name }));
+        }},
       { key: "is_active", label: "Active", type: "checkbox" },
     ]}
     tabSlug="locations"

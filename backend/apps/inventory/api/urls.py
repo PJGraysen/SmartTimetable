@@ -1,5 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from apps.inventory.api.extras import (
+    asset_detail, item_detail, location_contents, department_summary,
+    bulk_transfer_assets, bulk_status_assets, bulk_maintenance_assets,
+    dashboard_v2,
+)
 from apps.inventory.api.actions import (
     receive_stock, issue_stock, transfer_stock, move_asset,
 )
@@ -42,5 +47,19 @@ urlpatterns = [
     path("reports/expiring/", reports_expiring_soon, name="inventory-reports-expiring"),
     path("reports/valuation/", reports_valuation, name="inventory-reports-valuation"),
     path("reports/movements/", reports_movement_summary, name="inventory-reports-movements"),
+
+    # Dashboard v2
+    path("dashboard/v2/", dashboard_v2, name="inventory-dashboard-v2"),
+
+    # Detail + history
+    path("assets/<int:pk>/detail/", asset_detail, name="inventory-asset-detail"),
+    path("items/<int:pk>/detail/", item_detail, name="inventory-item-detail"),
+    path("locations/<int:pk>/contents/", location_contents, name="inventory-location-contents"),
+    path("departments/<int:pk>/summary/", department_summary, name="inventory-department-summary"),
+
+    # Bulk operations
+    path("actions/bulk-transfer-assets/", bulk_transfer_assets, name="inventory-bulk-transfer-assets"),
+    path("actions/bulk-status-assets/", bulk_status_assets, name="inventory-bulk-status-assets"),
+    path("actions/bulk-maintenance-assets/", bulk_maintenance_assets, name="inventory-bulk-maintenance-assets"),
     path("", include(router.urls)),
 ]

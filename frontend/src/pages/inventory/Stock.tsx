@@ -15,6 +15,14 @@ export default function Stock() {
       { key: "batch_number", label: "Batch" },
     ]}
     fields={[
+      { key: "item", label: "Item", type: "select", required: true, loadOptions: async () => {
+          const d = await inventoryApi.items.list();
+          return (d || []).map((i: any) => ({ value: i.id, label: `${i.code} — ${i.name}` }));
+        }},
+      { key: "location", label: "Location", type: "select", required: true, loadOptions: async () => {
+          const d = await inventoryApi.locations.list();
+          return (d || []).map((l: any) => ({ value: l.id, label: `${l.code} — ${l.name}` }));
+        }},
       { key: "quantity", label: "Quantity", type: "number", required: true },
       { key: "batch_number", label: "Batch Number" },
     ]}
