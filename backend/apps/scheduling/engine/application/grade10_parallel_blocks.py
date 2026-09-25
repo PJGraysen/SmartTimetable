@@ -536,7 +536,7 @@ _BLOCK_ROTATION_OFFSET = 0
 
 # Teaching periods available for block placement (Period 1 reserved for
 # Monday assembly; enforced elsewhere).
-_BLOCK_ROTATION_POOL = (2, 3, 4, 5, 6, 7, 8, 9, 10)
+_BLOCK_ROTATION_POOL = (2, 3, 4, 5, 6, 7)  # morning slots only
 
 
 def set_block_rotation_offset(offset: int) -> None:
@@ -559,41 +559,40 @@ def _rotate_period(period: int, offset: int) -> int:
     return _BLOCK_ROTATION_POOL[(idx + offset) % len(_BLOCK_ROTATION_POOL)]
 
 
+def _shift_period(period: int, offset: int) -> int:
+    if offset == 0:
+        return period
+    try:
+        idx = _BLOCK_ROTATION_POOL.index(int(period))
+    except (ValueError, TypeError):
+        return period
+    return _BLOCK_ROTATION_POOL[(idx + offset) % len(_BLOCK_ROTATION_POOL)]
+
+
 def get_senior_school_block_slots(
     group_code: object | None,
     block_code: object | None,
 ) -> tuple[tuple[str, int], ...]:
-    """Return authoritative synchronized slots for a stream/block.
+    """Return synchronized slots for a stream/block.
 
-    Period numbers are rotated by the current per-generation offset
-    while preserving the day-of-week pattern and the invariant that
-    both streams in a pair use identical positions.
+    Per-day rotation: each teaching day shifts by a different offset,
+    so the block moves to a different period each day AND each
+    generation. Combined with the generation offset, this gives
+    much stronger variation than a straight P2<->P3 swap.
     """
     normalized_group = _normalized_group_code(group_code)
-
     if normalized_group is None or block_code is None:
         return ()
-
     normalized_block = str(block_code).strip().upper()
-
-    base = SENIOR_SCHOOL_BLOCK_SLOTS.get(
-        normalized_group,
-        {},
-    ).get(
-        normalized_block,
-        (),
-    )
-
+    base = SENIOR_SCHOOL_BLOCK_SLOTS.get(normalized_group, {}).get(normalized_block, ())
     if not base:
         return ()
 
     offset = _BLOCK_ROTATION_OFFSET
-    if offset == 0:
-        return tuple(base)
-
+    pool_size = len(_BLOCK_ROTATION_POOL)
     return tuple(
-        (day, _rotate_period(period, offset))
-        for (day, period) in base
+        (day, _shift_period(period, (offset + day_idx) % pool_size))
+        for day_idx, (day, period) in enumerate(base)
     )
 
 
