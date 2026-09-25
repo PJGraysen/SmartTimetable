@@ -116,6 +116,19 @@ class SchedulingApplicationService:
                 if persistence_result is not None:
                     scheduling_run.persistence_result = persistence_result
 
+                # Post-solve Form 4 practicals (guarded; never blocks generation)
+                try:
+                    from apps.scheduling.engine.application.form4_practicals import (
+                        insert_form4_practicals,
+                    )
+                    insert_form4_practicals(scheduling_run)
+                except Exception as _e_prac:
+                    import sys as _sys_prac
+                    print(
+                        f"[PRACTICALS] wrapper error: {_e_prac}",
+                        file=_sys_prac.stderr,
+                    )
+
             return SchedulingExecutionResult(
                 scheduling_run=scheduling_run,
                 solver_result=result,
