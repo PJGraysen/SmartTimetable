@@ -50,6 +50,7 @@ import InventoryStock from "./pages/inventory/Stock";
 import InventoryMovements from "./pages/inventory/Movements";
 import InventoryMaintenance from "./pages/inventory/Maintenance";
 import InventoryAudits from "./pages/inventory/Audits";
+import InventoryReports from "./pages/inventory/Reports";
 
 export type AppRoute = {
   path: string;
@@ -78,6 +79,7 @@ export const PROTECTED_ROUTES: AppRoute[] = [
   { path: "/inventory/movements", element: <InventoryMovements /> },
   { path: "/inventory/maintenance", element: <InventoryMaintenance /> },
   { path: "/inventory/audits", element: <InventoryAudits /> },
+  { path: "/inventory/reports", element: <InventoryReports /> },
 
   { path: "/academics", element: <AcademicsManagement initialTab="groups" /> },
   { path: "/academics/students", element: <StudentsPage /> },

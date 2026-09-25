@@ -122,6 +122,7 @@ const INVENTORY_TABS: { to: string; label: string }[] = [
   { to: "/inventory/movements",   label: "Movements" },
   { to: "/inventory/maintenance", label: "Maintenance" },
   { to: "/inventory/audits",      label: "Audits" },
+  { to: "/inventory/reports",     label: "Reports" },
   { to: "/inventory/categories",  label: "Categories" },
   { to: "/inventory/locations",   label: "Locations" },
   { to: "/inventory/departments", label: "Departments" },
@@ -147,6 +148,100 @@ export function InventoryTabs({ active }: { active: string }) {
           }}>{t.label}</Link>
         );
       })}
+    </div>
+  );
+}
+
+// ---------- Pro utilities ----------
+export function downloadCSV(
+  filename: string,
+  headers: string[],
+  rows: (string | number | null | undefined)[][],
+) {
+  const esc = (v: any) => {
+    if (v === null || v === undefined) return "";
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [headers.map(esc).join(","), ...rows.map(r => r.map(esc).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename.endsWith(".csv") ? filename : filename + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
+export function Modal({
+  open, onClose, title, children, width = 520,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  width?: number;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff", borderRadius: 12, width, maxHeight: "90vh",
+          overflowY: "auto", boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
+        }}
+      >
+        <div style={{
+          padding: "0.9rem 1.1rem", borderBottom: `1px solid ${C.BORDER}`,
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <h3 style={{ margin: 0, color: C.BROWN, fontSize: "1rem", fontWeight: 700 }}>{title}</h3>
+          <button onClick={onClose} style={{ ...btnSecondary, padding: "0.2rem 0.5rem" }}>✕</button>
+        </div>
+        <div style={{ padding: "1rem 1.1rem" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export function FilterBar({
+  search, onSearch, filters, extra,
+}: {
+  search: string;
+  onSearch: (v: string) => void;
+  filters?: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }[];
+  extra?: ReactNode;
+}) {
+  return (
+    <div style={{
+      display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center",
+      marginBottom: 12,
+    }}>
+      <input
+        placeholder="Search..."
+        value={search}
+        onChange={e => onSearch(e.target.value)}
+        style={{ ...inputStyle, maxWidth: 260 }}
+      />
+      {filters?.map(f => (
+        <select
+          key={f.label}
+          value={f.value}
+          onChange={e => f.onChange(e.target.value)}
+          style={{ ...inputStyle, maxWidth: 200 }}
+        >
+          {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      ))}
+      <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+        {extra}
+      </div>
     </div>
   );
 }

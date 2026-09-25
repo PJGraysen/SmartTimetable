@@ -115,3 +115,24 @@ export const inventoryApi = {
     update: (id: number, d: Partial<AuditSession>) => http.patch(`${BASE}/audits/${id}/`, d).then(r => r.data),
   },
 };
+
+export const inventoryActions = {
+  receive: (payload: { item: number; location: number; quantity: number; batch_number?: string; reference?: string; notes?: string }) =>
+    http.post("/inventory/actions/receive/", payload).then(r => r.data),
+  issue: (payload: { item: number; location: number; quantity: number; batch_number?: string; recipient?: string; notes?: string }) =>
+    http.post("/inventory/actions/issue/", payload).then(r => r.data),
+  transfer: (payload: { item: number; from_location: number; to_location: number; quantity: number; batch_number?: string; notes?: string }) =>
+    http.post("/inventory/actions/transfer/", payload).then(r => r.data),
+  moveAsset: (payload: { asset: number; to_location: number; notes?: string }) =>
+    http.post("/inventory/actions/move-asset/", payload).then(r => r.data),
+};
+
+// Attach reports to the main api object
+(inventoryApi as any).reports = {
+  lowStock: () => http.get("/inventory/reports/low-stock/").then(r => r.data),
+  expiring: (days = 90) => http.get("/inventory/reports/expiring/", { params: { days } }).then(r => r.data),
+  valuation: () => http.get("/inventory/reports/valuation/").then(r => r.data),
+  movements: (days = 30) => http.get("/inventory/reports/movements/", { params: { days } }).then(r => r.data),
+};
+
+(inventoryApi as any).actions = inventoryActions;

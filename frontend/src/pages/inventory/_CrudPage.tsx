@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, C, ErrorBox, PageShell, SimpleTable, btnPrimary, btnSecondary, inputStyle, useLoad, InventoryTabs } from "./_shared";
+import { Card, C, ErrorBox, PageShell, SimpleTable, btnPrimary, btnSecondary, inputStyle, useLoad, InventoryTabs, downloadCSV, FilterBar } from "./_shared";
 
 export type Field = {
   key: string;
@@ -24,6 +24,7 @@ export function CrudPage({
   const [editing, setEditing] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState("");
+  const [search, setSearch] = useState("");
 
   function startNew() {
     const empty: any = {};
@@ -52,12 +53,31 @@ export function CrudPage({
     catch (e: any) { alert(String(e)); }
   }
 
+  const filteredRows = (data || []).filter((row: any) => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return columns.some(c => String(row[c.key] ?? "").toLowerCase().includes(s));
+  });
+
+  function handleExport() {
+    const headers = columns.map(c => c.label);
+    const rows = filteredRows.map((row: any) =>
+      columns.map(c => (c.render ? String(c.render(row) ?? "") : String(row[c.key] ?? "")))
+    );
+    downloadCSV(`${title.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`, headers, rows);
+  }
+
   return (
     <PageShell
       title={title} subtitle={subtitle}
       actions={<button style={btnPrimary} onClick={startNew}>+ New</button>}
     >
       {tabSlug ? <InventoryTabs active={tabSlug} /> : null}
+      <FilterBar
+        search={search}
+        onSearch={setSearch}
+        extra={<button style={btnSecondary} onClick={handleExport}>⬇ CSV</button>}
+      />
       <ErrorBox msg={err} />
       {loading ? <div>Loading...</div> : (
         <SimpleTable
@@ -72,7 +92,7 @@ export function CrudPage({
               ),
             },
           ]}
-          rows={data || []}
+          rows={filteredRows}
         />
       )}
 
