@@ -54,6 +54,12 @@ urlpatterns = [
         include("apps.scheduling.api.urls"),
     ),
 
+    # Inventory & Assets API
+    path(
+        "api/inventory/",
+        include("apps.inventory.api.urls"),
+    ),
+
     # Academics API
     path(
         "api/academics/",

@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "apps.platform",
     "apps.library",
     'apps.audit',
+    "apps.inventory",
 ]
 
 REST_FRAMEWORK = {
