@@ -950,7 +950,7 @@ function Timetable() {
     return (
       document.querySelector<HTMLElement>("[data-tt-capture]") ||
       document.querySelector<HTMLElement>(".tt-grid-wrap") ||
-      document.querySelector<HTMLElement>("table") ||
+      document.querySelector<HTMLElement>(".tt-table-wrap") ||
       null
     );
   };
@@ -970,8 +970,22 @@ function Timetable() {
         backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
-        windowWidth: el.scrollWidth,
-        windowHeight: el.scrollHeight,
+        // html2canvas has a bug where table-layout:auto + rowspan explodes
+        // into hundreds of columns. onclone forces a stable layout on the
+        // cloned DOM before it is rasterized.
+        onclone: (clonedDoc: Document) => {
+          clonedDoc.querySelectorAll("table").forEach((t) => {
+            (t as HTMLElement).style.tableLayout = "fixed";
+            (t as HTMLElement).style.width = "100%";
+            (t as HTMLElement).style.minWidth = "0";
+          });
+          clonedDoc.querySelectorAll("th, td").forEach((c) => {
+            const el = c as HTMLElement;
+            el.style.whiteSpace = "normal";
+            el.style.overflow = "hidden";
+            el.style.maxWidth = "160px";
+          });
+        },
       });
       const link = document.createElement("a");
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
@@ -1002,8 +1016,22 @@ function Timetable() {
         backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
-        windowWidth: el.scrollWidth,
-        windowHeight: el.scrollHeight,
+        // html2canvas has a bug where table-layout:auto + rowspan explodes
+        // into hundreds of columns. onclone forces a stable layout on the
+        // cloned DOM before it is rasterized.
+        onclone: (clonedDoc: Document) => {
+          clonedDoc.querySelectorAll("table").forEach((t) => {
+            (t as HTMLElement).style.tableLayout = "fixed";
+            (t as HTMLElement).style.width = "100%";
+            (t as HTMLElement).style.minWidth = "0";
+          });
+          clonedDoc.querySelectorAll("th, td").forEach((c) => {
+            const el = c as HTMLElement;
+            el.style.whiteSpace = "normal";
+            el.style.overflow = "hidden";
+            el.style.maxWidth = "160px";
+          });
+        },
       });
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
@@ -1709,7 +1737,7 @@ function Timetable() {
             Showing {visibleClasses.length} of {CLASSES.length} classes · {scheduledEntries} of {entries.length} lessons
           </span>
         </div>
-        <div className="tt-table-wrap">
+        <div className="tt-table-wrap" data-tt-capture>
           <table className="tt-table">
             <thead>
               <tr>
