@@ -69,16 +69,15 @@ class CPSATSolver:
 
         solver.parameters.random_seed = int.from_bytes(_oo.urandom(4), 'little') & 0x7FFFFFFF
 
-        solver.parameters.randomize_search = True
 
-        solver.parameters.num_search_workers = 8
+        solver.parameters.num_search_workers = 1
 
         solver.parameters.max_time_in_seconds = (
             self.time_limit_seconds
         )
 
         if self.num_workers is not None:
-            solver.parameters.num_workers = self.num_workers
+            solver.parameters.num_search_workers = self.num_workers
 
         try:
             status = solver.solve(solver_model.model)
