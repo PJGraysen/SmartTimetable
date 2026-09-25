@@ -39,6 +39,17 @@ import RankingPage from "./pages/academics/RankingPage";
 import AdminConsole from "./pages/AdminConsole";
 import ErrorLogsPage from "./pages/admin/ErrorLogsPage";
 import TeachersAdminPage from "./pages/admin/TeachersAdminPage";
+import InventoryDashboard from "./pages/inventory/Dashboard";
+import InventoryDepartments from "./pages/inventory/Departments";
+import InventoryLocations from "./pages/inventory/Locations";
+import InventoryCategories from "./pages/inventory/Categories";
+import InventorySuppliers from "./pages/inventory/Suppliers";
+import InventoryItems from "./pages/inventory/Items";
+import InventoryAssets from "./pages/inventory/Assets";
+import InventoryStock from "./pages/inventory/Stock";
+import InventoryMovements from "./pages/inventory/Movements";
+import InventoryMaintenance from "./pages/inventory/Maintenance";
+import InventoryAudits from "./pages/inventory/Audits";
 
 export type AppRoute = {
   path: string;
@@ -54,6 +65,19 @@ export const PROTECTED_ROUTES: AppRoute[] = [
   { path: "/", element: <Dashboard /> },
   { path: "/timetables", element: <Timetable /> },
   { path: "/scheduling", element: <Scheduling /> },
+
+  // Inventory & Assets
+  { path: "/inventory/dashboard", element: <InventoryDashboard /> },
+  { path: "/inventory/departments", element: <InventoryDepartments /> },
+  { path: "/inventory/locations", element: <InventoryLocations /> },
+  { path: "/inventory/categories", element: <InventoryCategories /> },
+  { path: "/inventory/suppliers", element: <InventorySuppliers /> },
+  { path: "/inventory/items", element: <InventoryItems /> },
+  { path: "/inventory/assets", element: <InventoryAssets /> },
+  { path: "/inventory/stock", element: <InventoryStock /> },
+  { path: "/inventory/movements", element: <InventoryMovements /> },
+  { path: "/inventory/maintenance", element: <InventoryMaintenance /> },
+  { path: "/inventory/audits", element: <InventoryAudits /> },
 
   { path: "/academics", element: <AcademicsManagement initialTab="groups" /> },
   { path: "/academics/students", element: <StudentsPage /> },

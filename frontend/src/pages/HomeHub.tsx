@@ -5,6 +5,7 @@ import {
   GraduationCap,
   LogOut,
   LayoutGrid,
+  Package,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import CalendarWidget from "../components/CalendarWidget";
@@ -201,6 +202,63 @@ export default function HomeHub() {
           </span>
         </button>
       </section>
+      {/* Administration section */}
+      <section style={{ marginBottom: "2rem" }}>
+        <h2
+          style={{
+            color: "#1e2e40",
+            marginBottom: "1rem",
+            fontSize: "1.1rem",
+            letterSpacing: "0.02em",
+          }}
+        >
+          Administration
+        </h2>
+        <button
+          type="button"
+          onClick={() => navigate("/inventory/dashboard")}
+          style={{
+            position: "relative",
+            overflow: "hidden",
+            border: "1px solid #7a4e2a",
+            borderRadius: "16px",
+            padding: "1.75rem",
+            textAlign: "left",
+            background: "linear-gradient(135deg, #2b1a0f 0%, #5a3a1e 100%)",
+            color: "#f5eee2",
+            cursor: "pointer",
+            boxShadow: "0 6px 20px rgba(10, 18, 29, 0.14)",
+            maxWidth: "360px",
+          }}
+        >
+          <div
+            style={{
+              width: "56px",
+              height: "56px",
+              borderRadius: "14px",
+              background: "linear-gradient(135deg, #22b4f0, #0b5d8c)",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: "1.1rem",
+              boxShadow: "0 8px 20px rgba(34,180,240,0.4)",
+            }}
+          >
+            <Package size={26} />
+          </div>
+          <h3 style={{ fontWeight: 700, fontSize: "1.15rem", color: "#ffffff", margin: "0 0 0.35rem 0" }}>
+            Inventory & Assets
+          </h3>
+          <p style={{ color: "#e8d9c2", fontSize: "0.9rem", lineHeight: 1.45, margin: "0 0 1rem 0" }}>
+            Track departments, locations, items, assets, stock, movements, maintenance and audits.
+          </p>
+          <span style={{ color: "#6fcffb", fontSize: "0.78rem", fontWeight: 800, letterSpacing: "0.1em" }}>
+            OPEN →
+          </span>
+        </button>
+      </section>
+
       {applications.length === 0 ? (
         <div
           style={{

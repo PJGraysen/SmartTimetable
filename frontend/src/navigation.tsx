@@ -3,7 +3,7 @@ import {
   AlertCircle, Award, BarChart3, BookOpen, Bot, CalendarDays,
   ClipboardCheck, ClipboardEdit, ClipboardList, DoorOpen, FileStack,
   FileText, GraduationCap, Home as HomeIcon, Layers, LayoutDashboard,
-  MessageSquare, PlayCircle, ScrollText, Trophy, UserCheck, UserCog, Users,
+  MessageSquare, Package, PlayCircle, ScrollText, Trophy, UserCheck, UserCog, Users,
 } from "lucide-react";
 
 export type Role = "admin" | "teacher";
@@ -41,6 +41,7 @@ export const MAIN_NAV: NavItem[] = [
   { to: "/subjects", label: "Subjects", icon: BookOpen, roles: ["admin"] },
   { to: "/rooms", label: "Rooms", icon: DoorOpen, roles: ["admin"] },
   { to: "/validation", label: "Validation", icon: ClipboardCheck, roles: ["admin"] },
+  { to: "/inventory/dashboard", label: "Inventory", icon: Package, roles: ["admin"] },
 ];
 
 export const ADMIN_NAV: NavItem[] = [
