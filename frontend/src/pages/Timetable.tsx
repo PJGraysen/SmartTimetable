@@ -1016,9 +1016,8 @@ function Timetable() {
         backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
-        // html2canvas has a bug where table-layout:auto + rowspan explodes
-        // into hundreds of columns. onclone forces a stable layout on the
-        // cloned DOM before it is rasterized.
+        windowWidth: el.scrollWidth,
+        windowHeight: el.scrollHeight,
         onclone: (clonedDoc: Document) => {
           clonedDoc.querySelectorAll("table").forEach((t) => {
             (t as HTMLElement).style.tableLayout = "fixed";
@@ -1034,22 +1033,15 @@ function Timetable() {
         },
       });
       const imgData = canvas.toDataURL("image/png");
+      // A3 PORTRAIT — 297 x 420 mm. Full-page fill, no margins.
       const pdf = new jsPDF({
-        orientation: "landscape",
+        orientation: "portrait",
         unit: "mm",
         format: "a3",
       });
       const pw = pdf.internal.pageSize.getWidth();
       const ph = pdf.internal.pageSize.getHeight();
-      const margin = 6;
-      const ratio = canvas.width / canvas.height;
-      let w = pw - margin * 2;
-      let h = w / ratio;
-      if (h > ph - margin * 2) {
-        h = ph - margin * 2;
-        w = h * ratio;
-      }
-      pdf.addImage(imgData, "PNG", margin, margin, w, h);
+      pdf.addImage(imgData, "PNG", 0, 0, pw, ph);
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
       pdf.save(safe + ".pdf");
     } catch (err) {
