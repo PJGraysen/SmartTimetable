@@ -86,6 +86,13 @@ class Book(LibraryBase):
     categories = models.ManyToManyField(Category, related_name="books", blank=True)
     subjects = models.ManyToManyField(Subject, related_name="library_books", blank=True)
     is_active = models.BooleanField(default=True)
+    ddc = models.CharField(max_length=32, blank=True, default="")
+    lcc = models.CharField(max_length=32, blank=True, default="")
+    page_count = models.PositiveIntegerField(null=True, blank=True)
+    toc = models.TextField(blank=True, default="")
+    source = models.CharField(max_length=20, blank=True, default="MANUAL")
+    source_id = models.CharField(max_length=64, blank=True, default="")
+    marc21 = models.JSONField(null=True, blank=True)
 
     class Meta:
         ordering = ["title"]

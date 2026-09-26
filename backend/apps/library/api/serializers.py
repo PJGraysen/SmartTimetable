@@ -191,3 +191,22 @@ class MemberWithStatusSerializer(MemberSerializer):
 
     def get_library_status(self, obj):
         return _member_status(obj)
+
+
+class BookLookupPreviewSerializer(serializers.Serializer):
+    isbn = serializers.CharField()
+    title = serializers.CharField(allow_blank=True)
+    subtitle = serializers.CharField(allow_blank=True)
+    authors = serializers.ListField(child=serializers.CharField(), required=False)
+    publisher = serializers.CharField(allow_blank=True)
+    published_year = serializers.IntegerField(allow_null=True, required=False)
+    edition = serializers.CharField(allow_blank=True)
+    language = serializers.CharField(allow_blank=True)
+    description = serializers.CharField(allow_blank=True)
+    cover_url = serializers.CharField(allow_blank=True)
+    page_count = serializers.IntegerField(allow_null=True, required=False)
+    ddc = serializers.CharField(allow_blank=True)
+    lcc = serializers.CharField(allow_blank=True)
+    toc = serializers.CharField(allow_blank=True)
+    source = serializers.CharField(allow_blank=True)
+    source_id = serializers.CharField(allow_blank=True)

@@ -572,3 +572,25 @@ class BlockedMembersReportView(APIView):
                     "fines_owed": str(total_fines_owed(m)),
                 })
         return Response(blocked)
+
+
+# ---- Cataloguing: ISBN lookup ----
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status as _status
+
+from apps.library.services.book_lookup import lookup_by_isbn
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def book_lookup(request):
+    """GET /api/library/catalogue/lookup/?isbn=XXXX"""
+    isbn = request.query_params.get("isbn", "").strip()
+    if not isbn:
+        return Response({"error": "isbn query parameter required"}, status=_status.HTTP_400_BAD_REQUEST)
+    result = lookup_by_isbn(isbn)
+    if not result:
+        return Response({"found": False, "isbn": isbn}, status=_status.HTTP_200_OK)
+    return Response({"found": True, **result.to_dict()}, status=_status.HTTP_200_OK)

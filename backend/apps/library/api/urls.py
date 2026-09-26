@@ -35,3 +35,9 @@ urlpatterns = router.urls + [
     path("reports/damage/", views.DamageReportView.as_view()),
     path("reports/blocked-members/", views.BlockedMembersReportView.as_view()),
 ]
+
+from apps.library.api.views import book_lookup as _book_lookup_view
+
+urlpatterns += [
+    path("catalogue/lookup/", _book_lookup_view, name="library-book-lookup"),
+]
