@@ -428,11 +428,15 @@ class TimetablePersistenceService:
 
         cells: dict[tuple, SchedulingAssignment] = {}
 
+        # OPTION C: keep one entry per (day, period, group, lesson_requirement).
+        # Block subjects scheduled in parallel all survive; only exact
+        # duplicates (same LR at the same slot) are collapsed.
         for assignment in assignments:
             key = (
                 assignment.day,
                 assignment.period_id,
                 assignment.instructional_group_id,
+                assignment.lesson_requirement_id,
             )
             current = cells.get(key)
             if current is None:

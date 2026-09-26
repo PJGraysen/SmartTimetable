@@ -409,6 +409,7 @@ class TimetableEntry(TimeStampedModel):
                     "day",
                     "period",
                     "instructional_group",
+                    "lesson_requirement",
                 ],
                 name="uq_timetable_entry_group_slot",
             ),
