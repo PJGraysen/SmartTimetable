@@ -97,7 +97,7 @@ export const PROTECTED_ROUTES: AppRoute[] = [
   { path: "/academics/grading", element: <GradingSchemePage /> },
   { path: "/academics/ranking", element: <RankingPage /> },
 
-  { path: "/teachers", element: <AcademicsManagement initialTab="teachers" /> },
+  { path: "/teachers", element: <TeachersAdminPage /> },
   { path: "/subjects", element: <AcademicsManagement initialTab="subjects" /> },
   { path: "/rooms", element: <AcademicsManagement initialTab="rooms" /> },
 

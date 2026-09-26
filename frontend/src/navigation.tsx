@@ -37,7 +37,7 @@ export const MAIN_NAV: NavItem[] = [
   { to: "/academics/grading", label: "Grading", icon: Award, roles: ["admin"] },
   { to: "/academics/ranking", label: "Ranking", icon: Trophy, roles: ["admin"] },
 
-  { to: "/teachers", label: "Teachers", icon: Users, roles: ["admin"] },
+  // (moved to admin section below)
   { to: "/subjects", label: "Subjects", icon: BookOpen, roles: ["admin"] },
   { to: "/rooms", label: "Rooms", icon: DoorOpen, roles: ["admin"] },
   { to: "/validation", label: "Validation", icon: ClipboardCheck, roles: ["admin"] },
