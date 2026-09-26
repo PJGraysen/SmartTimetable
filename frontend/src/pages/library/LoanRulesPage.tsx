@@ -23,7 +23,13 @@ export default function LoanRulesPage() {
 
   return (
     <div style={{ padding: "1.5rem" }}>
-      <h1 style={{ marginTop: 0 }}>Loan Rules</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "1rem" }}>
+        <h1 style={{ marginTop: 0 }}>Loan Rules</h1>
+        <button type="button" className="secondary-button" onClick={async () => {
+          try { await lib.ensureDefaultRules(); load(); }
+          catch (e: any) { setError(e?.response?.data?.detail || "Could not create defaults."); }
+        }}>Fix missing defaults</button>
+      </div>
       {error ? <div className="tt-error">{error}</div> : null}
 
       <div className="table-wrapper">

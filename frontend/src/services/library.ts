@@ -577,3 +577,24 @@ export async function fulfillReservation(id: string) {
   const { data } = await http.post(`/library/reservations/${id}/fulfill/`);
   return data as ReservationRow;
 }
+
+
+// ================================================================
+// SRU / MARC21 lookup
+// ================================================================
+export type MarcLookupResult = BookLookupResult & {
+  marc21?: Record<string, unknown>;
+};
+
+export async function lookupMarcByIsbn(isbn: string): Promise<MarcLookupResult> {
+  const { data } = await http.get("/library/catalogue/marc-lookup/", {
+    params: { isbn },
+  });
+  return data as MarcLookupResult;
+}
+
+
+export async function ensureDefaultRules() {
+  const { data } = await http.post("/library/rules/ensure-defaults/");
+  return data as { created: number; total: number; rules: LoanRule[] };
+}

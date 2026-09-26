@@ -1,12 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Download, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Library } from "lucide-react";
 import * as lib from "../../services/library";
 
 export default function BookFormPage() {
   const navigate = useNavigate();
 
-  // Core bibliographic state
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [isbn, setIsbn] = useState("");
@@ -15,7 +14,6 @@ export default function BookFormPage() {
   const [publishedYear, setPublishedYear] = useState("");
   const [description, setDescription] = useState("");
 
-  // Pro cataloguing fields
   const [authorsText, setAuthorsText] = useState("");
   const [publisherName, setPublisherName] = useState("");
   const [coverUrl, setCoverUrl] = useState("");
@@ -25,49 +23,60 @@ export default function BookFormPage() {
   const [toc, setToc] = useState("");
   const [source, setSource] = useState("");
   const [sourceId, setSourceId] = useState("");
+  const [marc21, setMarc21] = useState<Record<string, unknown> | null>(null);
 
-  // Form state
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [fetching, setFetching] = useState(false);
+  const [fetching, setFetching] = useState<"rest" | "marc" | null>(null);
   const [fetchNotice, setFetchNotice] = useState<string>("");
 
-  async function fetchMetadata() {
+  function applyResult(r: lib.MarcLookupResult) {
+    if (r.title) setTitle(r.title);
+    if (r.subtitle) setSubtitle(r.subtitle);
+    if (r.authors && r.authors.length) setAuthorsText(r.authors.join(", "));
+    if (r.publisher) setPublisherName(r.publisher);
+    if (r.published_year) setPublishedYear(String(r.published_year));
+    if (r.edition) setEdition(r.edition);
+    if (r.language) setLanguage(r.language);
+    if (r.description) setDescription(r.description);
+    if (r.cover_url) setCoverUrl(r.cover_url);
+    if (r.page_count) setPageCount(String(r.page_count));
+    if (r.ddc) setDdc(r.ddc);
+    if (r.lcc) setLcc(r.lcc);
+    if (r.toc) setToc(r.toc);
+    if (r.source) setSource(r.source);
+    if (r.source_id) setSourceId(r.source_id);
+    if ((r as any).marc21) setMarc21((r as any).marc21);
+  }
+
+  async function fetchMetadata(kind: "rest" | "marc") {
     const cleaned = isbn.replace(/[^0-9Xx]/g, "").toUpperCase();
     if (cleaned.length !== 10 && cleaned.length !== 13) {
       setFetchNotice("ISBN must be 10 or 13 digits.");
       return;
     }
-    setFetching(true);
+    setFetching(kind);
     setFetchNotice("");
     setError("");
     try {
-      const r = await lib.lookupBookByIsbn(cleaned);
+      const r = kind === "marc"
+        ? await lib.lookupMarcByIsbn(cleaned)
+        : await lib.lookupBookByIsbn(cleaned);
       if (!r.found) {
-        setFetchNotice("No metadata found for that ISBN.");
+        setFetchNotice(kind === "marc"
+          ? "No MARC record found on LoC SRU for that ISBN."
+          : "No metadata found for that ISBN.");
         return;
       }
-      if (r.title) setTitle(r.title);
-      if (r.subtitle) setSubtitle(r.subtitle);
-      if (r.authors && r.authors.length) setAuthorsText(r.authors.join(", "));
-      if (r.publisher) setPublisherName(r.publisher);
-      if (r.published_year) setPublishedYear(String(r.published_year));
-      if (r.edition) setEdition(r.edition);
-      if (r.language) setLanguage(r.language);
-      if (r.description) setDescription(r.description);
-      if (r.cover_url) setCoverUrl(r.cover_url);
-      if (r.page_count) setPageCount(String(r.page_count));
-      if (r.ddc) setDdc(r.ddc);
-      if (r.lcc) setLcc(r.lcc);
-      if (r.toc) setToc(r.toc);
-      if (r.source) setSource(r.source);
-      if (r.source_id) setSourceId(r.source_id);
-      setFetchNotice(`Fetched from ${r.source || "remote"} — review and save.`);
+      applyResult(r as lib.MarcLookupResult);
+      setFetchNotice(kind === "marc"
+        ? "Fetched from LoC SRU (MARC21) — review and save."
+        : `Fetched from ${r.source || "remote"} — review and save.`);
     } catch (err: any) {
       setFetchNotice("");
       setError(err?.response?.data?.error || "Lookup failed.");
     } finally {
-      setFetching(false);
+      setFetching(null);
     }
   }
 
@@ -76,28 +85,20 @@ export default function BookFormPage() {
     setSubmitting(true);
     setError("");
     try {
-      const authors = authorsText
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const created = await lib.createBook({
-        title,
-        subtitle,
-        isbn,
-        edition,
-        language,
-        description,
+      const authors = authorsText.split(",").map((s) => s.trim()).filter(Boolean);
+      const payload: Record<string, unknown> = {
+        title, subtitle, isbn, edition, language, description,
         published_year: publishedYear ? Number(publishedYear) : null,
         cover_url: coverUrl,
         page_count: pageCount ? Number(pageCount) : null,
-        ddc,
-        lcc,
-        toc,
+        ddc, lcc, toc,
         source: source || "MANUAL",
         source_id: sourceId,
         authors_text: authors.join(", "),
         publisher_name: publisherName,
-      } as any);
+      };
+      if (marc21) payload.marc21 = marc21;
+      const created = await lib.createBook(payload as any);
       navigate(`/library/catalogue/${created.id}`);
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Could not create book.");
@@ -105,6 +106,8 @@ export default function BookFormPage() {
       setSubmitting(false);
     }
   }
+
+  const busy = fetching !== null;
 
   return (
     <div style={{ padding: "1.5rem", maxWidth: "820px" }}>
@@ -116,7 +119,7 @@ export default function BookFormPage() {
       <form onSubmit={submit} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "1.5rem" }}>
         <div style={{ background: "#f0f7ff", border: "1px solid #b6d3f5", borderRadius: "8px", padding: "0.9rem 1rem", marginBottom: "1.25rem" }}>
           <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1e3a8a", letterSpacing: "0.04em", marginBottom: "0.4rem" }}>
-            ISBN QUICK-FILL
+            ISBN QUICK-FILL · choose source
           </div>
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
             <input
@@ -127,18 +130,31 @@ export default function BookFormPage() {
             />
             <button
               type="button"
-              onClick={() => void fetchMetadata()}
-              disabled={fetching || !isbn}
+              onClick={() => void fetchMetadata("rest")}
+              disabled={busy || !isbn}
               style={{
                 display: "inline-flex", alignItems: "center", gap: "0.4rem",
                 padding: "0.55rem 0.9rem", borderRadius: "6px",
                 background: "#1e3a8a", color: "#fff", border: "none",
-                fontWeight: 700, cursor: fetching ? "wait" : "pointer",
-                opacity: fetching || !isbn ? 0.6 : 1,
-              }}
-            >
-              {fetching ? <Loader2 size={14} className="spin" /> : <Download size={14} />}
-              {fetching ? "Fetching…" : "Fetch metadata"}
+                fontWeight: 700, cursor: busy ? "wait" : "pointer",
+                opacity: busy || !isbn ? 0.6 : 1,
+              }}>
+              {fetching === "rest" ? <Loader2 size={14} className="spin" /> : <Download size={14} />}
+              {fetching === "rest" ? "Fetching…" : "REST (OpenLibrary)"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void fetchMetadata("marc")}
+              disabled={busy || !isbn}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "0.4rem",
+                padding: "0.55rem 0.9rem", borderRadius: "6px",
+                background: "#065f46", color: "#fff", border: "none",
+                fontWeight: 700, cursor: busy ? "wait" : "pointer",
+                opacity: busy || !isbn ? 0.6 : 1,
+              }}>
+              {fetching === "marc" ? <Loader2 size={14} className="spin" /> : <Library size={14} />}
+              {fetching === "marc" ? "Fetching…" : "MARC (LoC SRU)"}
             </button>
           </div>
           {fetchNotice ? (
@@ -153,7 +169,7 @@ export default function BookFormPage() {
           <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} style={inp} />
         </Row>
         <Row label="Authors (comma-separated)">
-          <input value={authorsText} onChange={(e) => setAuthorsText(e.target.value)} style={inp} placeholder="Joshua Bloch, Brian Goetz" />
+          <input value={authorsText} onChange={(e) => setAuthorsText(e.target.value)} style={inp} placeholder="Joshua Bloch" />
         </Row>
         <Row label="Publisher">
           <input value={publisherName} onChange={(e) => setPublisherName(e.target.value)} style={inp} />
@@ -201,6 +217,7 @@ export default function BookFormPage() {
         {source ? (
           <div style={{ fontSize: "0.72rem", color: "#64748b", marginBottom: "1rem" }}>
             Source: <strong>{source}</strong>{sourceId ? ` · ${sourceId}` : ""}
+            {marc21 ? " · MARC21 record attached" : ""}
           </div>
         ) : null}
 

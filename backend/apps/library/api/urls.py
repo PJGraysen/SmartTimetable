@@ -125,3 +125,15 @@ urlpatterns += [
     path("notifications/<uuid:pk>/read/", _notification_read, name="library-notification-read"),
     path("notifications/scan/", _notifications_scan, name="library-notifications-scan"),
 ]
+
+from apps.library.api.views import catalogue_marc_lookup as _catalogue_marc_lookup
+
+urlpatterns += [
+    path("catalogue/marc-lookup/", _catalogue_marc_lookup, name="library-catalogue-marc-lookup"),
+]
+
+from apps.library.api.views import rules_ensure_defaults as _rules_ensure
+
+urlpatterns += [
+    path("rules/ensure-defaults/", _rules_ensure, name="library-rules-ensure"),
+]

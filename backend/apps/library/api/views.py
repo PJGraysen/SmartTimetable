@@ -1335,3 +1335,62 @@ def notifications_scan(request):
     """Trigger due/overdue scan (usually run by cron)."""
     from apps.library.services.notifications import scan_due_and_overdue
     return Response(scan_due_and_overdue())
+
+
+# =====================================================================
+# SRU / MARC21 cataloguing
+# =====================================================================
+from apps.library.services.marc_sru import lookup_marc_by_isbn as _lookup_marc
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def catalogue_marc_lookup(request):
+    """GET /api/library/catalogue/marc-lookup/?isbn=XXXX"""
+    isbn = (request.query_params.get("isbn") or "").strip()
+    if not isbn:
+        return Response({"error": "isbn query parameter required"}, status=400)
+    try:
+        result = _lookup_marc(isbn)
+    except Exception as e:
+        return Response({"error": f"lookup failed: {e}"}, status=500)
+    if not result:
+        return Response({"found": False, "isbn": isbn})
+    return Response({"found": True, **result.to_dict()})
+
+
+# =====================================================================
+# Loan Rules — ensure defaults
+# =====================================================================
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def rules_ensure_defaults(request):
+    """Create default LoanRules for any missing member types."""
+    from apps.library.models import LoanRule as _LR, Member as _M
+    DEFAULTS = {
+        _M.MemberType.STUDENT:  {"max_concurrent_loans": 2, "loan_days": 14, "max_renewals": 2,
+                                  "fine_per_day": "5.00",  "grace_days": 0, "max_fine": "500.00"},
+        _M.MemberType.TEACHER:  {"max_concurrent_loans": 5, "loan_days": 30, "max_renewals": 3,
+                                  "fine_per_day": "0.00",  "grace_days": 7, "max_fine": None},
+        _M.MemberType.STAFF:    {"max_concurrent_loans": 5, "loan_days": 30, "max_renewals": 3,
+                                  "fine_per_day": "0.00",  "grace_days": 7, "max_fine": None},
+        _M.MemberType.EXTERNAL: {"max_concurrent_loans": 1, "loan_days": 7,  "max_renewals": 1,
+                                  "fine_per_day": "10.00", "grace_days": 0, "max_fine": "500.00"},
+    }
+    created = 0
+    for mt, defaults in DEFAULTS.items():
+        _, was_new = _LR.objects.get_or_create(member_type=mt, defaults=defaults)
+        if was_new:
+            created += 1
+    rules = _LR.objects.all().order_by("member_type")
+    return Response({
+        "created": created,
+        "total": rules.count(),
+        "rules": [{
+            "id": str(r.id), "member_type": r.member_type,
+            "max_concurrent_loans": r.max_concurrent_loans,
+            "loan_days": r.loan_days, "max_renewals": r.max_renewals,
+            "fine_per_day": str(r.fine_per_day), "grace_days": r.grace_days,
+            "max_fine": str(r.max_fine) if r.max_fine is not None else None,
+        } for r in rules],
+    })
