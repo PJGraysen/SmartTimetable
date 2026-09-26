@@ -48,6 +48,35 @@ class Teacher(TimeStampedModel):
 
     is_frozen = models.BooleanField(default=False)
 
+    # ---- Extended profile (SmartTimetable Pro) ----
+    ROLE_CHOICES = [
+        ("SUPER_ADMIN", "Super Admin (full access)"),
+        ("DEPT_HEAD", "Department Head"),
+        ("TEACHER", "Teacher"),
+        ("LAB_TECH", "Lab Technician"),
+        ("AUDITOR", "Internal Auditor"),
+        ("PROCUREMENT", "Procurement Officer"),
+        ("LIBRARIAN", "Librarian"),
+        ("BURSAR", "Bursar"),
+        ("OTHER", "Other Staff"),
+    ]
+
+    role = models.CharField(
+        max_length=24,
+        choices=ROLE_CHOICES,
+        default="TEACHER",
+        help_text="Operational role in the school",
+    )
+    department = models.ForeignKey(
+        "inventory.Department",
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="teachers",
+        help_text="Home department (Science, Maths, ICT...)",
+    )
+    phone = models.CharField(max_length=40, blank=True)
+    hire_date = models.DateField(null=True, blank=True)
+
     class Meta:
         db_table = "teacher"
         ordering = ["teacher_number", "last_name", "first_name"]

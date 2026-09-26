@@ -1,6 +1,7 @@
 """Platform admin console endpoints (superuser/staff only)."""
 import shutil
 from django.contrib.auth.models import User, Group
+from django.db import transaction
 from django.db.models import Count
 from django.db import connection
 from rest_framework.views import APIView
@@ -309,6 +310,44 @@ class TeacherAdminViewSet(_VS2):
     /api/platform/admin/teachers/<id>/deactivate/    POST
     """
 
+    def destroy(self, request, pk=None):
+        """Safe delete: refuse if timetable history exists; otherwise
+        delete assignments first, then remove the teacher."""
+        from django.db.models.deletion import ProtectedError
+        try:
+            t = _Teacher.objects.get(id=pk)
+        except _Teacher.DoesNotExist:
+            return Response({"detail": "not found"}, status=404)
+
+        # Timetable history check — we never delete teachers with timetable entries
+        try:
+            from apps.scheduling.models import TimetableEntry
+            te_count = TimetableEntry.objects.filter(teacher=t).count()
+        except Exception:
+            te_count = 0
+        if te_count > 0:
+            return Response({
+                "detail": (
+                    f"Cannot delete: this teacher appears in {te_count} "
+                    "timetable entries (historical records). "
+                    "Deactivate instead — it keeps history and removes them from future runs."
+                ),
+                "te_count": te_count,
+                "suggestion": "deactivate",
+            }, status=409)
+
+        # Count assignments
+        lr_count = t.lesson_requirements.count() if hasattr(t, "lesson_requirements") else 0
+
+        with transaction.atomic():
+            # Delete all lesson requirements (assignments) first
+            if lr_count:
+                t.lesson_requirements.all().delete()
+            t.delete()
+
+        return Response({"ok": True, "deleted_assignments": lr_count}, status=200)
+
+    # marker: _smart_safe_destroy
     def list(self, request):
         qs = _Teacher.objects.select_related("user").order_by("employee_code")
         q = request.query_params.get("q")
