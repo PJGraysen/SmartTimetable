@@ -350,3 +350,52 @@ export async function downloadReport(reportName: string, format: "csv" | "json" 
   });
   return data;
 }
+
+
+// ================================================================
+// L3 — Roster / Finance / Inventory
+// ================================================================
+export type RosterStudent = { id: string; admission_number: string; first_name: string; last_name: string; status: string };
+export type RosterTeacher = { id: string; employee_code: string; first_name: string; last_name: string; role: string };
+
+export async function rosterEligible(): Promise<{ students: RosterStudent[]; teachers: RosterTeacher[] }> {
+  const { data } = await http.get("/library/roster/eligible/");
+  return data;
+}
+
+export async function rosterSync(): Promise<{
+  created_students: number; created_teachers: number; updated: number; total_members: number;
+}> {
+  const { data } = await http.post("/library/roster/sync/");
+  return data;
+}
+
+export type LedgerEntryRow = {
+  id: string; kind: string; source: string; amount: string;
+  description: string; recorded_at: string;
+};
+
+export type FeeAccount = {
+  member_id: string; member_number: string; member_name: string;
+  balance: string; currency: string; entries: LedgerEntryRow[];
+};
+
+export async function memberFeeAccount(memberId: string): Promise<FeeAccount> {
+  const { data } = await http.get(`/library/members/${memberId}/fee-account/`);
+  return data;
+}
+
+export async function postLoanFine(loanId: string, amount: string, reason: string = "") {
+  const { data } = await http.post(`/library/loans/${loanId}/post-fine/`, { amount, reason });
+  return data as { ok: boolean; entry_id: string; balance_after: string };
+}
+
+export async function registerCopyInInventory(copyId: string) {
+  const { data } = await http.post(`/library/copies/${copyId}/register-inventory/`);
+  return data as { ok: boolean; asset_id: string; asset_tag: string; created: boolean };
+}
+
+export async function registerAllCopiesInInventory() {
+  const { data } = await http.post("/library/copies/register-all-inventory/");
+  return data as { scanned: number; created: number; errors: number; total_copies: number };
+}
