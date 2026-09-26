@@ -41,3 +41,11 @@ from apps.library.api.views import book_lookup as _book_lookup_view
 urlpatterns += [
     path("catalogue/lookup/", _book_lookup_view, name="library-book-lookup"),
 ]
+
+from apps.library.api.views import subjects_list as _subjects_list_view
+from apps.library.api.views import subject_summary as _subject_summary_view
+
+urlpatterns += [
+    path("catalogue/subjects/", _subjects_list_view, name="library-subjects-list"),
+    path("catalogue/subject-summary/", _subject_summary_view, name="library-subject-summary"),
+]

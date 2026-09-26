@@ -594,3 +594,49 @@ def book_lookup(request):
     if not result:
         return Response({"found": False, "isbn": isbn}, status=_status.HTTP_200_OK)
     return Response({"found": True, **result.to_dict()}, status=_status.HTTP_200_OK)
+
+
+# ---- Cataloguing: subjects (learning categories) ----
+from apps.academics.models import Subject as _Subject
+from apps.library.models import Book as _Book
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def subjects_list(request):
+    """GET /api/library/catalogue/subjects/ - active subjects for form dropdowns."""
+    qs = _Subject.objects.filter(is_active=True).order_by("name")
+    return Response({
+        "subjects": [
+            {"id": str(s.id), "name": s.name, "code": s.code}
+            for s in qs
+        ]
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def subject_summary(request):
+    """GET /api/library/catalogue/subject-summary/
+
+    Per-subject book counts for the library dashboard "Learning Categories".
+    """
+    rows = []
+    for s in _Subject.objects.filter(is_active=True).order_by("name"):
+        book_count = _Book.objects.filter(subjects=s, is_active=True).count()
+        # Count distinct available copies across those books
+        available = 0
+        try:
+            available = _Book.objects.filter(
+                subjects=s, is_active=True, copies__status="AVAILABLE"
+            ).distinct().count()
+        except Exception:
+            available = 0
+        rows.append({
+            "id": str(s.id),
+            "name": s.name,
+            "code": s.code,
+            "book_count": book_count,
+            "available_copies": available,
+        })
+    return Response({"subjects": rows})

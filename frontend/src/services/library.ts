@@ -22,6 +22,7 @@ export type Book = {
   published_year: number | null;
   cover_url: string;
   authors: Author[];
+    subjects?: Subject[];
   categories: Category[];
   is_active: boolean;
   copy_count: number;
@@ -232,4 +233,55 @@ export async function reportTopBorrowers() {
   return (await http.get<{
     id: string; member_number: string; full_name: string; loan_count: number;
   }[]>(`${base}/reports/top-borrowers/`)).data;
+}
+
+
+// --- Cataloguing: ISBN metadata lookup (L1) ---
+export type BookLookupResult = {
+  found: boolean;
+  isbn: string;
+  title?: string;
+  subtitle?: string;
+  authors?: string[];
+  publisher?: string;
+  published_year?: number | null;
+  edition?: string;
+  language?: string;
+  description?: string;
+  cover_url?: string;
+  page_count?: number | null;
+  ddc?: string;
+  lcc?: string;
+  toc?: string;
+  source?: string;
+  source_id?: string;
+};
+
+export async function lookupBookByIsbn(isbn: string): Promise<BookLookupResult> {
+  const { data } = await http.get("/library/catalogue/lookup/", {
+    params: { isbn },
+  });
+  return data as BookLookupResult;
+}
+
+
+// --- L1 subjects (learning categories) ---
+export type Subject = { id: string; name: string; code: string };
+
+export type SubjectSummaryRow = {
+  id: string;
+  name: string;
+  code: string;
+  book_count: number;
+  available_copies: number;
+};
+
+export async function getSubjects(): Promise<Subject[]> {
+  const { data } = await http.get("/library/catalogue/subjects/");
+  return (data?.subjects ?? []) as Subject[];
+}
+
+export async function getSubjectSummary(): Promise<SubjectSummaryRow[]> {
+  const { data } = await http.get("/library/catalogue/subject-summary/");
+  return (data?.subjects ?? []) as SubjectSummaryRow[];
 }
