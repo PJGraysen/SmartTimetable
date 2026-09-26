@@ -44,71 +44,25 @@ const CLASSES: ClassDefinition[] = [
     label: "Form 4W",
     aliases: ["form 4w", "form 4 west", "f4 west", "4w", "f4w"],
   },
-      {
+  {
+    label: "Grade 11E",
+    aliases: ["grade 11e", "grade 11 east", "11e", "11 east", "grade11e", "g11e"],
+  },
+  {
+    label: "Grade 11W",
+    aliases: ["grade 11w", "grade 11 west", "11w", "11 west", "grade11w", "g11w"],
+  },
+  {
     label: "Grade 10E",
-    aliases: [
-      "grade 10e",
-      "grade 10 east",
-      "10e",
-      "10 east",
-      "grade10e",
-      "g10e",
-    ],
+    aliases: ["grade 10e", "grade 10 east", "10e", "10 east", "grade10e", "g10e"],
   },
   {
     label: "Grade 10W",
-    aliases: [
-      "grade 10w",
-      "grade 10 west",
-      "10w",
-      "10 west",
-      "grade10w",
-      "g10w",
-    ],
+    aliases: ["grade 10w", "grade 10 west", "10w", "10 west", "grade10w", "g10w"],
   },
   {
     label: "Grade 9E",
-    aliases: [
-      "grade 9e",
-      "grade 9 east",
-      "9e",
-      "9 east",
-      "grade9e",
-      "g9e",
-    ],
-  },
-  {
-    label: "Grade 9W",
-    aliases: [
-      "grade 9w",
-      "grade 9 west",
-      "9w",
-      "9 west",
-      "grade9w",
-      "g9w",
-    ],
-  },
-  {
-    label: "Grade 8E",
-    aliases: [
-      "grade 8e",
-      "grade 8 east",
-      "8e",
-      "8 east",
-      "grade8e",
-      "g8e",
-    ],
-  },
-  {
-    label: "Grade 8W",
-    aliases: [
-      "grade 8w",
-      "grade 8 west",
-      "8w",
-      "8 west",
-      "grade8w",
-      "g8w",
-    ],
+    aliases: ["grade 9e", "grade 9 east", "9e", "9 east", "grade9e", "g9e"],
   },
 ];
 
@@ -1402,9 +1356,11 @@ function Timetable() {
 
         .tt-lesson {
           display: flex;
-          flex-direction: column;
+          flex-direction: row;
           align-items: center;
           justify-content: center;
+          flex-wrap: wrap;
+          gap: 4px 8px;
           min-height: 28px;
           line-height: 12px;
         }
