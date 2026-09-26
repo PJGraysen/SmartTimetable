@@ -723,8 +723,9 @@ function Timetable() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [filterMode, setFilterMode] = useState<"master" | "class" | "teacher">("master");
+  const [filterMode, setFilterMode] = useState<"master" | "class" | "teacher" | "grade">("master");
   const [filterValue, setFilterValue] = useState<string>("");
+  const [selectedGrade, setSelectedGrade] = useState<string>("Grade 11");
 
   const loadTimetable = useCallback(async () => {
     setRefreshing(true);
@@ -1139,7 +1140,7 @@ function Timetable() {
       return CLASSES.filter((c) => taught.has(c.label));
     }
     return CLASSES;
-  }, [filterMode, filterValue, visibleEntries]);
+  }, [filterMode, filterValue, visibleEntries, selectedGrade]);
 
   const scheduledEntries = visibleEntries.length;
 
@@ -1701,6 +1702,7 @@ function Timetable() {
             const m = e.target.value as "master" | "class" | "teacher";
             setFilterMode(m);
             if (m === "master") setFilterValue("");
+            else if (m === "grade") setFilterValue("");
             else if (m === "class") setFilterValue(CLASSES[0]?.label ?? "");
             else if (m === "teacher") setFilterValue(allTeachers[0] ?? "");
           }} style={{
@@ -1708,6 +1710,7 @@ function Timetable() {
             fontWeight: 700, color: "#1262bd", background: "#fff", minWidth: "140px",
           }}>
             <option value="master">Master (all classes)</option>
+            <option value="grade">Grade (E + W streams)</option>
             <option value="class">Single class</option>
             <option value="teacher">Single teacher</option>
           </select>
@@ -1715,6 +1718,15 @@ function Timetable() {
             <select value={filterValue} onChange={(e) => setFilterValue(e.target.value)}
               style={{ padding: "6px 10px", border: "1px solid #2878dc", borderRadius: "6px", fontWeight: 700, color: "#1262bd", background: "#fff", minWidth: "160px" }}>
               {CLASSES.map((c) => <option key={c.label} value={c.label}>{c.label}</option>)}
+            </select>
+          )}
+          {filterMode === "grade" && (
+            <select value={selectedGrade} onChange={(e) => setSelectedGrade(e.target.value)}
+              style={{ padding: "6px 10px", border: "1px solid #2878dc", borderRadius: "6px", fontWeight: 700, color: "#1262bd", background: "#fff", minWidth: "160px" }}>
+              <option value="Grade 9">Grade 9</option>
+              <option value="Grade 10">Grade 10</option>
+              <option value="Grade 11">Grade 11</option>
+              <option value="Form 4">Form 4</option>
             </select>
           )}
           {filterMode === "teacher" && (
@@ -1853,51 +1865,34 @@ function Timetable() {
                               // display for that physical timetable cell.
                               const blockEntry = slotEntries.find((e) => e.block) ?? null;
                             
-                              if (blockEntry && blockEntry.block) {
-                                const block = blockEntry.block;
-                                const teacherDisplay = block.has_any_teacher
-                                  ? block.members
-                                      .map((m) => m.teacher_code ?? "-")
-                                      .join(" / ")
-                                  : null;
-                                const blockRoom = (() => {
-    // Build teacher_code -> room map for this slot from all visible entries
-    const blockMembers = Array.isArray((block as any)?.members) ? (block as any).members : [];
-    const slotKey = `${(blockEntry as any)?.day ?? day?.code ?? ""}:${(blockEntry as any)?.period_number ?? period ?? 0}`;
-    const allSlot = entriesBySlot?.get(slotKey) || [];
-    const roomForTeacher = new Map<string, string>();
-    for (const e of allSlot) {
-      const tc = String((e as any)?.teacher_code ?? (e as any)?.teacherCode ?? "").trim();
-      const r = roomCode(e);
-      if (tc && r && r !== "\u2014") roomForTeacher.set(tc, r);
-    }
-    // Ordered join: one room per block member, in member order
-    const ordered: string[] = [];
-    const seen = new Set<string>();
-    for (const mb of blockMembers) {
-      const tc = String(mb?.teacher_code ?? mb?.teacherCode ?? "").trim();
-      const r = tc ? roomForTeacher.get(tc) : "";
-      if (r && !seen.has(r)) { seen.add(r); ordered.push(r); }
-    }
-    if (ordered.length === 0) {
-      const single = roomCode(blockEntry);
-      if (single && single !== "\u2014") ordered.push(single);
-    }
-    return ordered.join(" / ");
-  })();
-                            
-                                return (
-                                  <div className="tt-lesson">
-                                    <span className="tt-subject">{block.display}</span>
-                                    {teacherDisplay ? (
-                                      <span className="tt-teacher">{teacherDisplay}</span>
-                                    ) : null}
-                                    {blockRoom ? (
-                                      <span className="tt-room">{blockRoom}</span>
-                                    ) : null}
-                                  </div>
-                                );
-                              }
+                                if (blockEntry && blockEntry.block) {
+                                  const blk: any = blockEntry.block;
+                                  const blkMembers: any[] = Array.isArray(blk?.members) ? blk.members : [];
+                                  const blkSlotKey = `${(blockEntry as any)?.day ?? day?.code ?? ""}:${(blockEntry as any)?.period_number ?? period ?? 0}`;
+                                  const blkSlot = entriesBySlot?.get(blkSlotKey) || [];
+                                  const roomByTeacher = new Map<string, string>();
+                                  for (const e of blkSlot) {
+                                    const tc = String((e as any)?.teacher_code ?? (e as any)?.teacherCode ?? "").trim();
+                                    const r = roomCode(e);
+                                    if (tc && r && r !== "\u2014") roomByTeacher.set(tc, r);
+                                  }
+                                  return (
+                                    <>
+                                      {blkMembers.map((mb: any, idx: number) => {
+                                        const sc = String(mb?.subject_code ?? mb?.subjectCode ?? "?").trim();
+                                        const tc = String(mb?.teacher_code ?? mb?.teacherCode ?? "").trim();
+                                        const rc = tc ? (roomByTeacher.get(tc) ?? "") : "";
+                                        return (
+                                          <div className="tt-lesson" key={`blk-${blk?.code || "X"}-${sc}-${idx}`}>
+                                            <span className="tt-subject">{sc}</span>
+                                            {tc ? <span className="tt-teacher">{tc}</span> : null}
+                                            {rc ? <span className="tt-room">{rc}</span> : null}
+                                          </div>
+                                        );
+                                      })}
+                                    </>
+                                  );
+                                }
                             
                               return (
                                 <>
