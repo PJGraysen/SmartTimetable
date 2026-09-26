@@ -436,3 +436,28 @@ export const smallBtn: React.CSSProperties = {
   border: `1px solid ${C.BORDER}`, background: "#fff",
   cursor: "pointer", fontSize: "0.78rem", fontWeight: 600,
 };
+
+export function copyToClipboard(text: string, label = "Copied") {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    // Lightweight toast
+    const el = document.createElement("div");
+    el.textContent = label + ": " + text;
+    el.style.cssText = "position:fixed;top:20px;right:20px;padding:10px 14px;" +
+      "background:#2b1a0f;color:#fff;border-radius:8px;font-size:0.85rem;" +
+      "z-index:99999;box-shadow:0 6px 20px rgba(0,0,0,0.3);opacity:0.95;";
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1800);
+  } catch { /* ignore */ }
+}

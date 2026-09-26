@@ -1,0 +1,282 @@
+﻿import { useMemo, useState, useEffect } from "react";
+import {
+  C, ErrorBox, PageShell, InventoryTabs, Drawer, StatusPill,
+  KV, SectionTitle, FilterBar, btnPrimary, btnSecondary, smallBtn,
+  downloadCSV, useLoad,
+} from "./_shared";
+import { inventoryApi } from "../../services/inventory";
+
+function SupplierModal({ open, onClose, onDone, edit }: any) {
+  const [f, setF] = useState<any>({});
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setF(edit || { is_active: true });
+  }, [open, edit]);
+
+  async function save() {
+    setBusy(true); setErr("");
+    try {
+      const payload = {
+        code: f.code, name: f.name,
+        contact_person: f.contact_person || "",
+        phone: f.phone || "", email: f.email || "",
+        whatsapp: f.whatsapp || "", address: f.address || "",
+        payment_terms: f.payment_terms || "",
+        lead_time_days: Number(f.lead_time_days || 7),
+        rating: Number(f.rating || 0),
+        notes: f.notes || "", is_active: f.is_active !== false,
+      };
+      if (edit?.id) await inventoryApi.suppliers.update(edit.id, payload);
+      else await inventoryApi.suppliers.create(payload);
+      onDone?.(); onClose();
+    } catch (e: any) {
+      setErr(e?.response?.data ? JSON.stringify(e.response.data) : String(e));
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
+                  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}
+         onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+           style={{ background: "#fff", borderRadius: 12, width: 620, maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ padding: "0.9rem 1.1rem", borderBottom: `1px solid ${C.BORDER}`,
+                      display: "flex", justifyContent: "space-between" }}>
+          <b style={{ color: C.BROWN }}>{edit?.id ? "Edit Supplier" : "New Supplier"}</b>
+          <button onClick={onClose} style={smallBtn}>✕</button>
+        </div>
+        <div style={{ padding: "1rem 1.1rem" }}>
+          {err && <ErrorBox msg={err} />}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div><label style={lbl}>Code *</label>
+              <input style={inp} value={f.code || ""} onChange={e => setF({ ...f, code: e.target.value })} /></div>
+            <div><label style={lbl}>Name *</label>
+              <input style={inp} value={f.name || ""} onChange={e => setF({ ...f, name: e.target.value })} /></div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
+            <div><label style={lbl}>Contact Person</label>
+              <input style={inp} value={f.contact_person || ""} onChange={e => setF({ ...f, contact_person: e.target.value })} /></div>
+            <div><label style={lbl}>Payment Terms</label>
+              <input style={inp} value={f.payment_terms || ""} onChange={e => setF({ ...f, payment_terms: e.target.value })} /></div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 8 }}>
+            <div><label style={lbl}>Phone</label>
+              <input style={inp} value={f.phone || ""} onChange={e => setF({ ...f, phone: e.target.value })} /></div>
+            <div><label style={lbl}>WhatsApp</label>
+              <input style={inp} value={f.whatsapp || ""} onChange={e => setF({ ...f, whatsapp: e.target.value })} /></div>
+            <div><label style={lbl}>Email</label>
+              <input style={inp} value={f.email || ""} onChange={e => setF({ ...f, email: e.target.value })} /></div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 8 }}>
+            <div><label style={lbl}>Lead Time (days)</label>
+              <input style={inp} type="number" value={f.lead_time_days || ""} onChange={e => setF({ ...f, lead_time_days: e.target.value })} /></div>
+            <div><label style={lbl}>Rating (0-5)</label>
+              <input style={inp} type="number" step="0.1" value={f.rating || ""} onChange={e => setF({ ...f, rating: e.target.value })} /></div>
+          </div>
+          <div style={{ marginTop: 8 }}><label style={lbl}>Address</label>
+            <input style={inp} value={f.address || ""} onChange={e => setF({ ...f, address: e.target.value })} /></div>
+          <div style={{ marginTop: 8 }}><label style={lbl}>Notes</label>
+            <textarea style={{ ...inp, minHeight: 70 }} value={f.notes || ""}
+              onChange={e => setF({ ...f, notes: e.target.value })} /></div>
+          <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+            <button style={btnPrimary} disabled={busy || !f.code || !f.name} onClick={save}>
+              {busy ? "Saving..." : (edit?.id ? "Update" : "Create")}
+            </button>
+            <button style={btnSecondary} onClick={onClose}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const inp: React.CSSProperties = {
+  padding: "0.5rem 0.7rem", borderRadius: 6, border: `1px solid ${C.BORDER}`,
+  fontSize: "0.88rem", width: "100%", background: "#fff",
+};
+const lbl: React.CSSProperties = {
+  display: "block", fontSize: "0.78rem", color: C.MUTED, marginBottom: 3,
+};
+
+export default function Suppliers() {
+  const { data, err, loading, reload } = useLoad<any[]>(() => inventoryApi.suppliers.list());
+  const [search, setSearch] = useState("");
+  const [drawerId, setDrawerId] = useState<number | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [editRow, setEditRow] = useState<any>(null);
+
+  const rows = useMemo(() => {
+    const s = search.toLowerCase();
+    return (data || []).filter((r: any) => {
+      if (!s) return true;
+      const hay = [r.code, r.name, r.contact_person, r.phone, r.email, r.whatsapp]
+        .map(x => String(x || "")).join(" ").toLowerCase();
+      return hay.includes(s);
+    });
+  }, [data, search]);
+
+  function exportCSV() {
+    downloadCSV("suppliers",
+      ["Code", "Name", "Contact", "Phone", "WhatsApp", "Email", "Terms", "Lead Days", "Rating"],
+      rows.map((r: any) => [r.code, r.name, r.contact_person, r.phone, r.whatsapp,
+                            r.email, r.payment_terms, r.lead_time_days, r.rating]));
+  }
+
+  async function remove(id: number, name: string) {
+    if (!confirm(`Delete supplier "${name}"?`)) return;
+    try { await inventoryApi.suppliers.remove(id); reload(); }
+    catch (e: any) { alert("Delete failed: " + (e?.response?.data?.detail || String(e))); }
+  }
+
+  return (
+    <PageShell title="Suppliers" subtitle="Vendors and service providers - click for items supplied"
+      actions={
+        <div style={{ display: "flex", gap: 6 }}>
+          <button style={btnPrimary} onClick={() => { setEditRow(null); setShowModal(true); }}>+ New Supplier</button>
+          <button style={btnSecondary} onClick={exportCSV}>CSV</button>
+        </div>
+      }>
+      <InventoryTabs active="suppliers" />
+      <FilterBar search={search} onSearch={setSearch} />
+      <ErrorBox msg={err} />
+      {loading ? <div>Loading...</div> : (
+        <div style={{ background: "#fff", borderRadius: 10, border: `1px solid ${C.BORDER}`, overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+            <thead>
+              <tr style={{ background: "#f8fafc", textAlign: "left" }}>
+                <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Code</th>
+                <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Name</th>
+                <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Contact</th>
+                <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Phone</th>
+                <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Rating</th>
+                <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 && (
+                <tr><td colSpan={6} style={{ padding: "1rem", textAlign: "center", color: C.MUTED }}>No suppliers</td></tr>
+              )}
+              {rows.map((r: any) => (
+                <tr key={r.id} style={{ borderTop: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: "0.5rem 0.6rem", fontWeight: 600 }}>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setDrawerId(r.id); }}
+                       style={{ color: C.BROWN, textDecoration: "none" }}>{r.code}</a>
+                  </td>
+                  <td style={{ padding: "0.5rem 0.6rem" }}>{r.name}</td>
+                  <td style={{ padding: "0.5rem 0.6rem" }}>{r.contact_person || "-"}</td>
+                  <td style={{ padding: "0.5rem 0.6rem" }}>{r.phone || "-"}</td>
+                  <td style={{ padding: "0.5rem 0.6rem" }}>
+                    {r.rating ? Number(r.rating).toFixed(1) + " / 5" : "-"}
+                  </td>
+                  <td style={{ padding: "0.5rem 0.6rem" }}>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button style={smallBtn} onClick={() => setDrawerId(r.id)}>View</button>
+                      <button style={smallBtn} onClick={() => { setEditRow(r); setShowModal(true); }}>Edit</button>
+                      <button style={{ ...smallBtn, color: C.RED, borderColor: C.RED }}
+                              onClick={() => remove(r.id, r.name)}>Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <SupplierDrawer supplierId={drawerId} onClose={() => setDrawerId(null)} onEdit={(r: any) => { setDrawerId(null); setEditRow(r); setShowModal(true); }} />
+      <SupplierModal open={showModal} onClose={() => setShowModal(false)} onDone={reload} edit={editRow} />
+    </PageShell>
+  );
+}
+
+function SupplierDrawer({ supplierId, onClose, onEdit }: any) {
+  const [d, setD] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [contacted, setContacted] = useState("");
+
+  useEffect(() => {
+    if (supplierId == null) { setD(null); return; }
+    setLoading(true);
+    inventoryApi.suppliers.list().then((all: any) => {
+      const s = (all || []).find((x: any) => x.id === supplierId);
+      setD(s);
+    }).finally(() => setLoading(false));
+  }, [supplierId]);
+
+  async function logContact(method: string) {
+    if (!supplierId) return;
+    const note = prompt(`${method} contact note (optional):`) || "";
+    await (inventoryApi as any).supplierContact(supplierId, method, note);
+    setContacted(method + " logged");
+    setTimeout(() => setContacted(""), 2000);
+  }
+
+  async function listItems() {
+    const all = await inventoryApi.items.list();
+    return (all || []).filter((i: any) => i.default_supplier === supplierId);
+  }
+
+  const [itemsSupplied, setItemsSupplied] = useState<any[]>([]);
+  useEffect(() => {
+    if (supplierId != null) listItems().then(setItemsSupplied);
+  }, [supplierId]);
+
+  if (supplierId == null) return null;
+
+  return (
+    <Drawer open={!!supplierId} onClose={onClose} title={d?.name || "Supplier"} subtitle={d?.code}>
+      {loading ? <div>Loading...</div> : !d ? <div>Not found</div> : (
+        <>
+          {contacted && <div style={{ marginBottom: 8, padding: 6, background: "#ecfdf5", color: "#065f46", borderRadius: 6, fontSize: "0.8rem" }}>{contacted}</div>}
+          <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+            {d.phone && (
+              <a href={`tel:${d.phone}`} style={{ ...smallBtn, textDecoration: "none" }} onClick={() => logContact("call")}>📞 Call</a>
+            )}
+            {d.email && (
+              <a href={`mailto:${d.email}`} style={{ ...smallBtn, textDecoration: "none" }} onClick={() => logContact("email")}>✉️ Email</a>
+            )}
+            {d.whatsapp && (
+              <a href={`https://wa.me/${String(d.whatsapp).replace(/\D/g, "")}`} target="_blank" rel="noreferrer"
+                 style={{ ...smallBtn, textDecoration: "none" }} onClick={() => logContact("whatsapp")}>💬 WhatsApp</a>
+            )}
+            <button style={smallBtn} onClick={() => onEdit(d)}>Edit</button>
+          </div>
+
+          <SectionTitle>Contact</SectionTitle>
+          <KV label="Code" value={d.code} />
+          <KV label="Name" value={d.name} />
+          <KV label="Contact Person" value={d.contact_person || "-"} />
+          <KV label="Phone" value={d.phone || "-"} />
+          <KV label="WhatsApp" value={d.whatsapp || "-"} />
+          <KV label="Email" value={d.email || "-"} />
+          <KV label="Address" value={d.address || "-"} />
+
+          <SectionTitle>Commercial</SectionTitle>
+          <KV label="Payment Terms" value={d.payment_terms || "-"} />
+          <KV label="Lead Time" value={`${d.lead_time_days || 0} days`} />
+          <KV label="Rating" value={d.rating ? `${Number(d.rating).toFixed(1)} / 5` : "-"} />
+
+          <SectionTitle>Items Supplied ({itemsSupplied.length})</SectionTitle>
+          {itemsSupplied.length === 0 && <div style={{ color: C.MUTED, fontSize: "0.85rem" }}>No items linked</div>}
+          {itemsSupplied.map((i: any) => (
+            <div key={i.id} style={{ padding: "0.3rem 0", borderBottom: "1px solid #f1f5f9", fontSize: "0.82rem", display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontWeight: 600 }}>{i.code}</span>
+              <span style={{ color: C.MUTED, flex: 1, marginLeft: 8 }}>{i.name}</span>
+              <span>KES {Number(i.unit_cost || 0).toLocaleString()}</span>
+            </div>
+          ))}
+
+          {d.notes && (
+            <>
+              <SectionTitle>Notes / Contact Log</SectionTitle>
+              <div style={{ fontSize: "0.8rem", whiteSpace: "pre-wrap", color: "#444" }}>{d.notes}</div>
+            </>
+          )}
+        </>
+      )}
+    </Drawer>
+  );
+}

@@ -6,17 +6,19 @@ import {
 import { inventoryApi } from "../../services/inventory";
 
 export default function Reports() {
-  const [tab, setTab] = useState<"low-stock" | "expiring" | "valuation" | "movements">("low-stock");
+  const [tab, setTab] = useState<"low-stock" | "expiring" | "valuation" | "movements" | "comprehensive">("low-stock");
   const [search, setSearch] = useState("");
 
   const lowStock = useLoad<any>(() => inventoryApi.reports.lowStock());
   const expiring = useLoad<any>(() => inventoryApi.reports.expiring());
   const valuation = useLoad<any>(() => inventoryApi.reports.valuation());
   const movements = useLoad<any>(() => inventoryApi.reports.movements());
+  const comprehensive = useLoad<any>(() => (inventoryApi as any).comprehensiveReport());
 
   const current = tab === "low-stock" ? lowStock
                 : tab === "expiring" ? expiring
                 : tab === "valuation" ? valuation
+                : tab === "comprehensive" ? comprehensive
                 : movements;
 
   return (
@@ -25,7 +27,7 @@ export default function Reports() {
       <FilterBar search={search} onSearch={setSearch} />
 
       <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-        {(["low-stock", "expiring", "valuation", "movements"] as const).map(t => (
+        {(["low-stock", "expiring", "valuation", "movements", "comprehensive"] as const).map(t => (
           <button key={t} style={{
             ...btnSecondary,
             background: tab === t ? C.BROWN : "#fff",
@@ -35,6 +37,7 @@ export default function Reports() {
             {t === "low-stock" ? "Low Stock"
               : t === "expiring" ? "Expiring Soon"
               : t === "valuation" ? "Valuation"
+              : t === "comprehensive" ? "Comprehensive"
               : "Movements"}
           </button>
         ))}
@@ -47,6 +50,7 @@ export default function Reports() {
           {tab === "expiring" && <ExpiringTable data={expiring.data} search={search} />}
           {tab === "valuation" && <Valuation data={valuation.data} />}
           {tab === "movements" && <Movements data={movements.data} search={search} />}
+          {tab === "comprehensive" && <Comprehensive data={comprehensive.data} />}
         </Card>
       )}
     </PageShell>
@@ -195,5 +199,113 @@ function Movements({ data, search }: any) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function Comprehensive({ data }: any) {
+  if (!data) return <div>Loading...</div>;
+  const t = data.totals || {};
+  function exportAll() {
+    const lines: string[][] = [];
+    lines.push(["Metric", "Value"]);
+    Object.entries(t).forEach(([k, v]) => lines.push([k, String(v)]));
+    downloadCSV("inventory_comprehensive_summary", ["Metric", "Value"], lines);
+  }
+  function exportCategory() {
+    downloadCSV("items_by_category",
+      ["Category", "Count", "Value"],
+      (data.items_by_category || []).map((r: any) => [r.category__name, r.count, r.value]));
+  }
+  function exportDept() {
+    downloadCSV("assets_by_department",
+      ["Department", "Assets", "Value"],
+      (data.assets_by_department || []).map((r: any) => [r.current_location__department__name, r.assets, r.value]));
+  }
+  function exportSupplier() {
+    downloadCSV("items_by_supplier",
+      ["Supplier", "Items"],
+      (data.items_by_supplier || []).map((r: any) => [r.default_supplier__name, r.items]));
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+        <button style={btnSecondary} onClick={exportAll}>⬇ Summary CSV</button>
+        <button style={btnSecondary} onClick={exportCategory}>⬇ By Category</button>
+        <button style={btnSecondary} onClick={exportDept}>⬇ By Department</button>
+        <button style={btnSecondary} onClick={exportSupplier}>⬇ By Supplier</button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+        <Stat label="Active Items" value={t.items_active} />
+        <Stat label="Retired Items" value={t.items_retired} />
+        <Stat label="Assets" value={t.assets} />
+        <Stat label="Asset Value" value={`KES ${Number(t.assets_value || 0).toLocaleString()}`} />
+        <Stat label="Locations" value={t.locations} />
+        <Stat label="Departments" value={t.departments} />
+        <Stat label="Suppliers" value={t.suppliers} />
+      </div>
+
+      <h3 style={{ margin: "12px 0 6px", color: C.BROWN }}>Items by Category</h3>
+      <table style={{ width: "100%", fontSize: "0.85rem", marginBottom: 16 }}>
+        <thead><tr style={{ textAlign: "left", color: C.MUTED }}>
+          <th style={{ padding: 6 }}>Category</th>
+          <th style={{ padding: 6 }}>Items</th>
+          <th style={{ padding: 6 }}>Value</th>
+        </tr></thead>
+        <tbody>
+          {(data.items_by_category || []).map((r: any, i: number) => (
+            <tr key={i} style={{ borderTop: "1px solid #f1f5f9" }}>
+              <td style={{ padding: 6 }}>{r.category__name}</td>
+              <td style={{ padding: 6 }}>{r.count}</td>
+              <td style={{ padding: 6 }}>KES {Number(r.value || 0).toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h3 style={{ margin: "12px 0 6px", color: C.BROWN }}>Assets by Department</h3>
+      <table style={{ width: "100%", fontSize: "0.85rem", marginBottom: 16 }}>
+        <thead><tr style={{ textAlign: "left", color: C.MUTED }}>
+          <th style={{ padding: 6 }}>Department</th>
+          <th style={{ padding: 6 }}>Assets</th>
+          <th style={{ padding: 6 }}>Value</th>
+        </tr></thead>
+        <tbody>
+          {(data.assets_by_department || []).map((r: any, i: number) => (
+            <tr key={i} style={{ borderTop: "1px solid #f1f5f9" }}>
+              <td style={{ padding: 6 }}>{r.current_location__department__name || "Unassigned"}</td>
+              <td style={{ padding: 6 }}>{r.assets}</td>
+              <td style={{ padding: 6 }}>KES {Number(r.value || 0).toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h3 style={{ margin: "12px 0 6px", color: C.BROWN }}>Items by Supplier</h3>
+      <table style={{ width: "100%", fontSize: "0.85rem" }}>
+        <thead><tr style={{ textAlign: "left", color: C.MUTED }}>
+          <th style={{ padding: 6 }}>Supplier</th>
+          <th style={{ padding: 6 }}>Items</th>
+        </tr></thead>
+        <tbody>
+          {(data.items_by_supplier || []).map((r: any, i: number) => (
+            <tr key={i} style={{ borderTop: "1px solid #f1f5f9" }}>
+              <td style={{ padding: 6 }}>{r.default_supplier__name}</td>
+              <td style={{ padding: 6 }}>{r.items}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Stat({ label, value }: any) {
+  return (
+    <Card>
+      <div style={{ fontSize: "0.72rem", color: C.MUTED, textTransform: "uppercase" }}>{label}</div>
+      <div style={{ fontSize: "1.3rem", fontWeight: 700, color: C.BROWN, marginTop: 4 }}>{value}</div>
+    </Card>
   );
 }
