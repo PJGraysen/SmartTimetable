@@ -683,7 +683,16 @@ def are_subjects_in_same_block(
 def is_grade10_instructional_group(
     group: object | None,
 ) -> bool:
-    """Return whether a group is one of the authoritative Grade 10 groups."""
+    """
+    Return whether a group uses the Grade 10 option-block machinery.
+
+    Grade 10 and Grade 11 share the same elective-block contract:
+        Option 1 = COMP / CHEM
+        Option 2 = BIO / GEO / HIS
+        Option 3 = PHY / LIT / MUSD
+        Option 4 = AGR / BUS
+    ICT remains STANDALONE.
+    """
     if isinstance(group, str):
         values = (group,)
     elif group is None:
@@ -701,6 +710,10 @@ def is_grade10_instructional_group(
             "10W",
             "GRADE 10E",
             "GRADE 10W",
+            "11E",
+            "11W",
+            "GRADE 11E",
+            "GRADE 11W",
         }
         for value in values
     )
