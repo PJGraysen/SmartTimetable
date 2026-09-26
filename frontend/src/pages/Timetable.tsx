@@ -734,6 +734,28 @@ function Timetable() {
       const result = await getSchedulingRunResults(latestRun.id);
       const timetableVersion = result.timetable_version;
 
+      // Fetch the previous completed run so the change counter compares
+      // against a real previous generation, not the previous page load.
+      let previousRunId: string | null = null;
+      let previousVersionName: string = "";
+      let previousEntries: any[] = [];
+      try {
+        const latestIdx = completed.findIndex((r: any) => r.id === latestRun.id);
+        const prevRun = (latestIdx >= 0 && latestIdx + 1 < completed.length)
+          ? completed[latestIdx + 1]
+          : null;
+        if (prevRun) {
+          previousRunId = prevRun.id;
+          const prevResult = await getSchedulingRunResults(prevRun.id);
+          const prevTV = prevResult.timetable_version;
+          previousVersionName = String(prevTV?.name || prevRun.timetable_version || "");
+          previousEntries = Array.isArray(prevTV?.entries) ? prevTV.entries : [];
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.log("[Timetable] previous-run baseline fetch failed:", e);
+      }
+
       if (!timetableVersion) {
         setEntries([]);
         setVersion("Completed run has no timetable version");
@@ -793,7 +815,29 @@ function Timetable() {
         for (const [k, v] of map) {
           map.set(k, v.split("|").sort().join("|"));
         }
-        const prev = prevEntryMapRef.current;
+        const buildCellMap = (list: any[]): Map<string, string> => {
+          const m = new Map<string, string>();
+          for (const e of list) {
+            const raw = String(e?.instructional_group_name || "");
+            const parts = raw.split(" - ");
+            const c = (parts[1] || parts[0] || raw).trim();
+            const d = String(e?.day || "");
+            const pp = String(e?.period_number || "");
+            const k = d + ":" + c + ":" + pp;
+            const sig = [
+              String(e?.subject_code || ""),
+              String(e?.teacher_code || ""),
+              String(e?.room_code || ""),
+            ].join("/");
+            m.set(k, (m.get(k) ? m.get(k) + "|" : "") + sig);
+          }
+          for (const [k, v] of m) m.set(k, v.split("|").sort().join("|"));
+          return m;
+        };
+        const prevFromBackend = previousEntries.length > 0
+          ? buildCellMap(previousEntries)
+          : null;
+        const prev = prevFromBackend ?? prevEntryMapRef.current;
         if (prev && prev.size > 0) {
           const byDay: Record<string, number> = {};
           const samples: string[] = [];
@@ -1356,11 +1400,9 @@ function Timetable() {
 
         .tt-lesson {
           display: flex;
-          flex-direction: row;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
-          flex-wrap: wrap;
-          gap: 4px 8px;
           min-height: 28px;
           line-height: 12px;
         }
@@ -1824,6 +1866,18 @@ function Timetable() {
                                 if (blockEntry && blockEntry.block) {
                                   const blk: any = blockEntry.block;
                                   const blkMembers: any[] = Array.isArray(blk?.members) ? blk.members : [];
+
+                                  const subjectLine =
+                                    (typeof blk?.display === "string" && blk.display) ||
+                                    blkMembers
+                                      .map((m: any) => String(m?.subject_code ?? "").trim())
+                                      .filter(Boolean)
+                                      .join(" / ");
+
+                                  const teacherLine = blkMembers
+                                    .map((m: any) => String(m?.teacher_code ?? "-").trim() || "-")
+                                    .join(" / ");
+
                                   const blkSlotKey = `${(blockEntry as any)?.day ?? day?.code ?? ""}:${(blockEntry as any)?.period_number ?? period ?? 0}`;
                                   const blkSlot = entriesBySlot?.get(blkSlotKey) || [];
                                   const roomByTeacher = new Map<string, string>();
@@ -1832,21 +1886,25 @@ function Timetable() {
                                     const r = roomCode(e);
                                     if (tc && r && r !== "\u2014") roomByTeacher.set(tc, r);
                                   }
+
+                                  const roomLine = blkMembers
+                                    .map((m: any) => {
+                                      const tc = String(m?.teacher_code ?? "").trim();
+                                      return tc ? (roomByTeacher.get(tc) ?? "") : "";
+                                    })
+                                    .filter(Boolean)
+                                    .join(" / ");
+
                                   return (
-                                    <>
-                                      {blkMembers.map((mb: any, idx: number) => {
-                                        const sc = String(mb?.subject_code ?? mb?.subjectCode ?? "?").trim();
-                                        const tc = String(mb?.teacher_code ?? mb?.teacherCode ?? "").trim();
-                                        const rc = tc ? (roomByTeacher.get(tc) ?? "") : "";
-                                        return (
-                                          <div className="tt-lesson" key={`blk-${blk?.code || "X"}-${sc}-${idx}`}>
-                                            <span className="tt-subject">{sc}</span>
-                                            {tc ? <span className="tt-teacher">{tc}</span> : null}
-                                            {rc ? <span className="tt-room">{rc}</span> : null}
-                                          </div>
-                                        );
-                                      })}
-                                    </>
+                                    <div className="tt-lesson">
+                                      <span className="tt-subject">{subjectLine}</span>
+                                      {blk?.has_any_teacher ? (
+                                        <span className="tt-teacher">{teacherLine}</span>
+                                      ) : null}
+                                      {roomLine ? (
+                                        <span className="tt-room">{roomLine}</span>
+                                      ) : null}
+                                    </div>
                                   );
                                 }
                             
