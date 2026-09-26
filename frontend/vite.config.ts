@@ -5,7 +5,6 @@ import react from "@vitejs/plugin-react";
 // origin, and Vite forwards /api/* to Django. This removes the cross-
 // origin problem entirely and lets session cookies work as same-origin.
 export default defineConfig({
-    chunkSizeWarningLimit: 2000,
   plugins: [react()],
   server: {
     port: 5173,
@@ -16,5 +15,8 @@ export default defineConfig({
         secure: false,
       },
     },
+  },
+  build: {
+    chunkSizeWarningLimit: 2000,
   },
 });

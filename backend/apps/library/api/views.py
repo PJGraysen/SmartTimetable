@@ -1100,7 +1100,7 @@ def dam_delete(request, pk):
 # L6 — Audits
 # =====================================================================
 from apps.library.models import InventoryAudit as _IA, InventoryAuditLine as _IAL
-from apps.library.services.audit import (
+from apps.library.services.inventory_audit import (
     start_audit as _start_audit, scan_barcode as _scan_barcode, finish_audit as _finish_audit,
 )
 
