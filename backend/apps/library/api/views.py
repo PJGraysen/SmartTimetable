@@ -640,3 +640,329 @@ def subject_summary(request):
             "available_copies": available,
         })
     return Response({"subjects": rows})
+
+
+# =====================================================================
+# L2 — Circulation quick actions
+# =====================================================================
+from apps.library.services.loans import issue_loan as _issue_loan
+from apps.library.services.loans import return_loan as _return_loan_service
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def self_checkout(request):
+    """POST /api/library/circulation/self-checkout/
+    Body: { "barcode": "BK-000123", "member_number": "STU-001" }
+    """
+    barcode = (request.data.get("barcode") or "").strip()
+    member_number = (request.data.get("member_number") or "").strip()
+    if not barcode or not member_number:
+        return Response({"error": "barcode and member_number are required"},
+                        status=400)
+    copy = Copy.objects.filter(barcode=barcode).select_related("book").first()
+    if not copy:
+        return Response({"error": f"No copy with barcode {barcode}"}, status=404)
+    member = Member.objects.filter(member_number=member_number).first()
+    if not member:
+        return Response({"error": f"No member with number {member_number}"}, status=404)
+    try:
+        loan = _issue_loan(copy=copy, member=member, issued_by=request.user)
+    except Exception as e:
+        return Response({"error": str(e)}, status=409)
+    return Response({
+        "ok": True,
+        "loan_id": str(loan.id),
+        "book_title": copy.book.title,
+        "member_name": member.full_name,
+        "due_at": loan.due_at,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def bulk_return(request):
+    """POST /api/library/circulation/bulk-return/
+    Body: { "barcodes": ["BK-000123", "BK-000124"] }
+    """
+    barcodes = request.data.get("barcodes") or []
+    if not isinstance(barcodes, list) or not barcodes:
+        return Response({"error": "barcodes must be a non-empty list"}, status=400)
+    results = []
+    for raw in barcodes:
+        barcode = str(raw).strip()
+        entry = {"barcode": barcode, "ok": False, "error": ""}
+        try:
+            copy = Copy.objects.filter(barcode=barcode).first()
+            if not copy:
+                entry["error"] = "copy not found"
+                results.append(entry); continue
+            loan = Loan.objects.filter(copy=copy, status=Loan.Status.ACTIVE).first()
+            if not loan:
+                entry["error"] = "no active loan"
+                results.append(entry); continue
+            _return_loan_service(loan=loan, received_by=request.user)
+            entry["ok"] = True
+        except Exception as e:
+            entry["error"] = str(e)
+        results.append(entry)
+    ok_count = sum(1 for r in results if r["ok"])
+    return Response({"processed": len(results), "succeeded": ok_count, "results": results})
+
+
+# =====================================================================
+# L5 — Catalogue search (facets)
+# =====================================================================
+from django.db.models import Q as _Q
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def catalogue_search(request):
+    """GET /api/library/catalogue/search/
+    params: q, subject, author, year_from, year_to, availability
+    """
+    qs = Book.objects.filter(is_active=True).prefetch_related(
+        "authors", "categories", "subjects",
+    ).select_related("publisher")
+
+    q = (request.query_params.get("q") or "").strip()
+    if q:
+        qs = qs.filter(
+            _Q(title__icontains=q) | _Q(subtitle__icontains=q) |
+            _Q(isbn__icontains=q) | _Q(authors__name__icontains=q) |
+            _Q(publisher__name__icontains=q)
+        ).distinct()
+
+    subject = (request.query_params.get("subject") or "").strip()
+    if subject:
+        qs = qs.filter(subjects__code__iexact=subject).distinct()
+
+    author = (request.query_params.get("author") or "").strip()
+    if author:
+        qs = qs.filter(authors__name__icontains=author).distinct()
+
+    year_from = request.query_params.get("year_from")
+    if year_from and str(year_from).isdigit():
+        qs = qs.filter(published_year__gte=int(year_from))
+    year_to = request.query_params.get("year_to")
+    if year_to and str(year_to).isdigit():
+        qs = qs.filter(published_year__lte=int(year_to))
+
+    availability = (request.query_params.get("availability") or "").strip().lower()
+    if availability == "available":
+        qs = qs.filter(copies__status=Copy.Status.AVAILABLE).distinct()
+
+    qs = qs.order_by("title")[:200]
+
+    rows = []
+    for b in qs:
+        rows.append({
+            "id": str(b.id),
+            "title": b.title,
+            "subtitle": b.subtitle,
+            "isbn": b.isbn,
+            "published_year": b.published_year,
+            "cover_url": b.cover_url,
+            "authors": [{"id": str(a.id), "name": a.name} for a in b.authors.all()],
+            "subjects": [{"id": str(s.id), "name": s.name, "code": s.code} for s in b.subjects.all()],
+            "publisher": b.publisher.name if b.publisher else "",
+            "copy_count": b.copies.count(),
+            "available_copy_count": b.copies.filter(status=Copy.Status.AVAILABLE).count(),
+        })
+    return Response({"results": rows, "count": len(rows)})
+
+
+# =====================================================================
+# L7 — Report export (CSV / JSON)
+# =====================================================================
+import csv as _csv
+from django.http import HttpResponse as _HttpResponse
+import json as _json
+
+
+_EXPORT_HANDLERS = {
+    "circulation": lambda: _report_circulation_rows(),
+    "overdue":     lambda: _report_overdue_rows(),
+    "inventory":   lambda: _report_inventory_rows(),
+    "popular":     lambda: _report_popular_rows(),
+}
+
+
+def _report_circulation_rows():
+    rows = [["loan_id", "issued_at", "due_at", "returned_at", "status",
+             "member_number", "member_name", "book_title", "copy_barcode"]]
+    for loan in Loan.objects.select_related("member", "copy__book").order_by("-issued_at")[:2000]:
+        rows.append([
+            str(loan.id), str(loan.issued_at), str(loan.due_at),
+            str(loan.returned_at or ""), loan.status,
+            loan.member.member_number, loan.member.full_name,
+            loan.copy.book.title if loan.copy and loan.copy.book else "",
+            loan.copy.barcode if loan.copy else "",
+        ])
+    return rows
+
+
+def _report_overdue_rows():
+    from django.utils import timezone as _tz
+    now = _tz.now()
+    rows = [["loan_id", "due_at", "days_overdue", "member_number",
+             "member_name", "book_title", "copy_barcode"]]
+    for loan in Loan.objects.filter(status=Loan.Status.ACTIVE, due_at__lt=now)                             .select_related("member", "copy__book").order_by("due_at"):
+        days = (now - loan.due_at).days
+        rows.append([
+            str(loan.id), str(loan.due_at), str(days),
+            loan.member.member_number, loan.member.full_name,
+            loan.copy.book.title if loan.copy and loan.copy.book else "",
+            loan.copy.barcode if loan.copy else "",
+        ])
+    return rows
+
+
+def _report_inventory_rows():
+    rows = [["barcode", "accession_number", "title", "shelf", "status", "condition"]]
+    for c in Copy.objects.select_related("book", "shelf").order_by("barcode"):
+        rows.append([
+            c.barcode, c.accession_number, c.book.title if c.book else "",
+            c.shelf.code if c.shelf else "", c.status, c.condition,
+        ])
+    return rows
+
+
+def _report_popular_rows():
+    from django.db.models import Count as _Count
+    rows = [["book_id", "title", "loan_count"]]
+    qs = Book.objects.annotate(loan_count=_Count("copies__loans")).order_by("-loan_count")[:100]
+    for b in qs:
+        rows.append([str(b.id), b.title, str(b.loan_count)])
+    return rows
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def export_report(request, report_name):
+    """GET /api/library/reports/<name>/export/?format=csv|json"""
+    handler = _EXPORT_HANDLERS.get(report_name)
+    if not handler:
+        return Response({"error": f"unknown report: {report_name}"}, status=404)
+    rows = handler()
+    fmt = (request.query_params.get("format") or "csv").lower()
+    if fmt == "json":
+        header = rows[0]
+        data = [dict(zip(header, r)) for r in rows[1:]]
+        return Response({"rows": data, "count": len(data)})
+    resp = _HttpResponse(content_type="text/csv")
+    resp["Content-Disposition"] = f"attachment; filename=library-{report_name}.csv"
+    writer = _csv.writer(resp)
+    for row in rows:
+        writer.writerow(row)
+    return resp
+
+
+# =====================================================================
+# L3a — Roster sync
+# =====================================================================
+from apps.library.services.roster import (
+    sync_roster as _sync_roster,
+    eligible_people as _eligible_people,
+)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def roster_eligible(request):
+    """GET /api/library/roster/eligible/ — students/teachers not yet members."""
+    return Response(_eligible_people())
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def roster_sync(request):
+    """POST /api/library/roster/sync/ — create Member rows from roster."""
+    return Response(_sync_roster())
+
+
+# =====================================================================
+# L3c — Inventory link
+# =====================================================================
+from apps.library.services.inventory_link import (
+    register_copy_in_inventory as _register_copy_in_inventory,
+    register_all_copies as _register_all_copies,
+)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def inventory_register_one(request, pk):
+    """POST /api/library/copies/<id>/register-inventory/"""
+    copy = Copy.objects.filter(id=pk).first()
+    if not copy:
+        return Response({"error": "copy not found"}, status=404)
+    asset, created = _register_copy_in_inventory(copy)
+    return Response({
+        "ok": True, "asset_id": str(asset.id), "asset_tag": asset.tag,
+        "created": created,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def inventory_register_all(request):
+    """POST /api/library/copies/register-all-inventory/"""
+    return Response(_register_all_copies())
+
+
+# =====================================================================
+# L3b — Fee account + ledger
+# =====================================================================
+from apps.finance.services import post_library_fine as _post_fine
+from apps.finance.services import post_library_payment as _post_payment
+from apps.finance.models import FeeAccount as _FeeAccount
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def member_fee_account(request, member_id):
+    """GET /api/library/members/<id>/fee-account/"""
+    member = Member.objects.filter(id=member_id).first()
+    if not member:
+        return Response({"error": "member not found"}, status=404)
+    acct, _ = _FeeAccount.objects.get_or_create(member=member)
+    entries = [
+        {
+            "id": str(e.id), "kind": e.kind, "source": e.source,
+            "amount": str(e.amount), "description": e.description,
+            "recorded_at": e.recorded_at,
+        }
+        for e in acct.entries.all()[:200]
+    ]
+    return Response({
+        "member_id": str(member.id),
+        "member_number": member.member_number,
+        "member_name": member.full_name,
+        "balance": str(acct.balance),
+        "currency": acct.currency,
+        "entries": entries,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def post_loan_fine(request, loan_id):
+    """POST /api/library/loans/<id>/post-fine/ — body {amount, reason}"""
+    from apps.library.models import Loan as _Loan
+    loan = _Loan.objects.filter(id=loan_id).first()
+    if not loan:
+        return Response({"error": "loan not found"}, status=404)
+    amount_raw = request.data.get("amount")
+    if not amount_raw:
+        return Response({"error": "amount required"}, status=400)
+    try:
+        from decimal import Decimal as _D
+        amount = _D(str(amount_raw))
+    except Exception:
+        return Response({"error": "invalid amount"}, status=400)
+    entry = _post_fine(loan=loan, amount=amount, by_user=request.user)
+    return Response({
+        "ok": True, "entry_id": str(entry.id), "balance_after": str(entry.account.balance),
+    })

@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'apps.users',
     "apps.platform",
     "apps.library",
+    "apps.finance",
     'apps.audit',
     "apps.inventory",
 ]

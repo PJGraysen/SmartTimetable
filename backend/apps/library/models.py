@@ -140,6 +140,11 @@ class Copy(LibraryBase):
     replacement_cost = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True,
     )
+    inventory_asset = models.ForeignKey(
+        "inventory.Asset", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="library_copies",
+        help_text="Linked inventory asset (created via register_copy_in_inventory).",
+    )
     notes = models.TextField(blank=True)
 
     class Meta:
@@ -161,6 +166,16 @@ class Member(LibraryBase):
     user = models.OneToOneField(
         User, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="library_member",
+    )
+    student = models.OneToOneField(
+        "academics.Student", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="library_member",
+        help_text="Set when this Member represents an academic student.",
+    )
+    teacher = models.OneToOneField(
+        "users.Teacher", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="library_member",
+        help_text="Set when this Member represents a teacher or staff member.",
     )
     full_name = models.CharField(max_length=200)
     email = models.EmailField(blank=True)

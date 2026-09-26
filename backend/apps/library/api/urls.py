@@ -49,3 +49,31 @@ urlpatterns += [
     path("catalogue/subjects/", _subjects_list_view, name="library-subjects-list"),
     path("catalogue/subject-summary/", _subject_summary_view, name="library-subject-summary"),
 ]
+
+from apps.library.api.views import self_checkout as _self_checkout_view
+from apps.library.api.views import bulk_return as _bulk_return_view
+from apps.library.api.views import catalogue_search as _catalogue_search_view
+from apps.library.api.views import export_report as _export_report_view
+
+urlpatterns += [
+    path("circulation/self-checkout/", _self_checkout_view, name="library-self-checkout"),
+    path("circulation/bulk-return/", _bulk_return_view, name="library-bulk-return"),
+    path("catalogue/search/", _catalogue_search_view, name="library-catalogue-search"),
+    path("reports/<slug:report_name>/export/", _export_report_view, name="library-report-export"),
+]
+
+from apps.library.api.views import roster_eligible as _roster_eligible
+from apps.library.api.views import roster_sync as _roster_sync
+from apps.library.api.views import inventory_register_one as _inv_reg_one
+from apps.library.api.views import inventory_register_all as _inv_reg_all
+from apps.library.api.views import member_fee_account as _member_fee_acct
+from apps.library.api.views import post_loan_fine as _post_loan_fine
+
+urlpatterns += [
+    path("roster/eligible/", _roster_eligible, name="library-roster-eligible"),
+    path("roster/sync/", _roster_sync, name="library-roster-sync"),
+    path("copies/<uuid:pk>/register-inventory/", _inv_reg_one, name="library-copy-inv-register"),
+    path("copies/register-all-inventory/", _inv_reg_all, name="library-copies-inv-register-all"),
+    path("members/<uuid:member_id>/fee-account/", _member_fee_acct, name="library-member-fee-account"),
+    path("loans/<uuid:loan_id>/post-fine/", _post_loan_fine, name="library-loan-post-fine"),
+]
