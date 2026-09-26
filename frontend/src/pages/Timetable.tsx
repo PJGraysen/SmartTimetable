@@ -45,11 +45,11 @@ const CLASSES: ClassDefinition[] = [
     aliases: ["form 4w", "form 4 west", "f4 west", "4w", "f4w"],
   },
   {
-    label: "Grade 11E",
+    label: "G11E",
     aliases: ["grade 11e", "grade 11 east", "11e", "11 east", "grade11e", "g11e"],
   },
   {
-    label: "Grade 11W",
+    label: "G11W",
     aliases: ["grade 11w", "grade 11 west", "11w", "11 west", "grade11w", "g11w"],
   },
   {
