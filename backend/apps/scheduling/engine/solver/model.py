@@ -2341,10 +2341,16 @@ class SolverModelBuilder:
             if group.is_active
         }
 
-        paired_streams: tuple[tuple[str, str], ...] = (
-            ("10E", "10W"),
-            ("4E", "4W"),
-        )
+        def _grade_prefix(stream_code: str) -> str | None:
+            """
+            Extract the grade prefix from a stream code: 10E -> 10,
+            11W -> 11, 4E -> 4. Returns None when the code is not a
+            valid E/W stream code.
+            """
+            sc = str(stream_code).strip().upper()
+            if len(sc) < 2 or sc[-1] not in ("E", "W"):
+                return None
+            return sc[:-1]
 
         def _group_code(gid: UUID) -> str | None:
             group = groups_by_id.get(gid)
@@ -2380,6 +2386,11 @@ class SolverModelBuilder:
             if stream_code is None:
                 continue
 
+            grade = _grade_prefix(stream_code)
+
+            if grade is None:
+                continue
+
             block = option_block_for_subject(requirement.subject_code)
 
             if block is None:
@@ -2389,6 +2400,7 @@ class SolverModelBuilder:
             subject_code = str(requirement.subject_code).strip().upper()
 
             group_key = (
+                grade,
                 block_code,
                 subject_code,
                 variable.teacher_id,
@@ -2402,14 +2414,19 @@ class SolverModelBuilder:
 
         for group_key, members in candidates.items():
 
+            # group_key[0] is the grade prefix ("10", "11", "4").
+            # Pairing is scoped to that single grade, so 10 and 11 can
+            # never merge into the same synchronized teacher event.
+            grade = group_key[0]
+
             stream_codes = {
                 _group_code(v.instructional_group_id)
                 for v in members
             }
 
-            is_paired = any(
-                first in stream_codes and second in stream_codes
-                for first, second in paired_streams
+            is_paired = (
+                (grade + "E") in stream_codes
+                and (grade + "W") in stream_codes
             )
 
             if not is_paired:
