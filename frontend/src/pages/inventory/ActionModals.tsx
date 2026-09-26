@@ -31,7 +31,7 @@ export function TransferAssetModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`Transfer Asset ${assetTag ? "— " + assetTag : ""}`}>
+    <Modal open={open} onClose={onClose} placement="right" title={`Transfer Asset ${assetTag ? "— " + assetTag : ""}`}>
       <ErrorBox msg={err} />
       <label style={{ display: "block", fontSize: "0.8rem", color: C.MUTED, marginBottom: 4 }}>Destination Location</label>
       <select style={inputStyle} value={to} onChange={e => setTo(e.target.value)}>
@@ -86,7 +86,7 @@ export function ReceiveStockModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Receive Stock">
+    <Modal open={open} onClose={onClose} placement="right" title="Receive Stock">
       <ErrorBox msg={err} />
       <Select label="Item" value={item} setValue={setItem} options={items.map((i:any) => ({value:i.id,label:`${i.code} — ${i.name}`}))} />
       <Select label="Location" value={loc} setValue={setLoc} options={locs.map((l:any) => ({value:l.id,label:`${l.code} — ${l.name}`}))} />
@@ -136,7 +136,7 @@ export function IssueStockModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Issue Stock">
+    <Modal open={open} onClose={onClose} placement="right" title="Issue Stock">
       <ErrorBox msg={err} />
       <Select label="Item" value={item} setValue={setItem} options={items.map((i:any) => ({value:i.id,label:`${i.code} — ${i.name}`}))} />
       <Select label="Location" value={loc} setValue={setLoc} options={locs.map((l:any) => ({value:l.id,label:`${l.code} — ${l.name}`}))} />
@@ -176,7 +176,7 @@ export function ScheduleMaintenanceModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`Schedule Maintenance (${assetIds.length} asset(s))`}>
+    <Modal open={open} onClose={onClose} placement="right" title={`Schedule Maintenance (${assetIds.length} asset(s))`}>
       <ErrorBox msg={err} />
       <Field label="Description" value={desc} setValue={setDesc} />
       <Field label="Estimated Cost" value={cost} setValue={setCost} type="number" />
@@ -213,7 +213,7 @@ export function ChangeStatusModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`Change Status (${assetIds.length} asset(s))`}>
+    <Modal open={open} onClose={onClose} placement="right" title={`Change Status (${assetIds.length} asset(s))`}>
       <ErrorBox msg={err} />
       <Select label="New Status" value={status} setValue={setStatus}
         options={["AVAILABLE","IN_USE","MAINTENANCE","LOANED","LOST","DISPOSED"]

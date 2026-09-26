@@ -1,34 +1,51 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useMemo, useState, useEffect } from "react";
 import {
   C, ErrorBox, PageShell, InventoryTabs, Drawer, StatusPill,
-  KV, SectionTitle, FilterBar, btnSecondary, smallBtn,
+  KV, SectionTitle, FilterBar, btnPrimary, btnSecondary, smallBtn,
   downloadCSV, useLoad,
 } from "./_shared";
+import { NewDepartmentModal } from "./Forms2";
 import { inventoryApi } from "../../services/inventory";
 
 export default function Departments() {
-  const { data, err, loading } = useLoad<any[]>(() => inventoryApi.departments.list());
+  const { data, err, loading, reload } = useLoad<any[]>(() => inventoryApi.departments.list());
   const [search, setSearch] = useState("");
   const [drawerId, setDrawerId] = useState<number | null>(null);
+  const [showNew, setShowNew] = useState(false);
 
   const rows = useMemo(() => {
     const s = search.toLowerCase();
     return (data || []).filter((r: any) => {
       if (!s) return true;
-      const hay = [r.code, r.name, r.description].map(x => String(x || "")).join(" ").toLowerCase();
+      const hay = [r.code, r.name, r.description, r.email, r.phone].map(x => String(x || "")).join(" ").toLowerCase();
       return hay.includes(s);
     });
   }, [data, search]);
 
   function exportCSV() {
     downloadCSV("departments",
-      ["Code", "Name", "Description", "Active"],
-      rows.map((r: any) => [r.code, r.name, r.description, r.is_active ? "yes" : "no"]));
+      ["Code", "Name", "Description", "Email", "Phone", "Active"],
+      rows.map((r: any) => [r.code, r.name, r.description, r.email, r.phone, r.is_active ? "yes" : "no"]));
+  }
+
+  async function remove(id: number, name: string) {
+    if (!confirm(`Delete department "${name}"? Locations and items referencing it will be unlinked.`)) return;
+    try {
+      await inventoryApi.departments.remove(id);
+      reload();
+    } catch (e: any) {
+      alert("Delete failed: " + (e?.response?.data?.detail || String(e)));
+    }
   }
 
   return (
-    <PageShell title="Departments" subtitle="Organisational units — click for summary"
-      actions={<button style={btnSecondary} onClick={exportCSV}>⬇ CSV</button>}>
+    <PageShell title="Departments" subtitle="Organisational units - click for summary"
+      actions={
+        <div style={{ display: "flex", gap: 6 }}>
+          <button style={btnPrimary} onClick={() => setShowNew(true)}>+ New Department</button>
+          <button style={btnSecondary} onClick={exportCSV}>CSV</button>
+        </div>
+      }>
       <InventoryTabs active="departments" />
       <FilterBar search={search} onSearch={setSearch} />
       <ErrorBox msg={err} />
@@ -39,14 +56,15 @@ export default function Departments() {
               <tr style={{ background: "#f8fafc", textAlign: "left" }}>
                 <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Code</th>
                 <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Name</th>
-                <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Description</th>
+                <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Email</th>
+                <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Phone</th>
                 <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Active</th>
                 <th style={{ padding: "0.55rem 0.6rem", color: C.MUTED }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={5} style={{ padding: "1rem", textAlign: "center", color: C.MUTED }}>No departments</td></tr>
+                <tr><td colSpan={6} style={{ padding: "1rem", textAlign: "center", color: C.MUTED }}>No departments</td></tr>
               )}
               {rows.map((r: any) => (
                 <tr key={r.id} style={{ borderTop: "1px solid #f1f5f9" }}>
@@ -55,10 +73,15 @@ export default function Departments() {
                        style={{ color: C.BROWN, textDecoration: "none" }}>{r.code}</a>
                   </td>
                   <td style={{ padding: "0.5rem 0.6rem" }}>{r.name}</td>
-                  <td style={{ padding: "0.5rem 0.6rem", color: C.MUTED }}>{r.description || "-"}</td>
-                  <td style={{ padding: "0.5rem 0.6rem" }}>{r.is_active ? "✓" : "-"}</td>
+                  <td style={{ padding: "0.5rem 0.6rem", color: C.MUTED }}>{r.email || "-"}</td>
+                  <td style={{ padding: "0.5rem 0.6rem", color: C.MUTED }}>{r.phone || "-"}</td>
+                  <td style={{ padding: "0.5rem 0.6rem" }}>{r.is_active ? "OK" : "-"}</td>
                   <td style={{ padding: "0.5rem 0.6rem" }}>
-                    <button style={smallBtn} onClick={() => setDrawerId(r.id)}>Summary</button>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button style={smallBtn} onClick={() => setDrawerId(r.id)}>Summary</button>
+                      <button style={{ ...smallBtn, color: C.RED, borderColor: C.RED }}
+                              onClick={() => remove(r.id, r.name)}>Delete</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -68,6 +91,7 @@ export default function Departments() {
       )}
 
       <DepartmentDrawer departmentId={drawerId} onClose={() => setDrawerId(null)} />
+      <NewDepartmentModal open={showNew} onClose={() => setShowNew(false)} onDone={reload} />
     </PageShell>
   );
 }
@@ -101,16 +125,12 @@ function DepartmentDrawer({ departmentId, onClose }: { departmentId: number | nu
           <SectionTitle>By Condition</SectionTitle>
           {Object.keys(d.by_condition || {}).length === 0
             ? <div style={{ color: C.MUTED, fontSize: "0.85rem" }}>No assets</div>
-            : Object.entries(d.by_condition || {}).map(([k, v]) => (
-                <KV key={k} label={k} value={v} />
-              ))}
+            : Object.entries(d.by_condition || {}).map(([k, v]) => <KV key={k} label={k} value={String(v)} />)}
 
           <SectionTitle>By Status</SectionTitle>
           {Object.keys(d.by_status || {}).length === 0
             ? <div style={{ color: C.MUTED, fontSize: "0.85rem" }}>No assets</div>
-            : Object.entries(d.by_status || {}).map(([k, v]) => (
-                <KV key={k} label={k} value={v} />
-              ))}
+            : Object.entries(d.by_status || {}).map(([k, v]) => <KV key={k} label={k} value={String(v)} />)}
 
           <SectionTitle>Locations ({d.locations?.length || 0})</SectionTitle>
           {(d.locations || []).map((l: any) => (

@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { useEffect, useState, ReactNode } from "react";
 
@@ -173,41 +174,73 @@ export function downloadCSV(
 }
 
 export function Modal({
-  open, onClose, title, children, width = 520,
+  open, onClose, title, children, width = 520, placement = "center",
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   width?: number;
+  placement?: "center" | "right";
 }) {
   if (!open) return null;
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
-        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
-      }}
-    >
+
+  const overlayStyle: React.CSSProperties =
+    placement === "right"
+      ? {
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.12)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          paddingRight: 260,
+          zIndex: 9998,
+        }
+      : {
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.35)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 200,
+        };
+
+  const panel = (
+    <div onClick={onClose} style={overlayStyle}>
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "#fff", borderRadius: 12, width, maxHeight: "90vh",
-          overflowY: "auto", boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
+          background: "#fff",
+          borderRadius: 12,
+          width,
+          maxHeight: "90vh",
+          overflowY: "auto",
+          boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
         }}
       >
-        <div style={{
-          padding: "0.9rem 1.1rem", borderBottom: `1px solid ${C.BORDER}`,
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-        }}>
-          <h3 style={{ margin: 0, color: C.BROWN, fontSize: "1rem", fontWeight: 700 }}>{title}</h3>
-          <button onClick={onClose} style={{ ...btnSecondary, padding: "0.2rem 0.5rem" }}>✕</button>
+        <div
+          style={{
+            padding: "0.9rem 1.1rem",
+            borderBottom: `1px solid ${C.BORDER}`,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <h3 style={{ margin: 0, color: C.BROWN, fontSize: "1rem", fontWeight: 700 }}>
+            {title}
+          </h3>
+          <button onClick={onClose} style={{ ...btnSecondary, padding: "0.2rem 0.5rem" }}>
+            ✕
+          </button>
         </div>
         <div style={{ padding: "1rem 1.1rem" }}>{children}</div>
       </div>
     </div>
   );
+  return createPortal(panel, document.body);
 }
 
 export function FilterBar({
@@ -321,42 +354,60 @@ export function BulkBar({
   children: ReactNode;
 }) {
   if (count === 0) return null;
-  return (
-    <div style={{
-      position: "fixed",
-      right: 20,
-      top: "50%",
-      transform: "translateY(-50%)",
-      background: C.BROWN,
-      color: "#fff",
-      padding: "1rem 0.9rem",
-      borderRadius: 12,
-      boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
-      display: "flex",
-      flexDirection: "column",
-      gap: 8,
-      alignItems: "stretch",
-      zIndex: 250,
-      fontSize: "0.82rem",
-      minWidth: 180,
-      maxWidth: 220,
-      animation: "slideInRight 200ms ease",
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
-                    borderBottom: "1px solid rgba(255,255,255,0.2)", paddingBottom: 6 }}>
+  const panel = (
+    <div
+      style={{
+        position: "fixed",
+        right: 16,
+        top: "50%",
+        transform: "translateY(-50%)",
+        background: C.BROWN,
+        color: "#fff",
+        padding: "1rem 0.9rem",
+        borderRadius: 12,
+        boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        alignItems: "stretch",
+        zIndex: 9999,
+        fontSize: "0.82rem",
+        minWidth: 190,
+        maxWidth: 230,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          borderBottom: "1px solid rgba(255,255,255,0.2)",
+          paddingBottom: 6,
+        }}
+      >
         <b style={{ fontSize: "0.9rem" }}>{count} selected</b>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         {children}
       </div>
-      <button onClick={onClear} style={{
-        padding: "0.35rem 0.6rem", borderRadius: 6,
-        border: "1px solid rgba(255,255,255,0.4)",
-        background: "transparent", color: "#fff",
-        cursor: "pointer", fontSize: "0.78rem", marginTop: 4,
-      }}>Clear selection</button>
+      <button
+        onClick={onClear}
+        style={{
+          padding: "0.35rem 0.6rem",
+          borderRadius: 6,
+          border: "1px solid rgba(255,255,255,0.4)",
+          background: "transparent",
+          color: "#fff",
+          cursor: "pointer",
+          fontSize: "0.78rem",
+          marginTop: 4,
+        }}
+      >
+        Clear selection
+      </button>
     </div>
   );
+  return createPortal(panel, document.body);
 }
 
 

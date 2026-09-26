@@ -1,25 +1,27 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useMemo, useState, useEffect } from "react";
 import {
   C, ErrorBox, PageShell, InventoryTabs, Drawer, StatusPill,
-  KV, SectionTitle, FilterBar, btnSecondary, smallBtn,
+  KV, SectionTitle, FilterBar, btnPrimary, btnSecondary, smallBtn,
   downloadCSV, useLoad,
 } from "./_shared";
+import { NewLocationModal } from "./Forms2";
 import { inventoryApi } from "../../services/inventory";
 
 const TYPES = ["LAB","OFFICE","STORE","CLASSROOM","LIBRARY","HALL","SPORTS","OTHER"];
 
 export default function Locations() {
-  const { data, err, loading } = useLoad<any[]>(() => inventoryApi.locations.list());
+  const { data, err, loading, reload } = useLoad<any[]>(() => inventoryApi.locations.list());
   const [search, setSearch] = useState("");
   const [fType, setFType] = useState("");
   const [drawerId, setDrawerId] = useState<number | null>(null);
+  const [showNew, setShowNew] = useState(false);
 
   const rows = useMemo(() => {
     const s = search.toLowerCase();
     return (data || []).filter((r: any) => {
       if (fType && r.location_type !== fType) return false;
       if (s) {
-        const hay = [r.code, r.name, r.department_name].map(x => String(x || "")).join(" ").toLowerCase();
+        const hay = [r.code, r.name, r.department_name, r.description].map(x => String(x || "")).join(" ").toLowerCase();
         if (!hay.includes(s)) return false;
       }
       return true;
@@ -28,13 +30,28 @@ export default function Locations() {
 
   function exportCSV() {
     downloadCSV("locations",
-      ["Code", "Name", "Type", "Department"],
-      rows.map((r: any) => [r.code, r.name, r.location_type, r.department_name]));
+      ["Code", "Name", "Type", "Department", "Description"],
+      rows.map((r: any) => [r.code, r.name, r.location_type, r.department_name, r.description]));
+  }
+
+  async function remove(id: number, name: string) {
+    if (!confirm(`Delete location "${name}"? This cannot be undone.`)) return;
+    try {
+      await inventoryApi.locations.remove(id);
+      reload();
+    } catch (e: any) {
+      alert("Delete failed: " + (e?.response?.data?.detail || String(e)));
+    }
   }
 
   return (
-    <PageShell title="Locations" subtitle="Labs, offices, stores, classrooms — click for full contents"
-      actions={<button style={btnSecondary} onClick={exportCSV}>⬇ CSV</button>}>
+    <PageShell title="Locations" subtitle="Labs, offices, stores, classrooms - click for full contents"
+      actions={
+        <div style={{ display: "flex", gap: 6 }}>
+          <button style={btnPrimary} onClick={() => setShowNew(true)}>+ New Location</button>
+          <button style={btnSecondary} onClick={exportCSV}>CSV</button>
+        </div>
+      }>
       <InventoryTabs active="locations" />
       <FilterBar search={search} onSearch={setSearch}
         filters={[
@@ -69,7 +86,11 @@ export default function Locations() {
                   <td style={{ padding: "0.5rem 0.6rem" }}><StatusPill value={r.location_type} /></td>
                   <td style={{ padding: "0.5rem 0.6rem" }}>{r.department_name || "-"}</td>
                   <td style={{ padding: "0.5rem 0.6rem" }}>
-                    <button style={smallBtn} onClick={() => setDrawerId(r.id)}>Contents</button>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button style={smallBtn} onClick={() => setDrawerId(r.id)}>Contents</button>
+                      <button style={{ ...smallBtn, color: C.RED, borderColor: C.RED }}
+                              onClick={() => remove(r.id, r.name)}>Delete</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -79,6 +100,7 @@ export default function Locations() {
       )}
 
       <LocationDrawer locationId={drawerId} onClose={() => setDrawerId(null)} />
+      <NewLocationModal open={showNew} onClose={() => setShowNew(false)} onDone={reload} />
     </PageShell>
   );
 }
