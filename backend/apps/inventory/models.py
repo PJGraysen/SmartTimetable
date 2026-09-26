@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from django.conf import settings
 from django.db import models
@@ -12,6 +12,13 @@ class Department(models.Model):
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name="headed_departments",
     )
+    assigned_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="inventory_departments",
+        help_text="Staff member responsible for tracking this department inventory",
+    )
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=40, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -20,19 +27,14 @@ class Department(models.Model):
         ordering = ["name"]
 
     def __str__(self):
-        return f"{self.code} — {self.name}"
+        return f"{self.code} - {self.name}"
 
 
 class Location(models.Model):
     LOCATION_TYPES = [
-        ("LAB", "Laboratory"),
-        ("OFFICE", "Office"),
-        ("STORE", "Store"),
-        ("CLASSROOM", "Classroom"),
-        ("LIBRARY", "Library"),
-        ("HALL", "Hall"),
-        ("SPORTS", "Sports Facility"),
-        ("OTHER", "Other"),
+        ("LAB", "Laboratory"), ("OFFICE", "Office"), ("STORE", "Store"),
+        ("CLASSROOM", "Classroom"), ("LIBRARY", "Library"), ("HALL", "Hall"),
+        ("SPORTS", "Sports Facility"), ("OTHER", "Other"),
     ]
     code = models.CharField(max_length=30, unique=True)
     name = models.CharField(max_length=160)
@@ -58,7 +60,7 @@ class Location(models.Model):
         ordering = ["name"]
 
     def __str__(self):
-        return f"{self.code} — {self.name}"
+        return f"{self.code} - {self.name}"
 
 
 class Category(models.Model):
@@ -88,9 +90,17 @@ class Supplier(models.Model):
     phone = models.CharField(max_length=40, blank=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
+    whatsapp = models.CharField(max_length=40, blank=True)
+    payment_terms = models.CharField(max_length=120, blank=True)
+    lead_time_days = models.IntegerField(default=7)
+    rating = models.DecimalField(
+        max_digits=3, decimal_places=2, default=0,
+        help_text="0-5 quality rating",
+    )
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
@@ -107,6 +117,11 @@ class Item(models.Model):
     code = models.CharField(max_length=40, unique=True)
     name = models.CharField(max_length=200)
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="items")
+    department = models.ForeignKey(
+        Department, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="owned_items",
+        help_text="Owning department",
+    )
     unit = models.CharField(max_length=20, default="pcs")
     tracking_mode = models.CharField(max_length=20, choices=TRACKING_CHOICES, default="INDIVIDUAL")
     description = models.TextField(blank=True)
@@ -119,6 +134,15 @@ class Item(models.Model):
     unit_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     specs = models.JSONField(default=dict, blank=True)
     is_active = models.BooleanField(default=True)
+
+    is_retired = models.BooleanField(default=False, db_index=True)
+    retired_at = models.DateTimeField(null=True, blank=True)
+    retired_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="retired_items",
+    )
+    retirement_reason = models.TextField(blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -126,25 +150,18 @@ class Item(models.Model):
         ordering = ["name"]
 
     def __str__(self):
-        return f"{self.code} — {self.name}"
+        return f"{self.code} - {self.name}"
 
 
 class Asset(models.Model):
     CONDITION_CHOICES = [
-        ("NEW", "New"),
-        ("GOOD", "Good"),
-        ("FAIR", "Fair"),
-        ("POOR", "Poor"),
-        ("DAMAGED", "Damaged"),
-        ("DISPOSED", "Disposed"),
+        ("NEW", "New"), ("GOOD", "Good"), ("FAIR", "Fair"),
+        ("POOR", "Poor"), ("DAMAGED", "Damaged"), ("DISPOSED", "Disposed"),
     ]
     STATUS_CHOICES = [
-        ("AVAILABLE", "Available"),
-        ("IN_USE", "In Use"),
-        ("MAINTENANCE", "Under Maintenance"),
-        ("LOANED", "Loaned Out"),
-        ("LOST", "Lost"),
-        ("DISPOSED", "Disposed"),
+        ("AVAILABLE", "Available"), ("IN_USE", "In Use"),
+        ("MAINTENANCE", "Under Maintenance"), ("LOANED", "Loaned Out"),
+        ("LOST", "Lost"), ("DISPOSED", "Disposed"),
     ]
     tag = models.CharField(max_length=40, unique=True)
     item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="assets")
@@ -176,7 +193,7 @@ class Asset(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.tag} — {self.item.name}"
+        return f"{self.tag} - {self.item.name}"
 
 
 class StockLevel(models.Model):
@@ -198,12 +215,8 @@ class StockLevel(models.Model):
 
 class Movement(models.Model):
     MOVEMENT_TYPES = [
-        ("RECEIPT", "Receipt"),
-        ("ISSUE", "Issue"),
-        ("TRANSFER", "Transfer"),
-        ("RETURN", "Return"),
-        ("DISPOSAL", "Disposal"),
-        ("ADJUSTMENT", "Stock Adjustment"),
+        ("RECEIPT", "Receipt"), ("ISSUE", "Issue"), ("TRANSFER", "Transfer"),
+        ("RETURN", "Return"), ("DISPOSAL", "Disposal"), ("ADJUSTMENT", "Stock Adjustment"),
         ("MAINTENANCE_OUT", "Sent for Maintenance"),
         ("MAINTENANCE_IN", "Returned from Maintenance"),
     ]
@@ -228,6 +241,7 @@ class Movement(models.Model):
     )
     recipient = models.CharField(max_length=120, blank=True)
     reference = models.CharField(max_length=60, blank=True)
+    reason = models.TextField(blank=True, help_text="Why this action is being taken")
     notes = models.TextField(blank=True)
     occurred_at = models.DateTimeField(auto_now_add=True)
 
@@ -239,19 +253,42 @@ class Movement(models.Model):
 
 
 class MaintenanceLog(models.Model):
+    STATUS_CHOICES = [
+        ("PENDING", "Pending Approval"), ("APPROVED", "Approved"),
+        ("IN_PROGRESS", "In Progress"), ("COMPLETED", "Completed"),
+        ("REJECTED", "Rejected"),
+    ]
+    PRIORITY_CHOICES = [
+        ("LOW", "Low"), ("NORMAL", "Normal"),
+        ("HIGH", "High"), ("CRITICAL", "Critical"),
+    ]
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name="maintenance_logs")
     performed_by = models.CharField(max_length=120, blank=True)
-    description = models.TextField()
+    description = models.TextField(help_text="What is faulty")
+    remedy = models.TextField(blank=True, help_text="Proposed remedy")
     cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    performed_at = models.DateField()
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default="NORMAL")
+    approval_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
+    reported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="reported_maintenance",
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="approved_maintenance",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approval_note = models.TextField(blank=True)
+    performed_at = models.DateField(null=True, blank=True)
     next_due = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-performed_at"]
+        ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.asset.tag} @ {self.performed_at}"
+        return f"{self.asset.tag} [{self.approval_status}] {self.description[:40]}"
 
 
 class AuditSession(models.Model):

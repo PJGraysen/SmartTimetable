@@ -323,19 +323,38 @@ export function BulkBar({
   if (count === 0) return null;
   return (
     <div style={{
-      position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)",
-      background: C.BROWN, color: "#fff", padding: "0.7rem 1.1rem",
-      borderRadius: 12, boxShadow: "0 12px 32px rgba(0,0,0,0.3)",
-      display: "flex", gap: 10, alignItems: "center", zIndex: 250,
-      fontSize: "0.85rem", flexWrap: "wrap",
+      position: "fixed",
+      right: 20,
+      top: "50%",
+      transform: "translateY(-50%)",
+      background: C.BROWN,
+      color: "#fff",
+      padding: "1rem 0.9rem",
+      borderRadius: 12,
+      boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      alignItems: "stretch",
+      zIndex: 250,
+      fontSize: "0.82rem",
+      minWidth: 180,
+      maxWidth: 220,
+      animation: "slideInRight 200ms ease",
     }}>
-      <b>{count} selected</b>
-      <span style={{ opacity: 0.6 }}>|</span>
-      {children}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+                    borderBottom: "1px solid rgba(255,255,255,0.2)", paddingBottom: 6 }}>
+        <b style={{ fontSize: "0.9rem" }}>{count} selected</b>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+        {children}
+      </div>
       <button onClick={onClear} style={{
-        padding: "0.3rem 0.6rem", borderRadius: 6, border: "1px solid rgba(255,255,255,0.4)",
-        background: "transparent", color: "#fff", cursor: "pointer", fontSize: "0.8rem",
-      }}>Clear</button>
+        padding: "0.35rem 0.6rem", borderRadius: 6,
+        border: "1px solid rgba(255,255,255,0.4)",
+        background: "transparent", color: "#fff",
+        cursor: "pointer", fontSize: "0.78rem", marginTop: 4,
+      }}>Clear selection</button>
     </div>
   );
 }

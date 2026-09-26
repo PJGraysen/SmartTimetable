@@ -7,6 +7,7 @@ import {
 import {
   TransferAssetModal, ScheduleMaintenanceModal, ChangeStatusModal,
 } from "./ActionModals";
+import { NewAssetModal } from "./Forms";
 import { inventoryApi } from "../../services/inventory";
 
 const CONDITIONS = ["NEW","GOOD","FAIR","POOR","DAMAGED","DISPOSED"];
@@ -14,7 +15,6 @@ const STATUSES = ["AVAILABLE","IN_USE","MAINTENANCE","LOANED","LOST","DISPOSED"]
 
 export default function Assets() {
   const { data, err, loading, reload } = useLoad<any[]>(() => inventoryApi.assets.list());
-
   const [search, setSearch] = useState("");
   const [fStatus, setFStatus] = useState("");
   const [fCondition, setFCondition] = useState("");
@@ -26,6 +26,7 @@ export default function Assets() {
   const [showTransfer, setShowTransfer] = useState<number | null>(null);
   const [showMaint, setShowMaint] = useState<number[] | null>(null);
   const [showStatus, setShowStatus] = useState<number[] | null>(null);
+  const [showNew, setShowNew] = useState(false);
   const [locations, setLocations] = useState<any[]>([]);
 
   useEffect(() => {
@@ -74,7 +75,8 @@ export default function Assets() {
       subtitle="Serially-tracked items - click a row to open its history"
       actions={
         <div style={{ display: "flex", gap: 6 }}>
-          <button style={btnSecondary} onClick={exportCSV}>⬇ CSV</button>
+          <button style={btnPrimary} onClick={() => setShowNew(true)}>+ New Asset</button>
+          <button style={btnSecondary} onClick={exportCSV}>CSV</button>
         </div>
       }
     >
@@ -153,6 +155,9 @@ export default function Assets() {
                 onClick={() => setShowMaint(selectedIds)}>Schedule maintenance</button>
         <button style={{ ...smallBtn, background: "transparent", color: "#fff", borderColor: "rgba(255,255,255,0.5)" }}
                 onClick={() => setShowStatus(selectedIds)}>Change status</button>
+        <button style={{ ...smallBtn, background: "transparent", color: "#fff", borderColor: "rgba(255,255,255,0.5)" }}
+                onClick={() => setShowTransfer(selectedIds[0])}
+                disabled={selectedIds.length !== 1}>Transfer (1 only)</button>
       </BulkBar>
 
       <AssetDrawer
@@ -178,6 +183,11 @@ export default function Assets() {
         open={showStatus !== null}
         onClose={() => setShowStatus(null)}
         assetIds={showStatus || []}
+        onDone={reload}
+      />
+      <NewAssetModal
+        open={showNew}
+        onClose={() => setShowNew(false)}
         onDone={reload}
       />
     </PageShell>

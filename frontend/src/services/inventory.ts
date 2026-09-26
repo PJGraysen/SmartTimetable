@@ -167,3 +167,25 @@ export const inventoryActions = {
   maintenance: (payload: { asset_ids: number[]; description?: string; cost?: number }) =>
     http.post("/inventory/actions/bulk-maintenance-assets/", payload).then(r => r.data),
 };
+
+// ---------- Phase 2: workflow ----------
+(inventoryApi as any).quickAddItem = (payload: any) =>
+  http.post("/inventory/items/quick-add/", payload).then(r => r.data);
+(inventoryApi as any).quickAddStock = (payload: any) =>
+  http.post("/inventory/stock/quick-add/", payload).then(r => r.data);
+(inventoryApi as any).retireItem = (id: number, reason: string) =>
+  http.post(`/inventory/items/${id}/retire/`, { reason }).then(r => r.data);
+(inventoryApi as any).unretireItem = (id: number) =>
+  http.post(`/inventory/items/${id}/unretire/`, {}).then(r => r.data);
+(inventoryApi as any).notifications = () =>
+  http.get("/inventory/notifications/").then(r => r.data);
+(inventoryApi as any).comprehensiveReport = () =>
+  http.get("/inventory/reports/comprehensive/").then(r => r.data);
+(inventoryApi as any).maintenanceApi = {
+  report: (payload: any) => http.post("/inventory/maintenance/report/", payload).then(r => r.data),
+  approve: (id: number, note: string) => http.post(`/inventory/maintenance/${id}/approve/`, { note }).then(r => r.data),
+  reject: (id: number, note: string) => http.post(`/inventory/maintenance/${id}/reject/`, { note }).then(r => r.data),
+  complete: (id: number) => http.post(`/inventory/maintenance/${id}/complete/`, {}).then(r => r.data),
+};
+(inventoryApi as any).supplierContact = (id: number, method: string, note: string) =>
+  http.post(`/inventory/suppliers/${id}/contact/`, { method, note }).then(r => r.data);
