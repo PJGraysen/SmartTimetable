@@ -2045,8 +2045,13 @@ class SolverModelBuilder:
         variables: list[AssignmentVariable],
     ) -> None:
         """
-        Force Grade 10 option blocks to use identical physical slots
-        in 10E and 10W.
+        Force option blocks to use identical physical slots within each
+        E/W stream pair (10E<->10W, 11E<->11W, ...).
+
+        Grade 10 and Grade 11 share the same elective-block contract:
+            Option 1 = COMP/CHEM, Option 2 = BIO/GEO/HIS,
+            Option 3 = PHY/LIT/MUSD, Option 4 = AGR/BUS
+        ICT remains STANDALONE.
 
         Form 3 and Form 4 use their own Senior School synchronization
         contract in the dedicated Senior School method.
@@ -2064,7 +2069,8 @@ class SolverModelBuilder:
             if group.is_active
         }
 
-        grade10_group_ids: dict[str, UUID] = {}
+        # Discover E/W stream pairs by grade prefix (10E<->10W, 11E<->11W)
+        pairs_by_grade: dict[str, dict[str, UUID]] = defaultdict(dict)
 
         for group_id, group in groups_by_id.items():
 
@@ -2078,11 +2084,29 @@ class SolverModelBuilder:
 
             normalized_code = str(group_code).strip().upper()
 
-            if normalized_code in {"10E", "10W"}:
-                grade10_group_ids[normalized_code] = group_id
+            if len(normalized_code) < 2:
+                continue
 
-        if set(grade10_group_ids) != {"10E", "10W"}:
+            stream = normalized_code[-1]
+            grade = normalized_code[:-1]
+
+            if stream in {"E", "W"} and grade:
+                pairs_by_grade[grade][stream] = group_id
+
+        complete_pairs: dict[str, dict[str, UUID]] = {
+            grade: pair
+            for grade, pair in pairs_by_grade.items()
+            if set(pair) == {"E", "W"}
+        }
+
+        if not complete_pairs:
             return
+
+        allowed_codes = {
+            f"{grade}{stream}"
+            for grade in complete_pairs
+            for stream in ("E", "W")
+        }
 
         variables_by_requirement: dict[
             UUID,
@@ -2118,7 +2142,7 @@ class SolverModelBuilder:
                 group_code
             ).strip().upper()
 
-            if normalized_group_code not in {"10E", "10W"}:
+            if normalized_group_code not in allowed_codes:
                 continue
 
             if not _is_block_requirement(requirement):
@@ -2138,121 +2162,127 @@ class SolverModelBuilder:
                 )
             ].append(requirement.id)
 
-        for block_definition in GRADE10_PARALLEL_BLOCKS:
+        for grade in complete_pairs:
 
-            block_code = block_definition.code
+            first_code = f"{grade}E"
+            second_code = f"{grade}W"
 
-            expected_subject_codes = {
-                str(code).strip().upper()
-                for code in block_definition.subject_codes
-            }
+            for block_definition in GRADE10_PARALLEL_BLOCKS:
 
-            representative_subject_code = str(
-                block_definition.subject_codes[0]
-            ).strip().upper()
+                block_code = block_definition.code
 
-            representative_ids: dict[str, UUID] = {}
-
-            for group_code in ("10E", "10W"):
-
-                requirement_ids = requirements_by_group_block.get(
-                    (group_code, block_code),
-                    [],
-                )
-
-                actual_subject_codes = {
-                    _normalized_subject_code(
-                        requirements_by_id[requirement_id]
-                    )
-                    for requirement_id in requirement_ids
+                expected_subject_codes = {
+                    str(code).strip().upper()
+                    for code in block_definition.subject_codes
                 }
 
-                missing_subjects = (
-                    expected_subject_codes - actual_subject_codes
+                representative_subject_code = str(
+                    block_definition.subject_codes[0]
+                ).strip().upper()
+
+                representative_ids: dict[str, UUID] = {}
+
+                for group_code in (first_code, second_code):
+
+                    requirement_ids = requirements_by_group_block.get(
+                        (group_code, block_code),
+                        [],
+                    )
+
+                    actual_subject_codes = {
+                        _normalized_subject_code(
+                            requirements_by_id[requirement_id]
+                        )
+                        for requirement_id in requirement_ids
+                    }
+
+                    missing_subjects = (
+                        expected_subject_codes - actual_subject_codes
+                    )
+
+                    if missing_subjects:
+                        raise ValueError(
+                            f"{grade} cross-class option block is incomplete "
+                            f"for {group_code}, block {block_code}: "
+                            f"missing {sorted(missing_subjects)}"
+                        )
+
+                    matching_requirements = [
+                        requirement_id
+                        for requirement_id in requirement_ids
+                        if _normalized_subject_code(
+                            requirements_by_id[requirement_id]
+                        ) == representative_subject_code
+                    ]
+
+                    if not matching_requirements:
+                        raise ValueError(
+                            f"{grade} cross-class option block has no "
+                            f"representative requirement "
+                            f"{representative_subject_code} for "
+                            f"{group_code}, block {block_code}."
+                        )
+
+                    representative_ids[group_code] = (
+                        matching_requirements[0]
+                    )
+
+                first_requirement_id = representative_ids[first_code]
+                second_requirement_id = representative_ids[second_code]
+
+                first_variables_by_slot: dict[
+                    tuple[str, UUID],
+                    list[cp_model.IntVar],
+                ] = defaultdict(list)
+
+                second_variables_by_slot: dict[
+                    tuple[str, UUID],
+                    list[cp_model.IntVar],
+                ] = defaultdict(list)
+
+                for variable in variables_by_requirement[
+                    first_requirement_id
+                ]:
+                    first_variables_by_slot[
+                        (
+                            variable.day,
+                            variable.period_id,
+                        )
+                    ].append(variable.variable)
+
+                for variable in variables_by_requirement[
+                    second_requirement_id
+                ]:
+                    second_variables_by_slot[
+                        (
+                            variable.day,
+                            variable.period_id,
+                        )
+                    ].append(variable.variable)
+
+                all_slot_keys = (
+                    set(first_variables_by_slot)
+                    | set(second_variables_by_slot)
                 )
 
-                if missing_subjects:
-                    raise ValueError(
-                        "Grade 10 cross-class option block is incomplete "
-                        f"for {group_code}, block {block_code}: "
-                        f"missing {sorted(missing_subjects)}"
-                    )
+                for slot_key in all_slot_keys:
 
-                matching_requirements = [
-                    requirement_id
-                    for requirement_id in requirement_ids
-                    if _normalized_subject_code(
-                        requirements_by_id[requirement_id]
-                    ) == representative_subject_code
-                ]
-
-                if not matching_requirements:
-                    raise ValueError(
-                        "Grade 10 cross-class option block has no "
-                        f"representative requirement "
-                        f"{representative_subject_code} for "
-                        f"{group_code}, block {block_code}."
-                    )
-
-                representative_ids[group_code] = (
-                    matching_requirements[0]
-                )
-
-            first_requirement_id = representative_ids["10E"]
-            second_requirement_id = representative_ids["10W"]
-
-            first_variables_by_slot: dict[
-                tuple[str, UUID],
-                list[cp_model.IntVar],
-            ] = defaultdict(list)
-
-            second_variables_by_slot: dict[
-                tuple[str, UUID],
-                list[cp_model.IntVar],
-            ] = defaultdict(list)
-
-            for variable in variables_by_requirement[
-                first_requirement_id
-            ]:
-                first_variables_by_slot[
-                    (
-                        variable.day,
-                        variable.period_id,
-                    )
-                ].append(variable.variable)
-
-            for variable in variables_by_requirement[
-                second_requirement_id
-            ]:
-                second_variables_by_slot[
-                    (
-                        variable.day,
-                        variable.period_id,
-                    )
-                ].append(variable.variable)
-
-            all_slot_keys = (
-                set(first_variables_by_slot)
-                | set(second_variables_by_slot)
-            )
-
-            for slot_key in all_slot_keys:
-
-                model.add(
-                    sum(
-                        first_variables_by_slot.get(
-                            slot_key,
-                            [],
+                    model.add(
+                        sum(
+                            first_variables_by_slot.get(
+                                slot_key,
+                                [],
+                            )
+                        )
+                        ==
+                        sum(
+                            second_variables_by_slot.get(
+                                slot_key,
+                                [],
+                            )
                         )
                     )
-                    ==
-                    sum(
-                        second_variables_by_slot.get(
-                            slot_key,
-                            [],
-                        )
-                    )
-                )
+
 
     # ------------------------------------------------------------------
     # Teacher clashes
