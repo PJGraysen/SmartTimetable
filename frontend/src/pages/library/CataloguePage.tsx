@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Search, BookOpen, Filter, X } from "lucide-react";
 import * as lib from "../../services/library";
-import LibraryTabs from "../../components/library/LibraryTabs";
 
 export default function CataloguePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -81,7 +80,6 @@ export default function CataloguePage() {
         <Link to="/library/catalogue/new" className="primary-button">Add Book</Link>
       </div>
 
-      <LibraryTabs />
 
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 320px", position: "relative" }}>

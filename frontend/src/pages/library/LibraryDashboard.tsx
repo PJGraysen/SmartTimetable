@@ -5,7 +5,6 @@ import {
   BookMarked, CheckCircle2, Library, Loader2,
 } from "lucide-react";
 import * as lib from "../../services/library";
-import LibraryTabs from "../../components/library/LibraryTabs";
 
 export default function LibraryDashboard() {
   const [stats, setStats] = useState<lib.LibraryDashboard | null>(null);
@@ -77,7 +76,6 @@ export default function LibraryDashboard() {
           </div>
         </div>
 
-        <LibraryTabs />
 
         {error ? <div className="tt-error">{error}</div> : null}
 
@@ -201,6 +199,13 @@ export default function LibraryDashboard() {
             </div>
           )}
         </section>
+
+        <section style={{ marginTop: "2rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem" }}>
+          <QuickLink to="/library/catalogue" icon={BookOpen} title="Catalogue" text="Browse and search the book collection." />
+          <QuickLink to="/library/members" icon={Users} title="Members" text="Students, teachers, and staff who borrow." />
+          <QuickLink to="/library/loans" icon={BookMarked} title="Loans" text="Active, overdue, and returned loans." />
+          <QuickLink to="/library/reports" icon={AlertTriangle} title="Reports" text="Circulation, inventory, top borrowers." />
+        </section>
       </div>
 
       <style>{`
@@ -289,5 +294,20 @@ export default function LibraryDashboard() {
         @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
+  );
+}
+
+
+function QuickLink({ to, icon: Icon, title, text }: { to: string; icon: any; title: string; text: string }) {
+  return (
+    <Link to={to} style={{
+      display: "block", background: "rgba(255,255,255,0.94)", border: "1px solid #e5e7eb",
+      borderRadius: "10px", padding: "1.25rem", textDecoration: "none", color: "inherit",
+      backdropFilter: "blur(2px)",
+    }}>
+      <Icon size={22} style={{ color: "#1e3a8a" }} />
+      <div style={{ fontWeight: 700, marginTop: "0.5rem", color: "#111827" }}>{title}</div>
+      <div style={{ color: "#748095", fontSize: "0.85rem", marginTop: "0.25rem" }}>{text}</div>
+    </Link>
   );
 }

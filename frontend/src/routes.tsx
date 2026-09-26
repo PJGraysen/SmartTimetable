@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import LibraryShell from "./components/library/LibraryShell";
 import ResourcesPage from "./pages/library/ResourcesPage";
 import ResourceViewerPage from "./pages/library/ResourceViewerPage";
 
@@ -105,19 +106,19 @@ export const PROTECTED_ROUTES: AppRoute[] = [
 
   { path: "/academic-analysis", element: <AnalysisDashboard /> },
 
-  { path: "/library", element: <LibraryDashboard /> },
-  { path: "/library/catalogue", element: <CataloguePage /> },
-  { path: "/library/catalogue/new", element: <BookFormPage /> },
-  { path: "/library/catalogue/:id", element: <BookDetailPage /> },
-  { path: "/library/members", element: <MembersPage /> },
-  { path: "/library/members/new", element: <MemberFormPage /> },
-  { path: "/library/members/:id", element: <MemberDetailPage /> },
-  { path: "/library/circulation", element: <CirculationPage /> },
-  { path: "/library/loans", element: <LoansPage /> },
-  { path: "/library/reports", element: <ReportsPage /> },
-  { path: "/library/resources", element: <ResourcesPage /> },
-  { path: "/library/resources/:id", element: <ResourceViewerPage /> },
-  { path: "/library/settings", element: <LoanRulesPage /> },
+  { path: "/library", element: <LibraryShell><LibraryDashboard /></LibraryShell> },
+  { path: "/library/catalogue", element: <LibraryShell><CataloguePage /></LibraryShell> },
+  { path: "/library/catalogue/new", element: <LibraryShell><BookFormPage /></LibraryShell> },
+  { path: "/library/catalogue/:id", element: <LibraryShell><BookDetailPage /></LibraryShell> },
+  { path: "/library/members", element: <LibraryShell><MembersPage /></LibraryShell> },
+  { path: "/library/members/new", element: <LibraryShell><MemberFormPage /></LibraryShell> },
+  { path: "/library/members/:id", element: <LibraryShell><MemberDetailPage /></LibraryShell> },
+  { path: "/library/circulation", element: <LibraryShell><CirculationPage /></LibraryShell> },
+  { path: "/library/loans", element: <LibraryShell><LoansPage /></LibraryShell> },
+  { path: "/library/reports", element: <LibraryShell><ReportsPage /></LibraryShell> },
+  { path: "/library/resources", element: <LibraryShell><ResourcesPage /></LibraryShell> },
+  { path: "/library/resources/:id", element: <LibraryShell><ResourceViewerPage /></LibraryShell> },
+  { path: "/library/settings", element: <LibraryShell><LoanRulesPage /></LibraryShell> },
 
   { path: "/validation", element: <Placeholder title="Validation" /> },
   { path: "/settings", element: <Placeholder title="Settings" /> },

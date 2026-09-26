@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ScanLine, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import * as lib from "../../services/library";
-import LibraryTabs from "../../components/library/LibraryTabs";
 
 export default function CirculationPage() {
   const [barcode, setBarcode] = useState("");
@@ -52,7 +51,6 @@ export default function CirculationPage() {
         <p style={{ color: "#748095" }}>Self-checkout and bulk return.</p>
       </div>
 
-      <LibraryTabs />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: "1.25rem" }}>
         <section style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "1.5rem" }}>

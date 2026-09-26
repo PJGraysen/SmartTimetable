@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Download, FileText, AlertTriangle, BookOpen, Users } from "lucide-react";
 import * as lib from "../../services/library";
-import LibraryTabs from "../../components/library/LibraryTabs";
 
 const REPORTS = [
   { name: "circulation", title: "Circulation", icon: BookOpen, text: "All loans issued with status and dates." },
@@ -44,7 +43,6 @@ export default function ReportsPage() {
         <p style={{ color: "#748095" }}>Download circulation, inventory and usage data.</p>
       </div>
 
-      <LibraryTabs />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
         {REPORTS.map((r) => {

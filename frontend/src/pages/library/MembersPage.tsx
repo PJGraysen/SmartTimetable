@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Users, RefreshCw, Wallet, Loader2 } from "lucide-react";
 import * as lib from "../../services/library";
-import LibraryTabs from "../../components/library/LibraryTabs";
 
 export default function MembersPage() {
   const [rows, setRows] = useState<lib.Member[]>([]);
@@ -67,7 +66,6 @@ export default function MembersPage() {
         </div>
       </div>
 
-      <LibraryTabs />
 
       {syncNotice ? (
         <div style={{ background: "#ecfdf5", border: "1px solid #86efac", color: "#065f46",

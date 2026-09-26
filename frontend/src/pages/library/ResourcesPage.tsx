@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Upload, FileText, Trash2, Loader2, Download } from "lucide-react";
 import * as lib from "../../services/library";
-import LibraryTabs from "../../components/library/LibraryTabs";
 
 const CATEGORIES: { value: lib.DigitalAssetCategory; label: string }[] = [
   { value: "PAST_PAPER", label: "Past Papers" },
@@ -96,7 +95,6 @@ export default function ResourcesPage() {
         </button>
       </div>
 
-      <LibraryTabs />
 
       {showUpload ? (
         <section style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "10px",
