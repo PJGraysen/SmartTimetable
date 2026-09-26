@@ -167,10 +167,11 @@ class Command(BaseCommand):
         self.stdout.write("")
 
         no_objective_proto = copy.deepcopy(production_proto)
-        no_objective_proto.ClearField("objective")
+        # Clear the objective via the wrapper field
+        no_objective_proto.objective.copy_from(type(no_objective_proto.objective)())
 
         no_objective_model = cp_model.CpModel()
-        no_objective_model.Proto().CopyFrom(
+        no_objective_model.Proto().copy_from(
             no_objective_proto
         )
 
