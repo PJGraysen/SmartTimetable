@@ -1,4 +1,6 @@
 import type { ReactElement } from "react";
+import ResourcesPage from "./pages/library/ResourcesPage";
+import ResourceViewerPage from "./pages/library/ResourceViewerPage";
 
 import LoginPage from "./pages/LoginPage";
 import HomeHub from "./pages/HomeHub";
@@ -113,6 +115,8 @@ export const PROTECTED_ROUTES: AppRoute[] = [
   { path: "/library/circulation", element: <CirculationPage /> },
   { path: "/library/loans", element: <LoansPage /> },
   { path: "/library/reports", element: <ReportsPage /> },
+  { path: "/library/resources", element: <ResourcesPage /> },
+  { path: "/library/resources/:id", element: <ResourceViewerPage /> },
   { path: "/library/settings", element: <LoanRulesPage /> },
 
   { path: "/validation", element: <Placeholder title="Validation" /> },

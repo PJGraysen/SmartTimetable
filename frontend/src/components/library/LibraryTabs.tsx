@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 const TABS = [
   { to: "/library", label: "Dashboard", end: true },
   { to: "/library/catalogue", label: "Catalogue" },
+  { to: "/library/resources", label: "Resources" },
   { to: "/library/circulation", label: "Circulation" },
   { to: "/library/members", label: "Members" },
   { to: "/library/loans", label: "Loans" },

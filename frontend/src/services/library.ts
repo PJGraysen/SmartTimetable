@@ -266,7 +266,7 @@ export async function lookupBookByIsbn(isbn: string): Promise<BookLookupResult> 
 
 
 // --- L1 subjects (learning categories) ---
-export type Subject = { id: string; name: string; code: string };
+export type Subject = { id: string; name: string; code: string; icon?: string; colour?: string; thumbnail_url?: string };
 
 export type SubjectSummaryRow = {
   id: string;
@@ -398,4 +398,59 @@ export async function registerCopyInInventory(copyId: string) {
 export async function registerAllCopiesInInventory() {
   const { data } = await http.post("/library/copies/register-all-inventory/");
   return data as { scanned: number; created: number; errors: number; total_copies: number };
+}
+
+
+// ================================================================
+// L4 — DAM resources
+// ================================================================
+export type DigitalAssetFormat = "PDF" | "EPUB" | "DOCX" | "PPTX" | "AUDIO" | "VIDEO" | "OTHER";
+export type DigitalAssetCategory =
+  | "PAST_PAPER" | "SYLLABUS" | "RESEARCH" | "NOTES"
+  | "TEACHER_RESOURCE" | "EBOOK" | "AUDIOBOOK" | "OTHER";
+
+export type DigitalAsset = {
+  id: string;
+  title: string;
+  description: string;
+  format: DigitalAssetFormat;
+  category: DigitalAssetCategory;
+  size_bytes: number;
+  subject: { id: string; name: string; code: string } | null;
+  book_id: string | null;
+  allow_download: boolean;
+  allow_print: boolean;
+  read_only: boolean;
+  watermark_text: string;
+  view_count: number;
+  download_count: number;
+  uploaded_by: string;
+  created_at: string;
+};
+
+export async function listResources(params: { category?: string; subject?: string; q?: string } = {}) {
+  const { data } = await http.get("/library/resources/", { params });
+  return (data?.resources ?? []) as DigitalAsset[];
+}
+
+export async function getResource(id: string) {
+  const { data } = await http.get(`/library/resources/${id}/`);
+  return data as DigitalAsset;
+}
+
+export async function uploadResource(form: FormData) {
+  const { data } = await http.post("/library/resources/", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data as { ok: boolean; id: string; format: string; size_bytes: number };
+}
+
+export async function deleteResource(id: string) {
+  const { data } = await http.delete(`/library/resources/${id}/delete/`);
+  return data as { ok: boolean };
+}
+
+export function resourceStreamUrl(id: string, mode: "view" | "download" = "view") {
+  const base = (http.defaults?.baseURL || "/api").replace(/\/$/, "");
+  return `${base}/library/resources/${id}/${mode}/`;
 }
