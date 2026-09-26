@@ -38,6 +38,7 @@ class BookSerializer(serializers.ModelSerializer):
     publisher = PublisherSerializer(read_only=True)
     copy_count = serializers.SerializerMethodField()
     available_copy_count = serializers.SerializerMethodField()
+    read_asset = serializers.SerializerMethodField()
 
     # --- L1 pro cataloguing: convenience fields ---
     authors_text = serializers.CharField(
@@ -57,7 +58,7 @@ class BookSerializer(serializers.ModelSerializer):
             "authors", "categories", "is_active",
             "ddc", "lcc", "toc", "page_count", "source", "source_id", "marc21",
             "authors_text", "publisher_name",
-            "copy_count", "available_copy_count",
+            "copy_count", "available_copy_count", "read_asset",
             "created_at", "updated_at",
         ]
 
@@ -66,6 +67,23 @@ class BookSerializer(serializers.ModelSerializer):
 
     def get_available_copy_count(self, obj):
         return obj.copies.filter(status=Copy.Status.AVAILABLE).count()
+
+
+
+    def get_read_asset(self, obj):
+        """Return a compact descriptor of the book's readable digital asset, if any."""
+        asset = obj.digital_assets.filter(is_active=True).order_by("-created_at").first()
+        if not asset:
+            return None
+        return {
+            "id": str(asset.id),
+            "title": asset.title,
+            "format": asset.format,
+            "allow_download": asset.allow_download,
+            "allow_print": asset.allow_print,
+            "read_only": asset.read_only,
+            "watermark_text": asset.watermark_text,
+        }
 
     def create(self, validated_data):
         authors_text = validated_data.pop("authors_text", "") or ""

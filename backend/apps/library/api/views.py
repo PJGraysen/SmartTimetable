@@ -1094,3 +1094,192 @@ def dam_delete(request, pk):
     a.is_active = False
     a.save(update_fields=["is_active", "updated_at"])
     return Response({"ok": True})
+
+
+# =====================================================================
+# L6 — Audits
+# =====================================================================
+from apps.library.models import InventoryAudit as _IA, InventoryAuditLine as _IAL
+from apps.library.services.audit import (
+    start_audit as _start_audit, scan_barcode as _scan_barcode, finish_audit as _finish_audit,
+)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def audits(request):
+    if request.method == "GET":
+        qs = _IA.objects.order_by("-started_at")[:60]
+        return Response({"audits": [{
+            "id": str(a.id), "scope": a.scope, "status": a.status,
+            "started_at": a.started_at, "finished_at": a.finished_at,
+            "total_expected": a.total_expected, "total_scanned": a.total_scanned,
+            "total_missing": a.total_missing, "total_misplaced": a.total_misplaced,
+            "shelf": ({"id": str(a.shelf.id), "code": a.shelf.code} if a.shelf else None),
+        } for a in qs]})
+    scope = (request.data.get("scope") or "FULL").upper()
+    shelf_id = request.data.get("shelf_id") or None
+    shelf = None
+    if scope == "SHELF" and shelf_id:
+        from apps.library.models import Shelf as _S
+        shelf = _S.objects.filter(id=shelf_id).first()
+    audit = _start_audit(scope=scope, shelf=shelf, user=request.user)
+    return Response({"ok": True, "id": str(audit.id), "total_expected": audit.total_expected})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def audit_detail(request, pk):
+    a = _IA.objects.filter(id=pk).first()
+    if not a: return Response({"error": "not found"}, status=404)
+    lines = a.lines.select_related("copy__book").order_by("-scanned_at", "barcode_scanned")[:300]
+    return Response({
+        "id": str(a.id), "scope": a.scope, "status": a.status,
+        "started_at": a.started_at, "finished_at": a.finished_at,
+        "total_expected": a.total_expected, "total_scanned": a.total_scanned,
+        "total_missing": a.total_missing, "total_misplaced": a.total_misplaced,
+        "lines": [{
+            "id": str(l.id), "barcode": l.barcode_scanned or (l.copy.barcode if l.copy else ""),
+            "book_title": (l.copy.book.title if l.copy and l.copy.book else ""),
+            "expected_shelf": l.expected_shelf, "result": l.result, "scanned_at": l.scanned_at,
+        } for l in lines],
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def audit_scan(request, pk):
+    a = _IA.objects.filter(id=pk).first()
+    if not a: return Response({"error": "not found"}, status=404)
+    if a.status != _IA.Status.OPEN: return Response({"error": "audit is not open"}, status=409)
+    barcode = (request.data.get("barcode") or "").strip()
+    if not barcode: return Response({"error": "barcode required"}, status=400)
+    line = _scan_barcode(audit=a, barcode=barcode, user=request.user)
+    return Response({
+        "ok": True, "line_id": str(line.id), "result": line.result,
+        "barcode": line.barcode_scanned,
+        "book_title": (line.copy.book.title if line.copy and line.copy.book else ""),
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def audit_finish(request, pk):
+    a = _IA.objects.filter(id=pk).first()
+    if not a: return Response({"error": "not found"}, status=404)
+    _finish_audit(audit=a, user=request.user)
+    return Response({"ok": True, "status": a.status, "total_expected": a.total_expected,
+                     "total_scanned": a.total_scanned, "total_missing": a.total_missing,
+                     "total_misplaced": a.total_misplaced})
+
+
+# =====================================================================
+# Student portal
+# =====================================================================
+def _resolve_member_for_user(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return None
+    m = Member.objects.filter(user=user).first()
+    if m: return m
+    t = getattr(user, "teacher_profile", None)
+    if t is not None:
+        return Member.objects.filter(teacher=t).first()
+    s = getattr(user, "student_profile", None)
+    if s is not None:
+        return Member.objects.filter(student=s).first()
+    return None
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def portal_me(request):
+    member = _resolve_member_for_user(request.user)
+    if not member:
+        return Response({"linked": False, "message": "Your account is not yet linked to a library membership."})
+    from django.utils import timezone
+    now = timezone.now()
+    active = Loan.objects.filter(member=member, status=Loan.Status.ACTIVE).select_related("copy__book").order_by("due_at")
+    history = Loan.objects.filter(member=member).exclude(status=Loan.Status.ACTIVE).select_related("copy__book").order_by("-returned_at")[:50]
+    return Response({
+        "linked": True,
+        "member": {"id": str(member.id), "member_number": member.member_number,
+                   "full_name": member.full_name, "member_type": member.member_type},
+        "active_loans": [{
+            "id": str(l.id), "book_title": l.copy.book.title if l.copy and l.copy.book else "",
+            "copy_barcode": l.copy.barcode if l.copy else "",
+            "issued_at": l.issued_at, "due_at": l.due_at,
+            "overdue_days": max(0, (now - l.due_at).days) if l.due_at < now else 0,
+            "renewals_used": l.renewal_count,
+        } for l in active],
+        "history": [{
+            "id": str(l.id), "book_title": l.copy.book.title if l.copy and l.copy.book else "",
+            "issued_at": l.issued_at, "returned_at": l.returned_at, "status": l.status,
+        } for l in history],
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def portal_recommendations(request):
+    member = _resolve_member_for_user(request.user)
+    if not member or not member.student_id:
+        return Response({"recommendations": []})
+    from apps.academics.models import StudentEnrollment as _SE, LessonRequirement as _LR
+    enr = _SE.objects.filter(student=member.student, is_active=True).select_related("instructional_group").first()
+    codes = set()
+    if enr and enr.instructional_group:
+        codes = {lr.subject.code for lr in _LR.objects.filter(
+            instructional_group=enr.instructional_group, is_active=True).select_related("subject") if lr.subject}
+    qs = Book.objects.filter(is_active=True, subjects__code__in=codes).distinct()[:24]
+    return Response({"recommendations": [{
+        "id": str(b.id), "title": b.title, "cover_url": b.cover_url,
+        "subjects": [s.code for s in b.subjects.all()],
+    } for b in qs]})
+
+
+# =====================================================================
+# Analytics
+# =====================================================================
+from django.db.models import Count as _Count
+from django.db.models.functions import TruncDate as _TruncDate, ExtractWeekDay as _EWD
+from datetime import timedelta as _td
+from django.utils import timezone as _tz
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def analytics_circulation(request):
+    days = max(7, min(int(request.query_params.get("days") or 30), 180))
+    start = _tz.now() - _td(days=days)
+    qs = (Loan.objects.filter(issued_at__gte=start)
+          .annotate(d=_TruncDate("issued_at")).values("d").annotate(n=_Count("id")).order_by("d"))
+    return Response({"days": days, "series": [{"date": r["d"].isoformat(), "count": r["n"]} for r in qs]})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def analytics_subject_mix(request):
+    from apps.academics.models import Subject as _S
+    rows = [{"subject": s.code, "name": s.name,
+             "count": Book.objects.filter(subjects=s, is_active=True).count()}
+            for s in _S.objects.filter(is_active=True)]
+    rows = [r for r in rows if r["count"] > 0]
+    rows.sort(key=lambda r: -r["count"])
+    return Response({"subjects": rows})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def analytics_peak_periods(request):
+    start = _tz.now() - _td(days=90)
+    qs = (Loan.objects.filter(issued_at__gte=start)
+          .annotate(d=_EWD("issued_at")).values("d").annotate(n=_Count("id")).order_by("d"))
+    names = {1: "Sun", 2: "Mon", 3: "Tue", 4: "Wed", 5: "Thu", 6: "Fri", 7: "Sat"}
+    return Response({"by_weekday": [{"day": names.get(r["d"], str(r["d"])), "count": r["n"]} for r in qs]})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def analytics_top_titles(request):
+    qs = Book.objects.annotate(loans_n=_Count("copies__loans")).filter(loans_n__gt=0).order_by("-loans_n")[:20]
+    return Response({"titles": [{"id": str(b.id), "title": b.title, "loans": b.loans_n} for b in qs]})

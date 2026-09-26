@@ -311,6 +311,11 @@ class Student(TimeStampedModel):
     """
 
     admission_number = models.CharField(max_length=50, unique=True)
+    user = models.OneToOneField(
+        "auth.User", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="student_profile",
+        help_text="Portal login for this student.",
+    )
     first_name = models.CharField(max_length=100)
     middle_name = models.CharField(max_length=100, blank=True, default="")
     last_name = models.CharField(max_length=100)

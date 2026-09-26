@@ -1,4 +1,8 @@
 import type { ReactElement } from "react";
+import AnalyticsPage from "./pages/library/AnalyticsPage";
+import StudentPortalPage from "./pages/library/StudentPortalPage";
+import AuditsPage from "./pages/library/AuditsPage";
+import BookReaderPage from "./pages/library/BookReaderPage";
 import LibraryShell from "./components/library/LibraryShell";
 import ResourcesPage from "./pages/library/ResourcesPage";
 import ResourceViewerPage from "./pages/library/ResourceViewerPage";
@@ -110,12 +114,16 @@ export const PROTECTED_ROUTES: AppRoute[] = [
   { path: "/library/catalogue", element: <LibraryShell><CataloguePage /></LibraryShell> },
   { path: "/library/catalogue/new", element: <LibraryShell><BookFormPage /></LibraryShell> },
   { path: "/library/catalogue/:id", element: <LibraryShell><BookDetailPage /></LibraryShell> },
+  { path: "/library/read/:bookId", element: <LibraryShell><BookReaderPage /></LibraryShell> },
   { path: "/library/members", element: <LibraryShell><MembersPage /></LibraryShell> },
   { path: "/library/members/new", element: <LibraryShell><MemberFormPage /></LibraryShell> },
   { path: "/library/members/:id", element: <LibraryShell><MemberDetailPage /></LibraryShell> },
   { path: "/library/circulation", element: <LibraryShell><CirculationPage /></LibraryShell> },
   { path: "/library/loans", element: <LibraryShell><LoansPage /></LibraryShell> },
   { path: "/library/reports", element: <LibraryShell><ReportsPage /></LibraryShell> },
+  { path: "/library/audits", element: <LibraryShell><AuditsPage /></LibraryShell> },
+  { path: "/library/analytics", element: <LibraryShell><AnalyticsPage /></LibraryShell> },
+  { path: "/library/my", element: <LibraryShell><StudentPortalPage /></LibraryShell> },
   { path: "/library/resources", element: <LibraryShell><ResourcesPage /></LibraryShell> },
   { path: "/library/resources/:id", element: <LibraryShell><ResourceViewerPage /></LibraryShell> },
   { path: "/library/settings", element: <LibraryShell><LoanRulesPage /></LibraryShell> },

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, type FormEvent } from "react";
+﻿import { BookOpen, useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Plus } from "lucide-react";
 import * as lib from "../../services/library";
@@ -49,6 +49,16 @@ export default function BookDetailPage() {
 
       <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "1.5rem", marginBottom: "1.5rem" }}>
         <h1 style={{ margin: 0 }}>{book.title}</h1>
+        <div style={{ marginTop: "0.5rem" }}>
+          {book.read_asset ? (
+            <Link to={`/library/read/${book.id}`}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem",
+                           padding: "0.55rem 1rem", borderRadius: 6, background: "#1e3a8a",
+                           color: "#fff", fontWeight: 700, textDecoration: "none" }}>
+              <BookOpen size={15} /> Read online
+            </Link>
+          ) : null}
+        </div>
         {book.subtitle ? <p style={{ color: "#748095", marginTop: "0.35rem" }}>{book.subtitle}</p> : null}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginTop: "1rem" }}>

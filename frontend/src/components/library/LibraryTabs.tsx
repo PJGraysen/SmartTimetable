@@ -9,7 +9,10 @@ const TABS = [
   { to: "/library/loans", label: "Loans" },
   { to: "/library/reservations", label: "Reservations" },
   { to: "/library/reports", label: "Reports" },
+  { to: "/library/audits", label: "Audits" },
+  { to: "/library/analytics", label: "Analytics" },
   { to: "/library/rules", label: "Loan Rules" },
+  { to: "/library/my", label: "My Library" },
 ];
 
 export default function LibraryTabs() {

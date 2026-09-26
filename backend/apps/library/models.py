@@ -473,3 +473,62 @@ class DigitalAssetView(models.Model):
 
     def __str__(self):
         return f"{self.action} {self.asset_id} by {self.user_id}"
+
+
+
+# =========================================================================
+# L6 — Inventory audit
+# =========================================================================
+class InventoryAudit(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "In progress"
+        FINISHED = "FINISHED", "Finished"
+        CANCELLED = "CANCELLED", "Cancelled"
+    class Scope(models.TextChoices):
+        FULL = "FULL", "All copies"
+        SHELF = "SHELF", "Specific shelf"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    scope = models.CharField(max_length=16, choices=Scope.choices, default=Scope.FULL)
+    shelf = models.ForeignKey(Shelf, null=True, blank=True, on_delete=models.SET_NULL, related_name="audits")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN, db_index=True)
+    started_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="library_audits_started")
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    total_expected = models.PositiveIntegerField(default=0)
+    total_scanned = models.PositiveIntegerField(default=0)
+    total_missing = models.PositiveIntegerField(default=0)
+    total_misplaced = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-started_at"]
+        db_table = "library_inventory_audit"
+
+    def __str__(self):
+        return f"Audit {self.id} ({self.status})"
+
+
+class InventoryAuditLine(models.Model):
+    class Result(models.TextChoices):
+        MATCH = "MATCH", "Match (in place)"
+        MISPLACED = "MISPLACED", "Misplaced"
+        MISSING = "MISSING", "Missing"
+        UNKNOWN = "UNKNOWN", "Unknown barcode"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    audit = models.ForeignKey(InventoryAudit, on_delete=models.CASCADE, related_name="lines")
+    copy = models.ForeignKey(Copy, null=True, blank=True, on_delete=models.SET_NULL, related_name="audit_lines")
+    barcode_scanned = models.CharField(max_length=60, blank=True, default="")
+    expected_shelf = models.CharField(max_length=32, blank=True, default="")
+    scanned_at = models.DateTimeField(null=True, blank=True)
+    result = models.CharField(max_length=10, choices=Result.choices, default=Result.UNKNOWN, db_index=True)
+    notes = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-scanned_at", "barcode_scanned"]
+        db_table = "library_inventory_audit_line"
+        indexes = [models.Index(fields=["audit", "result"])]
+
+    def __str__(self):
+        return f"{self.barcode_scanned} [{self.result}]"

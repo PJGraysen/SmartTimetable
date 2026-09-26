@@ -91,3 +91,27 @@ urlpatterns += [
     path("resources/<uuid:pk>/download/", _dam_download_stream, name="library-resource-download"),
     path("resources/<uuid:pk>/delete/", _dam_delete, name="library-resource-delete"),
 ]
+
+from apps.library.api.views import audits as _audits
+from apps.library.api.views import audit_detail as _audit_detail
+from apps.library.api.views import audit_scan as _audit_scan
+from apps.library.api.views import audit_finish as _audit_finish
+from apps.library.api.views import portal_me as _portal_me
+from apps.library.api.views import portal_recommendations as _portal_recs
+from apps.library.api.views import analytics_circulation as _ana_circ
+from apps.library.api.views import analytics_subject_mix as _ana_subj
+from apps.library.api.views import analytics_peak_periods as _ana_peak
+from apps.library.api.views import analytics_top_titles as _ana_titles
+
+urlpatterns += [
+    path("audits/", _audits, name="library-audits"),
+    path("audits/<uuid:pk>/", _audit_detail, name="library-audit-detail"),
+    path("audits/<uuid:pk>/scan/", _audit_scan, name="library-audit-scan"),
+    path("audits/<uuid:pk>/finish/", _audit_finish, name="library-audit-finish"),
+    path("portal/me/", _portal_me, name="library-portal-me"),
+    path("portal/recommendations/", _portal_recs, name="library-portal-recommendations"),
+    path("analytics/circulation/", _ana_circ, name="library-analytics-circulation"),
+    path("analytics/subject-mix/", _ana_subj, name="library-analytics-subject-mix"),
+    path("analytics/peak-periods/", _ana_peak, name="library-analytics-peak-periods"),
+    path("analytics/top-titles/", _ana_titles, name="library-analytics-top-titles"),
+]

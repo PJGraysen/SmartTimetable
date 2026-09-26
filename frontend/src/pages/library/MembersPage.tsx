@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { Users, RefreshCw, Wallet, Loader2 } from "lucide-react";
 import * as lib from "../../services/library";
@@ -130,10 +131,10 @@ export default function MembersPage() {
         </table>
       )}
 
-      {feeMember ? (
+      {feeMember ? createPortal((
         <div onClick={() => setFeeMember(null)}
              style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)",
-                      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+                      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
           <div onClick={(e) => e.stopPropagation()}
                style={{ background: "#fff", borderRadius: "10px", padding: "1.5rem",
                         maxWidth: 600, width: "90%", maxHeight: "80vh", overflowY: "auto" }}>
@@ -181,7 +182,7 @@ export default function MembersPage() {
             )}
           </div>
         </div>
-      ) : null}
+      ), document.body) : null}
 
       <style>{`
         .spin { animation: spin 1s linear infinite; }

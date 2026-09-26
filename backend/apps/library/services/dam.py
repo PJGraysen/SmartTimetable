@@ -104,6 +104,52 @@ def _file_chunks(path, chunk=65536):
             yield data
 
 
+
+
+def _watermark_pdf(path: str, text: str):
+    """Return watermarked PDF bytes, or None."""
+    if not text:
+        return None
+    try:
+        from io import BytesIO
+        from pypdf import PdfReader, PdfWriter
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import A4
+    except Exception:
+        return None
+    try:
+        buf = BytesIO()
+        c = canvas.Canvas(buf, pagesize=A4)
+        c.saveState()
+        c.setFont("Helvetica-Bold", 48)
+        try:
+            c.setFillAlpha(0.14)
+        except Exception:
+            pass
+        c.setFillColorRGB(0.4, 0.15, 0.15)
+        c.translate(280, 420)
+        c.rotate(40)
+        c.drawString(-220, 0, text[:80])
+        c.restoreState()
+        c.save()
+        buf.seek(0)
+        overlay = PdfReader(buf)
+
+        reader = PdfReader(path)
+        writer = PdfWriter()
+        overlay_page = overlay.pages[0] if overlay.pages else None
+        for page in reader.pages:
+            if overlay_page is not None:
+                page.merge_page(overlay_page)
+            writer.add_page(page)
+        writer.add_metadata({"/Watermark": text, "/Producer": "SmartTimetable Pro Library"})
+        out = BytesIO()
+        writer.write(out)
+        return out.getvalue()
+    except Exception:
+        return None
+
+
 def serve_asset(asset: DigitalAsset, *, user, action: str, request=None):
     """
     Stream the asset. Enforces allow_download, read_only, expires_at.
@@ -129,8 +175,20 @@ def serve_asset(asset: DigitalAsset, *, user, action: str, request=None):
     disposition = "inline" if action == "view" else "attachment"
     filename = os.path.basename(path)
 
-    resp = StreamingHttpResponse(_file_chunks(path), content_type=ctype)
-    resp["Content-Length"] = str(asset.size_bytes or os.path.getsize(path))
+    body = None
+    size = asset.size_bytes or os.path.getsize(path)
+    if asset.watermark_text and path.lower().endswith(".pdf"):
+        wm = _watermark_pdf(path, asset.watermark_text)
+        if wm:
+            body = wm
+            size = len(wm)
+
+    if body is not None:
+        from django.http import HttpResponse as _HR
+        resp = _HR(body, content_type=ctype)
+    else:
+        resp = StreamingHttpResponse(_file_chunks(path), content_type=ctype)
+    resp["Content-Length"] = str(size)
     resp["Content-Disposition"] = f'{disposition}; filename="{filename}"'
     resp["X-DRM-ReadOnly"] = "1" if asset.read_only else "0"
     resp["X-DRM-Allow-Download"] = "1" if asset.allow_download else "0"

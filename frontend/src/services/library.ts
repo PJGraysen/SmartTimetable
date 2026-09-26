@@ -26,6 +26,7 @@ export type Book = {
   categories: Category[];
   is_active: boolean;
   copy_count: number;
+  read_asset?: { id: string; title: string; format: string; allow_download: boolean; allow_print: boolean; read_only: boolean; watermark_text: string } | null;
   available_copy_count: number;
 };
 
@@ -453,4 +454,76 @@ export async function deleteResource(id: string) {
 export function resourceStreamUrl(id: string, mode: "view" | "download" = "view") {
   const base = (http.defaults?.baseURL || "/api").replace(/\/$/, "");
   return `${base}/library/resources/${id}/${mode}/`;
+}
+
+
+// ================================================================
+// L6 — Audits
+// ================================================================
+export type AuditLineResult = "MATCH" | "MISPLACED" | "MISSING" | "UNKNOWN";
+export type AuditRow = { id: string; scope: string; status: string;
+  started_at: string; finished_at: string | null;
+  total_expected: number; total_scanned: number;
+  total_missing: number; total_misplaced: number;
+  shelf: { id: string; code: string } | null; };
+export type AuditLine = { id: string; barcode: string; book_title: string;
+  expected_shelf: string; result: AuditLineResult; scanned_at: string | null; };
+
+export async function listAudits() {
+  const { data } = await http.get("/library/audits/");
+  return (data?.audits ?? []) as AuditRow[];
+}
+export async function startAudit(scope = "FULL", shelfId?: string) {
+  const { data } = await http.post("/library/audits/", { scope, shelf_id: shelfId });
+  return data as { ok: boolean; id: string; total_expected: number };
+}
+export async function getAudit(id: string) {
+  const { data } = await http.get(`/library/audits/${id}/`);
+  return data as AuditRow & { lines: AuditLine[] };
+}
+export async function scanAuditBarcode(auditId: string, barcode: string) {
+  const { data } = await http.post(`/library/audits/${auditId}/scan/`, { barcode });
+  return data as { ok: boolean; line_id: string; result: AuditLineResult; barcode: string; book_title: string };
+}
+export async function finishAudit(auditId: string) {
+  const { data } = await http.post(`/library/audits/${auditId}/finish/`);
+  return data as AuditRow;
+}
+
+// ================================================================
+// Student portal
+// ================================================================
+export type PortalLoan = { id: string; book_title: string; copy_barcode: string;
+  issued_at: string; due_at: string; overdue_days: number; renewals_used: number; };
+
+export async function portalMe() {
+  const { data } = await http.get("/library/portal/me/");
+  return data as { linked: boolean; message?: string;
+    member?: { id: string; member_number: string; full_name: string; member_type: string };
+    active_loans?: PortalLoan[];
+    history?: { id: string; book_title: string; issued_at: string; returned_at: string | null; status: string }[]; };
+}
+export async function portalRecommendations() {
+  const { data } = await http.get("/library/portal/recommendations/");
+  return (data?.recommendations ?? []) as { id: string; title: string; cover_url: string; subjects: string[] }[];
+}
+
+// ================================================================
+// Analytics
+// ================================================================
+export async function analyticsCirculation(days = 30) {
+  const { data } = await http.get("/library/analytics/circulation/", { params: { days } });
+  return data as { days: number; series: { date: string; count: number }[] };
+}
+export async function analyticsSubjectMix() {
+  const { data } = await http.get("/library/analytics/subject-mix/");
+  return data as { subjects: { subject: string; name: string; count: number }[] };
+}
+export async function analyticsPeakPeriods() {
+  const { data } = await http.get("/library/analytics/peak-periods/");
+  return data as { by_weekday: { day: string; count: number }[] };
+}
+export async function analyticsTopTitles() {
+  const { data } = await http.get("/library/analytics/top-titles/");
+  return data as { titles: { id: string; title: string; loans: number }[] };
 }
