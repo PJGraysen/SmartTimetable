@@ -285,3 +285,68 @@ export async function getSubjectSummary(): Promise<SubjectSummaryRow[]> {
   const { data } = await http.get("/library/catalogue/subject-summary/");
   return (data?.subjects ?? []) as SubjectSummaryRow[];
 }
+
+
+// ================================================================
+// L2 — Circulation quick actions
+// ================================================================
+export async function selfCheckout(payload: { barcode: string; member_number: string }) {
+  const { data } = await http.post("/library/circulation/self-checkout/", payload);
+  return data as { ok: boolean; loan_id: string; book_title: string; member_name: string; due_at: string };
+}
+
+export async function bulkReturn(barcodes: string[]) {
+  const { data } = await http.post("/library/circulation/bulk-return/", { barcodes });
+  return data as {
+    processed: number;
+    succeeded: number;
+    results: { barcode: string; ok: boolean; error: string }[];
+  };
+}
+
+// ================================================================
+// L5 — Faceted catalogue search
+// ================================================================
+export type CatalogueSearchRow = {
+  id: string;
+  title: string;
+  subtitle: string;
+  isbn: string;
+  published_year: number | null;
+  cover_url: string;
+  authors: { id: string; name: string }[];
+  subjects: { id: string; name: string; code: string }[];
+  publisher: string;
+  copy_count: number;
+  available_copy_count: number;
+};
+
+export type CatalogueSearchParams = {
+  q?: string;
+  subject?: string;
+  author?: string;
+  year_from?: string | number;
+  year_to?: string | number;
+  availability?: "available" | "";
+};
+
+export async function catalogueSearch(params: CatalogueSearchParams = {}) {
+  const { data } = await http.get("/library/catalogue/search/", { params });
+  return data as { results: CatalogueSearchRow[]; count: number };
+}
+
+// ================================================================
+// L7 — Report export
+// ================================================================
+export function reportExportUrl(reportName: string, format: "csv" | "json" = "csv"): string {
+  const base = (http.defaults?.baseURL || "/api").replace(/\/$/, "");
+  return `${base}/library/reports/${reportName}/export/?format=${format}`;
+}
+
+export async function downloadReport(reportName: string, format: "csv" | "json" = "csv") {
+  const { data } = await http.get(`/library/reports/${reportName}/export/`, {
+    params: { format },
+    responseType: format === "csv" ? "blob" : "json",
+  });
+  return data;
+}
