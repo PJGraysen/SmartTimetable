@@ -163,6 +163,16 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# ---- Media (L4 digital assets) ----
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# ---- Upload limits ----
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024      # 10 MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024     # 100 MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
+
+
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration

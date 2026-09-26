@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 """
 URL configuration for SmartTimetable Pro.
 """
@@ -81,3 +83,8 @@ from apps.core.api.views import SchoolEventViewSet
 _events_router = DefaultRouter()
 _events_router.register("api/core/events", SchoolEventViewSet, basename="school-event")
 urlpatterns = urlpatterns + _events_router.urls
+
+
+# ---- Serve uploaded media in dev ----
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

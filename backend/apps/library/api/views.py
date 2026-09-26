@@ -966,3 +966,131 @@ def post_loan_fine(request, loan_id):
     return Response({
         "ok": True, "entry_id": str(entry.id), "balance_after": str(entry.account.balance),
     })
+
+
+# =====================================================================
+# L4 — DAM
+# =====================================================================
+from apps.library.models import DigitalAsset as _DA
+from apps.library.services.dam import (
+    save_asset as _save_asset,
+    serve_asset as _serve_asset,
+    DAMError as _DAMError,
+)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def dam_resources(request):
+    """GET  list  | POST upload"""
+    if request.method == "GET":
+        qs = _DA.objects.filter(is_active=True).select_related("subject", "book", "uploaded_by")
+        cat = (request.query_params.get("category") or "").strip()
+        if cat: qs = qs.filter(category=cat)
+        subj = (request.query_params.get("subject") or "").strip()
+        if subj: qs = qs.filter(subject__code__iexact=subj)
+        q = (request.query_params.get("q") or "").strip()
+        if q: qs = qs.filter(title__icontains=q)
+        qs = qs.order_by("-created_at")[:300]
+        rows = [{
+            "id": str(a.id), "title": a.title, "description": a.description,
+            "format": a.format, "category": a.category,
+            "size_bytes": a.size_bytes, "subject": (
+                {"id": str(a.subject.id), "name": a.subject.name, "code": a.subject.code}
+                if a.subject else None
+            ),
+            "book_id": str(a.book.id) if a.book else None,
+            "allow_download": a.allow_download, "read_only": a.read_only,
+            "watermark_text": a.watermark_text,
+            "view_count": a.view_count, "download_count": a.download_count,
+            "uploaded_by": str(a.uploaded_by) if a.uploaded_by else "",
+            "created_at": a.created_at,
+        } for a in qs]
+        return Response({"resources": rows})
+
+    # POST upload
+    file = request.FILES.get("file")
+    title = (request.data.get("title") or "").strip()
+    if not file or not title:
+        return Response({"error": "file and title are required"}, status=400)
+    subject_id = request.data.get("subject_id") or None
+    book_id = request.data.get("book_id") or None
+    category = (request.data.get("category") or "OTHER").strip()
+    desc = (request.data.get("description") or "").strip()
+    allow_dl = str(request.data.get("allow_download") or "false").lower() in ("1", "true", "yes")
+    allow_pr = str(request.data.get("allow_print") or "false").lower() in ("1", "true", "yes")
+    wm = (request.data.get("watermark_text") or "").strip()
+    expires = request.data.get("expires_at") or None
+
+    subj_obj = None; book_obj = None
+    if subject_id:
+        from apps.academics.models import Subject as _S
+        subj_obj = _S.objects.filter(id=subject_id).first()
+    if book_id:
+        book_obj = Book.objects.filter(id=book_id).first()
+
+    try:
+        asset = _save_asset(
+            file=file, title=title, description=desc, category=category,
+            subject=subj_obj, book=book_obj,
+            allow_download=allow_dl, allow_print=allow_pr,
+            watermark_text=wm, by_user=request.user,
+        )
+    except _DAMError as e:
+        return Response({"error": str(e)}, status=400)
+    return Response({"ok": True, "id": str(asset.id), "format": asset.format,
+                     "size_bytes": asset.size_bytes})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def dam_resource_detail(request, pk):
+    a = _DA.objects.filter(id=pk).first()
+    if not a:
+        return Response({"error": "not found"}, status=404)
+    return Response({
+        "id": str(a.id), "title": a.title, "description": a.description,
+        "format": a.format, "category": a.category, "size_bytes": a.size_bytes,
+        "subject": ({"id": str(a.subject.id), "code": a.subject.code, "name": a.subject.name}
+                    if a.subject else None),
+        "allow_download": a.allow_download, "allow_print": a.allow_print,
+        "read_only": a.read_only, "watermark_text": a.watermark_text,
+        "view_count": a.view_count, "download_count": a.download_count,
+        "uploaded_by": str(a.uploaded_by) if a.uploaded_by else "",
+        "created_at": a.created_at,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def dam_view_stream(request, pk):
+    a = _DA.objects.filter(id=pk, is_active=True).first()
+    if not a:
+        return Response({"error": "not found"}, status=404)
+    try:
+        return _serve_asset(a, user=request.user, action="view", request=request)
+    except _DAMError as e:
+        return Response({"error": str(e)}, status=403)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def dam_download_stream(request, pk):
+    a = _DA.objects.filter(id=pk, is_active=True).first()
+    if not a:
+        return Response({"error": "not found"}, status=404)
+    try:
+        return _serve_asset(a, user=request.user, action="download", request=request)
+    except _DAMError as e:
+        return Response({"error": str(e)}, status=403)
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def dam_delete(request, pk):
+    a = _DA.objects.filter(id=pk).first()
+    if not a:
+        return Response({"error": "not found"}, status=404)
+    a.is_active = False
+    a.save(update_fields=["is_active", "updated_at"])
+    return Response({"ok": True})

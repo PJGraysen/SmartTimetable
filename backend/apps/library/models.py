@@ -373,3 +373,103 @@ class ReadingListItem(LibraryBase):
 
     def __str__(self):
         return f"{self.reading_list.name}: {self.book.title}"
+
+
+
+# =========================================================================
+# L4 — Digital Asset Management (DAM)
+# =========================================================================
+def _asset_upload_path(instance, filename):
+    import os as _os
+    ext = _os.path.splitext(filename)[1].lower()
+    return f"library/assets/{instance.id}{ext}"
+
+
+class DigitalAsset(models.Model):
+    class Category(models.TextChoices):
+        PAST_PAPER = "PAST_PAPER", "Past Paper"
+        SYLLABUS = "SYLLABUS", "Syllabus"
+        RESEARCH = "RESEARCH", "Research / Journal"
+        NOTES = "NOTES", "Lesson Notes"
+        TEACHER_RESOURCE = "TEACHER_RESOURCE", "Teacher Resource Kit"
+        EBOOK = "EBOOK", "E-book"
+        AUDIOBOOK = "AUDIOBOOK", "Audiobook"
+        OTHER = "OTHER", "Other"
+
+    class Format(models.TextChoices):
+        PDF = "PDF", "PDF"
+        EPUB = "EPUB", "EPUB"
+        DOCX = "DOCX", "Word"
+        PPTX = "PPTX", "PowerPoint"
+        AUDIO = "AUDIO", "Audio"
+        VIDEO = "VIDEO", "Video"
+        OTHER = "OTHER", "Other"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=220)
+    description = models.TextField(blank=True, default="")
+    file = models.FileField(upload_to=_asset_upload_path)
+    format = models.CharField(max_length=8, choices=Format.choices, default=Format.OTHER)
+    category = models.CharField(max_length=20, choices=Category.choices, default=Category.OTHER, db_index=True)
+    size_bytes = models.BigIntegerField(default=0)
+    checksum = models.CharField(max_length=64, blank=True, default="")
+    subject = models.ForeignKey(
+        "academics.Subject", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="library_assets",
+    )
+    book = models.ForeignKey(
+        Book, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="digital_assets",
+    )
+
+    # DRM / policy
+    allow_download = models.BooleanField(default=False)
+    allow_print = models.BooleanField(default=False)
+    watermark_text = models.CharField(max_length=120, blank=True, default="")
+    read_only = models.BooleanField(default=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    uploaded_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="library_assets_uploaded",
+    )
+    is_active = models.BooleanField(default=True, db_index=True)
+    view_count = models.PositiveIntegerField(default=0)
+    download_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["category", "is_active"]),
+            models.Index(fields=["subject", "is_active"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_category_display()} — {self.title}"
+
+
+class DigitalAssetView(models.Model):
+    class Action(models.TextChoices):
+        VIEW = "VIEW", "Viewed"
+        DOWNLOAD = "DOWNLOAD", "Downloaded"
+        DENIED = "DENIED", "Access denied"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    asset = models.ForeignKey(DigitalAsset, on_delete=models.CASCADE, related_name="views")
+    user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="library_asset_views",
+    )
+    action = models.CharField(max_length=10, choices=Action.choices, default=Action.VIEW)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=240, blank=True, default="")
+    viewed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-viewed_at"]
+        indexes = [models.Index(fields=["asset", "-viewed_at"])]
+
+    def __str__(self):
+        return f"{self.action} {self.asset_id} by {self.user_id}"

@@ -163,6 +163,20 @@ class Subject(TimeStampedModel):
     code = models.CharField(max_length=30, unique=True)
     is_active = models.BooleanField(default=True)
 
+    # ---- L4 / dashboard thumbnails ----
+    icon = models.CharField(
+        max_length=8, blank=True, default="",
+        help_text="Single emoji shown as the subject tile on the library dashboard.",
+    )
+    thumbnail_url = models.URLField(
+        blank=True, default="",
+        help_text="Optional image URL. When empty, the emoji tile is used.",
+    )
+    colour = models.CharField(
+        max_length=16, blank=True, default="",
+        help_text="Optional hex colour for the tile background (e.g. #1e3a8a).",
+    )
+
     class Meta:
         db_table = "subject"
         ordering = ["name"]

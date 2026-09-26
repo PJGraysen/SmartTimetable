@@ -77,3 +77,17 @@ urlpatterns += [
     path("members/<uuid:member_id>/fee-account/", _member_fee_acct, name="library-member-fee-account"),
     path("loans/<uuid:loan_id>/post-fine/", _post_loan_fine, name="library-loan-post-fine"),
 ]
+
+from apps.library.api.views import dam_resources as _dam_resources
+from apps.library.api.views import dam_resource_detail as _dam_detail
+from apps.library.api.views import dam_view_stream as _dam_view_stream
+from apps.library.api.views import dam_download_stream as _dam_download_stream
+from apps.library.api.views import dam_delete as _dam_delete
+
+urlpatterns += [
+    path("resources/", _dam_resources, name="library-resources"),
+    path("resources/<uuid:pk>/", _dam_detail, name="library-resource-detail"),
+    path("resources/<uuid:pk>/view/", _dam_view_stream, name="library-resource-view"),
+    path("resources/<uuid:pk>/download/", _dam_download_stream, name="library-resource-download"),
+    path("resources/<uuid:pk>/delete/", _dam_delete, name="library-resource-delete"),
+]
