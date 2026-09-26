@@ -144,8 +144,16 @@ class MemberViewSet(BaseViewSet):
 
 
 class LoanRuleViewSet(BaseViewSet):
+    """Loan rules are configuration: authenticated users can read;
+    only staff may modify."""
     queryset = LoanRule.objects.all()
     serializer_class = s.LoanRuleSerializer
+
+    def get_permissions(self):
+        from rest_framework.permissions import IsAdminUser
+        if self.action in ("create", "update", "partial_update", "destroy"):
+            return [IsAuthenticated(), IsAdminUser()]
+        return [IsAuthenticated()]
 
 
 class LoanViewSet(BaseViewSet):
