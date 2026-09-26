@@ -527,3 +527,44 @@ export async function analyticsTopTitles() {
   const { data } = await http.get("/library/analytics/top-titles/");
   return data as { titles: { id: string; title: string; loans: number }[] };
 }
+
+
+// ================================================================
+// Notifications
+// ================================================================
+export type NotificationRow = {
+  id: string; kind: string; subject: string; body: string;
+  status: string; created_at: string; read_at: string | null;
+};
+
+export async function notificationsMe() {
+  const { data } = await http.get("/library/notifications/me/");
+  return data as { unread: number; notifications: NotificationRow[] };
+}
+export async function markNotificationRead(id: string) {
+  const { data } = await http.post(`/library/notifications/${id}/read/`);
+  return data as { ok: boolean };
+}
+
+// ================================================================
+// Reservations
+// ================================================================
+export type ReservationRow = {
+  id: string; book: string; book_title: string;
+  member: string; member_number: string; member_name: string;
+  status: string; position: number;
+  requested_at: string; notified_at: string | null; expires_at: string | null; notes: string;
+};
+
+export async function listReservations(params: { status?: string } = {}) {
+  const { data } = await http.get("/library/reservations/", { params });
+  return data as ReservationRow[];
+}
+export async function cancelReservation(id: string) {
+  const { data } = await http.post(`/library/reservations/${id}/cancel/`);
+  return data as { ok: boolean };
+}
+export async function fulfilReservation(id: string) {
+  const { data } = await http.post(`/library/reservations/${id}/fulfill/`);
+  return data as { ok: boolean };
+}

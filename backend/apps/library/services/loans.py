@@ -104,6 +104,21 @@ def return_loan(*, loan: Loan, received_by, notes: str = "") -> Loan:
         entity_id=str(loan.id),
         description=f"Returned {copy.barcode}; fine_accrued={fine}",
     )
+
+    # ---- Post fine to finance ledger if any ----
+    if fine and fine > 0:
+        try:
+            from apps.finance.services import post_library_fine as _post_fine
+            _post_fine(loan=loan, amount=fine, by_user=received_by)
+        except Exception:
+            pass
+        # ---- Fire fine notification ----
+        try:
+            from apps.library.services.notifications import on_fine_accrued as _n
+            _n(loan)
+        except Exception:
+            pass
+
     return loan
 
 

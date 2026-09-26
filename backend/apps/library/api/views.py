@@ -1283,3 +1283,50 @@ def analytics_peak_periods(request):
 def analytics_top_titles(request):
     qs = Book.objects.annotate(loans_n=_Count("copies__loans")).filter(loans_n__gt=0).order_by("-loans_n")[:20]
     return Response({"titles": [{"id": str(b.id), "title": b.title, "loans": b.loans_n} for b in qs]})
+
+
+# =====================================================================
+# Notifications
+# =====================================================================
+from apps.library.models import Notification as _Notif
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def notifications_me(request):
+    member = _resolve_member_for_user(request.user)
+    if not member:
+        return Response({"notifications": [], "unread": 0})
+    qs = _Notif.objects.filter(member=member).order_by("-created_at")[:50]
+    unread = _Notif.objects.filter(member=member).exclude(status=_Notif.Status.READ).count()
+    return Response({
+        "unread": unread,
+        "notifications": [{
+            "id": str(n.id), "kind": n.kind, "subject": n.subject, "body": n.body,
+            "status": n.status, "created_at": n.created_at, "read_at": n.read_at,
+        } for n in qs],
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def notification_mark_read(request, pk):
+    member = _resolve_member_for_user(request.user)
+    if not member:
+        return Response({"error": "not linked"}, status=404)
+    n = _Notif.objects.filter(id=pk, member=member).first()
+    if not n:
+        return Response({"error": "not found"}, status=404)
+    from django.utils import timezone as _tz
+    n.status = _Notif.Status.READ
+    n.read_at = _tz.now()
+    n.save(update_fields=["status", "read_at"])
+    return Response({"ok": True})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def notifications_scan(request):
+    """Trigger due/overdue scan (usually run by cron)."""
+    from apps.library.services.notifications import scan_due_and_overdue
+    return Response(scan_due_and_overdue())

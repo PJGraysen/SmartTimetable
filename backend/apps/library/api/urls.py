@@ -115,3 +115,13 @@ urlpatterns += [
     path("analytics/peak-periods/", _ana_peak, name="library-analytics-peak-periods"),
     path("analytics/top-titles/", _ana_titles, name="library-analytics-top-titles"),
 ]
+
+from apps.library.api.views import notifications_me as _notifications_me
+from apps.library.api.views import notification_mark_read as _notification_read
+from apps.library.api.views import notifications_scan as _notifications_scan
+
+urlpatterns += [
+    path("notifications/me/", _notifications_me, name="library-notifications-me"),
+    path("notifications/<uuid:pk>/read/", _notification_read, name="library-notification-read"),
+    path("notifications/scan/", _notifications_scan, name="library-notifications-scan"),
+]

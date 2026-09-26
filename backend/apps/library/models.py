@@ -532,3 +532,53 @@ class InventoryAuditLine(models.Model):
 
     def __str__(self):
         return f"{self.barcode_scanned} [{self.result}]"
+
+
+
+# =========================================================================
+# Notifications (email/SMS/push)
+# =========================================================================
+class Notification(models.Model):
+    class Kind(models.TextChoices):
+        DUE_SOON = "DUE_SOON", "Loan due soon"
+        OVERDUE = "OVERDUE", "Loan overdue"
+        HOLD_READY = "HOLD_READY", "Hold ready for pickup"
+        FINE_ACCRUED = "FINE_ACCRUED", "Fine accrued"
+        RESERVATION_EXPIRED = "RESERVATION_EXPIRED", "Reservation expired"
+        GENERAL = "GENERAL", "General"
+
+    class Channel(models.TextChoices):
+        IN_APP = "IN_APP", "In-app"
+        EMAIL = "EMAIL", "Email"
+        SMS = "SMS", "SMS"
+        PUSH = "PUSH", "Push"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        SENT = "SENT", "Sent"
+        FAILED = "FAILED", "Failed"
+        READ = "READ", "Read"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    member = models.ForeignKey(Member, on_delete=models.CASCADE, related_name="notifications")
+    kind = models.CharField(max_length=20, choices=Kind.choices, db_index=True)
+    channel = models.CharField(max_length=10, choices=Channel.choices, default=Channel.IN_APP)
+    subject = models.CharField(max_length=200, blank=True, default="")
+    body = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
+    reference_type = models.CharField(max_length=40, blank=True, default="")
+    reference_id = models.CharField(max_length=64, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        db_table = "library_notification"
+        indexes = [
+            models.Index(fields=["member", "status"]),
+            models.Index(fields=["member", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.kind} -> {self.member.member_number}"
