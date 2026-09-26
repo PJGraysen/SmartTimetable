@@ -564,7 +564,16 @@ export async function cancelReservation(id: string) {
   const { data } = await http.post(`/library/reservations/${id}/cancel/`);
   return data as { ok: boolean };
 }
-export async function fulfilReservation(id: string) {
+
+
+// ---- reservations (corrected) ----
+export async function createReservation(bookId: string, memberId: string) {
+  const { data } = await http.post("/library/reservations/create_for/", {
+    book: bookId, member: memberId,
+  });
+  return data as ReservationRow;
+}
+export async function fulfillReservation(id: string) {
   const { data } = await http.post(`/library/reservations/${id}/fulfill/`);
-  return data as { ok: boolean };
+  return data as ReservationRow;
 }

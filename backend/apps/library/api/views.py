@@ -357,6 +357,11 @@ class ReservationViewSet(BaseViewSet):
         r = self.get_object()
         r.status = _Reservation.Status.FULFILLED
         r.save(update_fields=["status", "updated_at"])
+        try:
+            from apps.library.services.notifications import on_hold_ready as _n
+            _n(r)
+        except Exception:
+            pass
         return Response(ReservationSerializer(r).data)
 
 

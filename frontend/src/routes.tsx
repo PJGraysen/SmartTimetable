@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import ReservationsPage from "./pages/library/ReservationsPage";
 import AnalyticsPage from "./pages/library/AnalyticsPage";
 import StudentPortalPage from "./pages/library/StudentPortalPage";
 import AuditsPage from "./pages/library/AuditsPage";
@@ -120,6 +121,7 @@ export const PROTECTED_ROUTES: AppRoute[] = [
   { path: "/library/members/:id", element: <LibraryShell><MemberDetailPage /></LibraryShell> },
   { path: "/library/circulation", element: <LibraryShell><CirculationPage /></LibraryShell> },
   { path: "/library/loans", element: <LibraryShell><LoansPage /></LibraryShell> },
+  { path: "/library/reservations", element: <LibraryShell><ReservationsPage /></LibraryShell> },
   { path: "/library/reports", element: <LibraryShell><ReportsPage /></LibraryShell> },
   { path: "/library/audits", element: <LibraryShell><AuditsPage /></LibraryShell> },
   { path: "/library/analytics", element: <LibraryShell><AnalyticsPage /></LibraryShell> },
