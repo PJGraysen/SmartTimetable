@@ -39,12 +39,24 @@ class BookSerializer(serializers.ModelSerializer):
     copy_count = serializers.SerializerMethodField()
     available_copy_count = serializers.SerializerMethodField()
 
+    # --- L1 pro cataloguing: convenience fields ---
+    authors_text = serializers.CharField(
+        write_only=True, required=False, allow_blank=True,
+        help_text="Comma-separated author names. Auto-creates Author rows.",
+    )
+    publisher_name = serializers.CharField(
+        write_only=True, required=False, allow_blank=True,
+        help_text="Publisher name. Auto-creates Publisher row.",
+    )
+
     class Meta:
         model = Book
         fields = [
             "id", "isbn", "title", "subtitle", "edition", "language",
             "description", "publisher", "published_year", "cover_url",
             "authors", "categories", "is_active",
+            "ddc", "lcc", "toc", "page_count", "source", "source_id", "marc21",
+            "authors_text", "publisher_name",
             "copy_count", "available_copy_count",
             "created_at", "updated_at",
         ]
@@ -54,6 +66,45 @@ class BookSerializer(serializers.ModelSerializer):
 
     def get_available_copy_count(self, obj):
         return obj.copies.filter(status=Copy.Status.AVAILABLE).count()
+
+    def create(self, validated_data):
+        authors_text = validated_data.pop("authors_text", "") or ""
+        publisher_name = (validated_data.pop("publisher_name", "") or "").strip()
+
+        if publisher_name:
+            pub, _ = Publisher.objects.get_or_create(name=publisher_name)
+            validated_data["publisher"] = pub
+
+        book = super().create(validated_data)
+
+        names = [n.strip() for n in authors_text.split(",") if n.strip()]
+        for name in names:
+            a, _ = Author.objects.get_or_create(name=name, defaults={"sort_name": name})
+            book.authors.add(a)
+        return book
+
+    def update(self, instance, validated_data):
+        authors_text = validated_data.pop("authors_text", None)
+        publisher_name = validated_data.pop("publisher_name", None)
+
+        if publisher_name is not None:
+            publisher_name = (publisher_name or "").strip()
+            if publisher_name:
+                pub, _ = Publisher.objects.get_or_create(name=publisher_name)
+                validated_data["publisher"] = pub
+            else:
+                validated_data["publisher"] = None
+
+        book = super().update(instance, validated_data)
+
+        if authors_text is not None:
+            names = [n.strip() for n in authors_text.split(",") if n.strip()]
+            authors = []
+            for name in names:
+                a, _ = Author.objects.get_or_create(name=name, defaults={"sort_name": name})
+                authors.append(a)
+            book.authors.set(authors)
+        return book
 
 
 class CopySerializer(serializers.ModelSerializer):
