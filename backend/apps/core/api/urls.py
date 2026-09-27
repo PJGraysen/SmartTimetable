@@ -44,3 +44,9 @@ urlpatterns = [
         name="term-detail",
     ),
 ]
+
+from apps.core.api.views import me as _me_view
+
+urlpatterns += [
+    path("me/", _me_view, name="core-me"),
+]

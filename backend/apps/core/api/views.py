@@ -79,3 +79,45 @@ class SchoolEventViewSet(viewsets.ReadOnlyModelViewSet):
             horizon = today + timedelta(days=30)
             qs = qs.filter(date__gte=today, date__lte=horizon)
         return qs.order_by("date", "start_time")
+
+
+# =====================================================================
+# Current-user role + landing endpoint
+# =====================================================================
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.response import Response
+from apps.core.services.roles import user_primary_role, landing_path
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def me(request):
+    """Return current user role, member_id, landing_path."""
+    u = request.user
+    if not getattr(u, "is_authenticated", False):
+        return Response({
+            "authenticated": False,
+            "role": "GUEST",
+            "landing_path": landing_path("GUEST"),
+        })
+    role = user_primary_role(u)
+    member_id = None
+    try:
+        m = getattr(u, "library_member", None)
+        if m is not None:
+            member_id = str(m.id)
+    except Exception:
+        pass
+    return Response({
+        "authenticated": True,
+        "id": u.id,
+        "username": u.username,
+        "email": u.email or "",
+        "full_name": u.get_full_name() or u.username,
+        "role": role,
+        "is_superuser": bool(u.is_superuser),
+        "is_staff": bool(u.is_staff),
+        "member_id": member_id,
+        "landing_path": landing_path(role),
+    })

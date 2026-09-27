@@ -160,6 +160,7 @@ class Member(LibraryBase):
         STUDENT = "STUDENT", "Student"
         TEACHER = "TEACHER", "Teacher"
         STAFF = "STAFF", "Staff"
+        LIBRARIAN = "LIBRARIAN", "Librarian"
         EXTERNAL = "EXTERNAL", "External"
 
     member_number = models.CharField(max_length=40, unique=True)

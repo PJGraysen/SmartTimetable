@@ -1,0 +1,57 @@
+{
+  "generated_at": "2026-09-26T13:57:11.285426+00:00",
+  "read_only": true,
+  "database_mutation": false,
+  "timetable_persistence": false,
+  "term": {
+    "id": "8ba158ac-4526-41d6-bf40-cb30023e09eb",
+    "name": "2026 - Term 1"
+  },
+  "known_good_run": {
+    "id": "8eccf5f8-c91a-439a-9970-297abfbdc403",
+    "status": "COMPLETED",
+    "solver_status": "OPTIMAL",
+    "objective_value": 46.0,
+    "statistics": {
+      "raw": "{'branches': 1998, 'conflicts': 0, 'entries_created': 98, 'wall_time_seconds': 62.7556683}"
+    }
+  },
+  "problem_dimensions": {
+    "requirements": 112,
+    "teachers": 20,
+    "groups": 8,
+    "rooms": 16,
+    "periods": 15,
+    "slots": 50
+  },
+  "production_model": {
+    "variables": 11956,
+    "constraints": 19420,
+    "has_objective": true
+  },
+  "production_solver_configuration": {
+    "class": "apps.scheduling.engine.solver.solver.CPSATSolver",
+    "time_limit_seconds": 900.0,
+    "num_workers": null,
+    "solve_source": "    def solve(\n        self,\n        problem: SchedulingProblem,\n        solver_model: SolverModel,\n    ) -> SolverResult:\n        \"\"\"\n        Solve the supplied scheduling model.\n        \"\"\"\n\n        solver = cp_model.CpSolver()\n\n\n\n        # Diversity injection (SmartTimetable Pro):\n\n        # Every generation uses a fresh seed so CP-SAT explores\n\n        # a different region of the feasible space.\n\n        import time as _tt, os as _oo\n\n        solver.parameters.random_seed = int.from_bytes(_oo.urandom(4), 'little') & 0x7FFFFFFF\n\n\n        solver.parameters.num_search_workers = 1\n\n        solver.parameters.max_time_in_seconds = (\n            self.time_limit_seconds\n        )\n\n        if self.num_workers is not None:\n            solver.parameters.num_search_workers = self.num_workers\n\n        try:\n            status = solver.solve(solver_model.model)\n\n            solver_status = self._map_status(status)\n\n            assignments: tuple[SchedulingAssignment, ...] = ()\n\n            if status in (\n                cp_model.FEASIBLE,\n                cp_model.OPTIMAL,\n            ):\n                assignments = self._extract_assignments(\n                    problem=problem,\n                    solver_model=solver_model,\n                    solver=solver,\n                )\n\n            statistics = SolverStatistics(\n                wall_time_seconds=solver.wall_time,\n                branches=solver.num_branches,\n                conflicts=solver.num_conflicts,\n                objective_value=(\n                    solver.objective_value\n                    if status in (\n                        cp_model.FEASIBLE,\n                        cp_model.OPTIMAL,\n                    )\n                    else None\n                ),\n            )\n\n            error_message: str | None = None\n\n            if status == cp_model.INFEASIBLE:\n                diagnostic_report = analyze_infeasibility(\n                    problem,\n                )\n\n                error_message = diagnostic_report.format_message()\n\n            return SolverResult(\n                status=solver_status,\n                assignments=assignments,\n                statistics=statistics,\n                error_message=error_message,\n            )\n\n        except Exception as exc:\n            return SolverResult(\n                status=SolverStatus.FAILED,\n                error_message=str(exc),\n            )\n"
+  },
+  "production_result": {
+    "status": "OPTIMAL",
+    "assignments": 490,
+    "wall_time_seconds": 1.3242289,
+    "branches": 14401,
+    "conflicts": 9,
+    "objective_value": 0.0,
+    "error_message": null
+  },
+  "no_objective_result": {
+    "status_code": 4,
+    "status_name": "OPTIMAL",
+    "wall_time_seconds": 0.9575499000000001,
+    "branches": 6292,
+    "conflicts": 1,
+    "objective_value": null,
+    "started_at": "2026-09-26T13:57:10.323760+00:00",
+    "completed_at": "2026-09-26T13:57:11.284871+00:00"
+  }
+}

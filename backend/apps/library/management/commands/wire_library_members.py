@@ -65,6 +65,22 @@ class Command(BaseCommand):
                 created_members += 1
                 self.stdout.write(f"  TEACH  {t.employee_code} -> Member created")
 
+        # ---- Librarians (via Librarian group) ----
+        librarian_users = User.objects.filter(
+            groups__name="Librarian", is_active=True
+        ).distinct()
+        for u in librarian_users:
+            if not Member.objects.filter(user=u).exists():
+                if not dry:
+                    Member.objects.create(
+                        user=u, member_number=f"LIB-{u.username[:12]}",
+                        full_name=(u.get_full_name() or u.username),
+                        email=u.email or "",
+                        member_type=Member.MemberType.LIBRARIAN,
+                    )
+                created_members += 1
+                self.stdout.write(f"  LIBRN  {u.username} -> Member created")
+
         # ---- Students ----
         from apps.academics.models import Student
         import secrets
