@@ -1,4 +1,6 @@
 import type { ReactElement } from "react";
+import PublicCataloguePage from "./pages/library/PublicCataloguePage";
+import MyLibraryHome from "./pages/library/MyLibraryHome";
 import SubjectLandingPage from "./pages/library/SubjectLandingPage";
 import ReservationsPage from "./pages/library/ReservationsPage";
 import AnalyticsPage from "./pages/library/AnalyticsPage";
@@ -114,6 +116,7 @@ export const PROTECTED_ROUTES: AppRoute[] = [
 
   { path: "/library", element: <LibraryShell><LibraryDashboard /></LibraryShell> },
   { path: "/library/catalogue", element: <LibraryShell><CataloguePage /></LibraryShell> },
+  { path: "/library/public", element: <PublicCataloguePage /> },
   { path: "/library/subject/:code", element: <LibraryShell><SubjectLandingPage /></LibraryShell> },
   { path: "/library/catalogue/new", element: <LibraryShell><BookFormPage /></LibraryShell> },
   { path: "/library/catalogue/:id", element: <LibraryShell><BookDetailPage /></LibraryShell> },
