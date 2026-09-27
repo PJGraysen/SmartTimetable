@@ -75,6 +75,13 @@ export default function CataloguePage() {
             LIBRARY MANAGEMENT
           </span>
           <h1 style={{ marginTop: "0.35rem" }}>Catalogue</h1>
+          {searchParams.get("class") ? (
+            <span style={{
+              display: "inline-block", marginTop: "0.35rem",
+              fontSize: "0.72rem", fontWeight: 800, padding: "0.15rem 0.55rem",
+              background: "#e0e7ff", color: "#3730a3", borderRadius: 4,
+            }}>Class: {searchParams.get("class")}</span>
+          ) : null}
           <p style={{ color: "#748095" }}>Search and browse the collection.</p>
         </div>
         <Link to="/library/catalogue/new" className="primary-button">Add Book</Link>

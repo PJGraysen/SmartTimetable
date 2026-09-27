@@ -17,7 +17,7 @@ export default function ResourceViewerPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const stream = id ? lib.resourceStreamUrl(id, "view") : "";
+  const stream = id ? lib.resourceStreamUrlWithToken(id, "view") : "";
 
   return (
     <div style={{ padding: "1.5rem", height: "calc(100vh - 40px)", display: "flex", flexDirection: "column" }}>

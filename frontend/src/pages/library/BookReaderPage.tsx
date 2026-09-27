@@ -84,7 +84,7 @@ export default function BookReaderPage() {
     );
   }
 
-  const stream = lib.resourceStreamUrl(asset.id, "view") + "#toolbar=0&navpanes=0&scrollbar=0";
+  const stream = lib.resourceStreamUrlWithToken(asset.id, "view") + "#toolbar=0&navpanes=0&scrollbar=0";
 
   return (
     <div style={{ padding: "1rem 1.5rem 1.5rem", height: "calc(100vh - 40px)",

@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from apps.library.api.permissions import LibraryModelPermissions
 from rest_framework.response import Response
@@ -328,8 +328,15 @@ from apps.library.api.serializers import (
 
 
 class ReservationViewSet(BaseViewSet):
+    """Reservations: any auth user can read; manage requires library perms."""
     queryset = _Reservation.objects.all()
     serializer_class = ReservationSerializer
+
+    def get_permissions(self):
+        from rest_framework.permissions import IsAuthenticated as _IA, IsAdminUser as _IAU
+        if self.action in ("list", "retrieve"):
+            return [_IA()]
+        return [_IA(), _IAU()]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -989,6 +996,7 @@ from apps.library.services.dam import (
     save_asset as _save_asset,
     serve_asset as _serve_asset,
     DAMError as _DAMError,
+    _authenticate_stream_token as _auth_stream,
 )
 
 
@@ -1075,25 +1083,26 @@ def dam_resource_detail(request, pk):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def dam_view_stream(request, pk):
     a = _DA.objects.filter(id=pk, is_active=True).first()
     if not a:
         return Response({"error": "not found"}, status=404)
+    user = _auth_stream(request)
     try:
-        return _serve_asset(a, user=request.user, action="view", request=request)
+        return _serve_asset(a, user=user, action="view", request=request)
     except _DAMError as e:
         return Response({"error": str(e)}, status=403)
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def dam_download_stream(request, pk):
     a = _DA.objects.filter(id=pk, is_active=True).first()
     if not a:
         return Response({"error": "not found"}, status=404)
     try:
-        return _serve_asset(a, user=request.user, action="download", request=request)
+        return _serve_asset(a, user=_auth_stream(request), action="download", request=request)
     except _DAMError as e:
         return Response({"error": str(e)}, status=403)
 
@@ -1402,3 +1411,39 @@ def rules_ensure_defaults(request):
             "max_fine": str(r.max_fine) if r.max_fine is not None else None,
         } for r in rules],
     })
+
+
+# =====================================================================
+# Pro PDF Reports
+# =====================================================================
+from django.http import HttpResponse as _HR2
+from apps.library.services.pdf_reports import (
+    build_general_report as _pdf_general,
+    build_department_report as _pdf_dept,
+    build_category_report as _pdf_cat,
+    build_asset_report as _pdf_asset,
+)
+
+_PDF_BUILDERS = {
+    "general": _pdf_general,
+    "department": _pdf_dept,
+    "category": _pdf_cat,
+    "asset": _pdf_asset,
+}
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def reports_pdf(request, report_name):
+    """GET /api/library/reports/pdf/<name>/
+    name in {general, department, category, asset}"""
+    builder = _PDF_BUILDERS.get(report_name)
+    if not builder:
+        return Response({"error": f"unknown report '{report_name}'"}, status=404)
+    try:
+        data = builder()
+    except Exception as e:
+        return Response({"error": f"PDF build failed: {e}"}, status=500)
+    resp = _HR2(data, content_type="application/pdf")
+    resp["Content-Disposition"] = f'inline; filename="library-{report_name}.pdf"'
+    return resp

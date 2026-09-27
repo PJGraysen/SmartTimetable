@@ -44,6 +44,35 @@ export default function ReportsPage() {
       </div>
 
 
+      <section style={{ marginBottom: "2rem" }}>
+        <h2 style={{ fontSize: "1.1rem", color: "#1e3a8a", marginBottom: "0.75rem" }}>Pro PDF Reports</h2>
+        <p style={{ color: "#748095", fontSize: "0.83rem", marginBottom: "1rem" }}>
+          Print-ready PDF documents for department meetings, audits, and records.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "0.75rem" }}>
+          {[
+            { name: "general", label: "General Report", desc: "Snapshot: catalogue, loans, members, coverage." },
+            { name: "department", label: "Department Report", desc: "Holdings grouped by owning department." },
+            { name: "category", label: "Category Report", desc: "Distribution across book categories." },
+            { name: "asset", label: "Asset Report", desc: "Linked inventory assets with condition + location." },
+          ].map((r) => (
+            <a key={r.name}
+               href={lib.pdfReportUrl(r.name as any)}
+               target="_blank" rel="noreferrer"
+               style={{
+                 display: "block", background: "#fff", border: "1px solid #e5e7eb",
+                 borderRadius: 10, padding: "1rem", textDecoration: "none", color: "inherit",
+               }}>
+              <div style={{ fontWeight: 700, color: "#111827", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <Download size={14} /> {r.label}
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "#748095", marginTop: "0.3rem" }}>{r.desc}</div>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <h2 style={{ fontSize: "1.1rem", color: "#1e3a8a", marginBottom: "0.75rem" }}>Data Exports (CSV / JSON)</h2>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
         {REPORTS.map((r) => {
           const Icon = r.icon;

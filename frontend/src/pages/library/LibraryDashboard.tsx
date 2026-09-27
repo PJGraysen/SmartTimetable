@@ -135,7 +135,7 @@ export default function LibraryDashboard() {
                 return (
                   <Link
                     key={s.id}
-                    to={`/library/catalogue?subject=${encodeURIComponent(s.code)}`}
+                    to={`/library/subject/${encodeURIComponent(s.code)}`}
                     className="lib-subject-card"
                     style={{
                       display: "block",

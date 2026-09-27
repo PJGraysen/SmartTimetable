@@ -137,3 +137,9 @@ from apps.library.api.views import rules_ensure_defaults as _rules_ensure
 urlpatterns += [
     path("rules/ensure-defaults/", _rules_ensure, name="library-rules-ensure"),
 ]
+
+from apps.library.api.views import reports_pdf as _reports_pdf
+
+urlpatterns += [
+    path("reports/pdf/<slug:report_name>/", _reports_pdf, name="library-reports-pdf"),
+]

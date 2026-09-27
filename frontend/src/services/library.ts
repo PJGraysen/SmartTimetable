@@ -598,3 +598,20 @@ export async function ensureDefaultRules() {
   const { data } = await http.post("/library/rules/ensure-defaults/");
   return data as { created: number; total: number; rules: LoanRule[] };
 }
+
+
+// ---- PDF reports ----
+export function pdfReportUrl(name: "general" | "department" | "category" | "asset"): string {
+  const base = (http.defaults?.baseURL || "/api").replace(/\/$/, "");
+  return `${base}/library/reports/pdf/${name}/`;
+}
+
+// ---- resource stream URL with token for iframes ----
+export function resourceStreamUrlWithToken(id: string, mode: "view" | "download" = "view"): string {
+  const base = (http.defaults?.baseURL || "/api").replace(/\/$/, "");
+  const tok = typeof window !== "undefined"
+    ? (localStorage.getItem("access_token") || localStorage.getItem("token") || "")
+    : "";
+  const q = tok ? `?token=${encodeURIComponent(tok)}` : "";
+  return `${base}/library/resources/${id}/${mode}/${q}`;
+}

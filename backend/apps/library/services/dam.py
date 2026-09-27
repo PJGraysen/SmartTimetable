@@ -150,6 +150,37 @@ def _watermark_pdf(path: str, text: str):
         return None
 
 
+
+
+# --- Stream auth: iframes cannot send Authorization headers,
+# so we accept a ?token= query param (JWT or DRF token).
+def _authenticate_stream_token(request):
+    from django.contrib.auth.models import AnonymousUser
+    token = request.GET.get("token")
+    if not token:
+        return request.user  # fall back to normal auth
+    # Try JWT
+    try:
+        from rest_framework_simplejwt.authentication import JWTAuthentication
+        from rest_framework_simplejwt.tokens import AccessToken
+        from django.contrib.auth import get_user_model
+        validated = AccessToken(token)
+        uid = validated.get("user_id")
+        if uid:
+            return get_user_model().objects.filter(pk=uid).first() or request.user
+    except Exception:
+        pass
+    # Try DRF TokenAuthentication
+    try:
+        from rest_framework.authtoken.models import Token
+        t = Token.objects.filter(key=token).select_related("user").first()
+        if t:
+            return t.user
+    except Exception:
+        pass
+    return request.user
+
+
 def serve_asset(asset: DigitalAsset, *, user, action: str, request=None):
     """
     Stream the asset. Enforces allow_download, read_only, expires_at.
