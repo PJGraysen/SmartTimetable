@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import http from "../services/http";
 import { useNavigate } from "react-router-dom";
 import { PlayCircle } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
@@ -17,7 +18,12 @@ function LoginPage() {
     setError("");
     try {
       await login(username, password);
-      navigate("/home", { replace: true });
+      try {
+        const { data: me } = await http.get("/core/me/");
+        navigate(me.landing_path || "/home", { replace: true });
+      } catch {
+        navigate("/home", { replace: true });
+      }
     } catch (err: any) {
       const detail =
         err?.response?.data?.detail ||
