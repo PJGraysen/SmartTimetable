@@ -662,6 +662,7 @@ function Timetable() {
   const [entries, setEntries] = useState<TimetableEntryResult[]>([]);
   const [version, setVersion] = useState("Live timetable");
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
+  const [runCompletedAt, setRunCompletedAt] = useState<string | null>(null);
   const [availableRuns, setAvailableRuns] = useState<any[]>([]);
   const [entrySignature, setEntrySignature] = useState<string>("");
   const [changedKeys, setChangedKeys] = useState<Set<string>>(new Set());
@@ -1975,7 +1976,7 @@ function Timetable() {
             <span className="tt-fresh-v">{version}</span>
             {loadedAt ? (
               <span className="tt-fresh-t">
-                loaded {loadedAt.toLocaleTimeString()}
+                {runCompletedAt ? `generated ${new Date(runCompletedAt).toLocaleString()}` : (loadedAt ? `loaded ${loadedAt.toLocaleTimeString()}` : "")}
               </span>
             ) : null}
           </div>
