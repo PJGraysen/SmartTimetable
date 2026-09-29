@@ -66,6 +66,35 @@ const CLASSES: ClassDefinition[] = [
   },
 ];
 
+// Canonical teacher codes/names. Any entry whose teacher_code or
+// teacher_name doesn't match this list is normalised against it before
+// being shown in the roster, so a single teacher never appears twice.
+const CANONICAL_TEACHERS: Array<{ code: string; name: string }> = [
+  { code: "T001",   name: "Fr. Rector" },
+  { code: "T002",   name: "Fr. Samuel" },
+  { code: "T003",   name: "Fr. Mburu" },
+  { code: "T004",   name: "Mr. Wanjohi" },
+  { code: "T005",   name: "Mr. Magothe" },
+  { code: "T006",   name: "Mr. Ogilo" },
+  { code: "T007",   name: "Madam Prisca" },
+  { code: "T008",   name: "Ms. Ndeta" },
+  { code: "T009",   name: "Mr. Omanga" },
+  { code: "T010",   name: "Ms. Kinyua" },
+  { code: "T011",   name: "Mr. Nyaga" },
+  { code: "T012",   name: "Mr. Wamalwa" },
+  { code: "T013",   name: "Sis. Felistas" },
+  { code: "T014",   name: "Ms. Erambi" },
+  { code: "T015",   name: "Madam Maryann" },
+  { code: "T016",   name: "Mr. Osano" },
+  { code: "T017",   name: "Mr. Baraza" },
+  { code: "T018",   name: "Mr. Namuye" },
+  { code: "T019",   name: "Mr. Peter" },
+  { code: "T020",   name: "Ms. Wainaina" },
+  { code: "LAB001", name: "Lab Technician" },
+];
+const CANON_BY_CODE = new Map(CANONICAL_TEACHERS.map((t) => [t.code.toUpperCase(), t]));
+const CANON_BY_NAME = new Map(CANONICAL_TEACHERS.map((t) => [t.name.toLowerCase(), t]));
+
 const COLUMNS: TimetableColumn[] = [
   {
     key: "p1",
@@ -674,7 +703,80 @@ function Timetable() {
   } | null>(null);
   const prevEntryMapRef = useRef<Map<string, string> | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string>("");
+  // True once the user explicitly picks a run from the dropdown.
+  // While true, the 6-second auto-poller must NOT switch back to newest.
+  const userPickedRef = useRef<boolean>(false);
+  const [schoolName] = useState<string>("Queen of Apostles Seminary Senior School");
+  const [termDisplay, setTermDisplay] = useState<string>("");
   const [searchParams] = useSearchParams();
+
+  // Canonical teacher table: teacher_id -> { code, name }.
+  // Fetched once from the backend so the roster is immune to
+  // denormalised teacher_code / teacher_name drift in entries.
+  const [teacherLookup, setTeacherLookup] = useState<Map<string, { code: string; name: string }>>(
+    () => new Map(),
+  );
+
+  useEffect(() => {
+    const tryLoad = async () => {
+      const candidates: Array<() => Promise<any>> = [];
+      try {
+        const mod: any = await import("../services/teachersAdmin");
+        for (const k of ["listTeachers", "getTeachers", "list", "fetchTeachers"]) {
+          if (typeof mod?.[k] === "function") candidates.push(() => mod[k]());
+        }
+        if (typeof mod?.default === "function") candidates.push(() => mod.default());
+        else if (mod?.default && typeof mod.default.list === "function") candidates.push(() => mod.default.list());
+      } catch { /* module not present, fine */ }
+      try {
+        const sched: any = await import("../services/scheduling");
+        for (const k of ["listAllTeachers", "fetchAllTeachers"]) {
+          if (typeof sched?.[k] === "function") candidates.push(() => sched[k]());
+        }
+      } catch { /* fine */ }
+      // Final fallback: raw fetch
+      candidates.push(async () => {
+        const r = await fetch("/api/platform/teachers/?page_size=500", { credentials: "include" });
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      });
+
+      for (const fn of candidates) {
+        try {
+          const data = await fn();
+          const list = Array.isArray(data) ? data : (data?.results || []);
+          if (!Array.isArray(list) || list.length === 0) continue;
+          const m = new Map<string, { code: string; name: string }>();
+          for (const t of list) {
+            const id = String(t?.id ?? "");
+            if (!id) continue;
+            const code = String(t?.employee_code || t?.teacher_number || t?.code || "").trim();
+            const name =
+              String(`${t?.first_name || ""} ${t?.last_name || ""}`).trim() ||
+              String(t?.name || "").trim();
+            if (code || name) m.set(id, { code, name });
+          }
+          if (m.size > 0) {
+            setTeacherLookup(m);
+            return;
+          }
+        } catch { /* try next */ }
+      }
+    };
+    void tryLoad();
+  }, []);
+
+  // Fetch active term/year for the masthead (best-effort, non-blocking)
+  useEffect(() => {
+    import("../services/scheduling").then(({ fetchSchedulingDashboard }) => {
+      fetchSchedulingDashboard()
+        .then((d: any) => {
+          const t = d?.active_term;
+          if (t) setTermDisplay(`${t.academic_year_name} ${t.name}`);
+        })
+        .catch(() => {});
+    });
+  }, []);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -715,6 +817,12 @@ function Timetable() {
         })),
       );
 
+      // Always sort by completed_at DESC so [0] is genuinely the newest
+      completed.sort((a: any, b: any) => {
+        const da = a.completed_at ? Date.parse(a.completed_at) : 0;
+        const db = b.completed_at ? Date.parse(b.completed_at) : 0;
+        return db - da;
+      });
       // Honor explicit pick, else newest by completed_at
       let latestRun = completed[0];
       if (selectedRunId) {
@@ -722,6 +830,12 @@ function Timetable() {
         if (picked) latestRun = picked;
       }
 
+      // eslint-disable-next-line no-console
+      console.log(
+        "[Timetable] selectedRunId:", selectedRunId || "(auto)",
+        "| picked id:", String(latestRun.id).slice(0, 8),
+        "| found in completed:", completed.some((r: any) => r.id === latestRun.id),
+      );
       // eslint-disable-next-line no-console
       console.log(
         "[Timetable] picking run:", String(latestRun.id).slice(0, 8),
@@ -1089,6 +1203,11 @@ function Timetable() {
         }
         if (v !== lastSeenVersion) {
           lastSeenVersion = v;
+          if (userPickedRef.current) {
+            // eslint-disable-next-line no-console
+            console.log("[Timetable] newer version detected but user has pinned a run; skipping auto-reload:", v);
+            return;
+          }
           // eslint-disable-next-line no-console
           console.log("[Timetable] newer version detected, reloading:", v);
           if (!cancelled) await loadTimetable();
@@ -1115,6 +1234,36 @@ function Timetable() {
     }
     return Array.from(set).sort();
   }, [entries]);
+
+  const teacherRoster = useMemo(() => {
+    // Resolve each entry to its canonical teacher via FK teacher_id.
+    // Fall back to teacher_code only if the FK is missing.
+    const byId = new Map<string, { code: string; name: string }>();
+    const orphanCodes = new Map<string, string>(); // code -> name for FK-less entries
+    for (const e of entries) {
+      const tid = String(
+        (e as any)?.teacher_id || (e as any)?.teacher || ""
+      ).trim();
+      const rawCode = String(displayTeacherCode(e) || "").toUpperCase().trim();
+      const rawName = String(
+        (e as any)?.teacher_name || (e as any)?.teacher || ""
+      ).trim();
+
+      if (tid && teacherLookup.has(tid)) {
+        if (!byId.has(tid)) byId.set(tid, teacherLookup.get(tid)!);
+        continue;
+      }
+      // No FK: bucket by code so a teacher never appears twice under the
+      // same code. Names are still shown for display only.
+      if (rawCode && rawCode !== "-") {
+        if (!orphanCodes.has(rawCode)) orphanCodes.set(rawCode, rawName);
+      }
+    }
+    const merged: { code: string; name: string }[] = [];
+    for (const rec of byId.values()) merged.push(rec);
+    for (const [code, name] of orphanCodes) merged.push({ code, name });
+    return merged.sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+  }, [entries, teacherLookup]);
 
   const visibleEntries = useMemo(() => {
     if (filterMode === "teacher" && filterValue) {
@@ -1178,6 +1327,142 @@ function Timetable() {
   return (
     <>
       <style>{`
+
+        /* A3 landscape for printable masthead + table + roster */
+        @page { size: A3 landscape; margin: 6mm; }
+        @media print {
+          html, body {
+            background: #fff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+          }
+          /* Hide everything that isn't the timetable itself */
+          .tt-actions,
+          .tt-fingerprint,
+          .tt-changes-banner,
+          .tt-hard-reload,
+          .tt-dl-png,
+          .tt-dl-pdf,
+          .tt-dl-row,
+          .tt-highlight-toggle,
+          .tt-nuke-cache,
+          .tt-run-picker,
+          .tt-force-btn,
+          .tt-fresh-badge,
+          .tt-fresh-dot,
+          .tt-fresh-v,
+          .tt-fresh-t,
+          .tt-subtitle,
+          .tt-status,
+          .tt-error,
+          .no-print { display: none !important; visibility: hidden !important; }
+
+          /* Page: no zoom, full width */
+          .tt-page {
+            zoom: 1 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: none !important;
+            width: 100% !important;
+          }
+
+          /* Masthead stays compact and centred */
+          .tt-masthead {
+            display: block !important;
+            text-align: center !important;
+            padding: 2px 0 !important;
+            margin: 2px 0 4px 0 !important;
+            border-bottom: 1px solid #244b72 !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+          .tt-mast-school { font-size: 11pt !important; font-weight: 800 !important; }
+          .tt-masthead .tt-title { font-size: 13pt !important; font-weight: 900 !important; }
+          .tt-mast-line { font-size: 8pt !important; margin-top: 2px !important; }
+
+          /* Table: fixed layout so every column fits inside A3 landscape */
+          .tt-table-wrap {
+            border: 1px solid #9fb4cb !important;
+            overflow: visible !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            width: 100% !important;
+          }
+          .tt-table {
+            table-layout: fixed !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            border-collapse: collapse !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .tt-table thead { display: table-header-group !important; }
+          .tt-table tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          /* Small fonts + tight padding so every cell stays compact */
+          .tt-table th,
+          .tt-table td {
+            padding: 1px 2px !important;
+            font-size: 6pt !important;
+            line-height: 1.05 !important;
+            overflow: hidden !important;
+            word-break: break-word !important;
+          }
+          .tt-table th { font-size: 6pt !important; }
+
+          /* Day + class columns are narrow */
+          .tt-class-head, .tt-class {
+            width: 34px !important;
+            min-width: 34px !important;
+            max-width: 34px !important;
+          }
+
+          /* Non-lesson columns (TEA, LUNCH, PRAYERS, ACTIVITIES) narrower */
+          .tt-cell.tt-tea,
+          .tt-cell.tt-lunch,
+          .tt-cell.tt-prayers,
+          .tt-cell.tt-activities {
+            font-size: 5pt !important;
+          }
+
+          /* Text inside cells */
+          .tt-cell .tt-subject,
+          .tt-cell .tt-subject-name,
+          .tt-cell .tt-teacher,
+          .tt-cell .tt-room {
+            font-size: 5.5pt !important;
+            white-space: normal !important;
+            overflow: hidden !important;
+            text-overflow: clip !important;
+            line-height: 1.02 !important;
+            word-break: break-word !important;
+            display: block !important;
+          }
+          .tt-cell .tt-room { color: #166534 !important; font-weight: 700 !important; }
+
+          /* Roster: 5 columns, compact, no split */
+          .tt-teacher-roster {
+            display: block !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            margin-top: 6px !important;
+            padding: 4px 6px !important;
+            border: 1px solid #d3dfeb !important;
+            background: #f8fafc !important;
+          }
+          .tt-tr-head { font-size: 8pt !important; margin-bottom: 2px !important; }
+          .tt-tr-grid {
+            grid-template-columns: repeat(5, 1fr) !important;
+            gap: 1px 6px !important;
+            font-size: 6pt !important;
+          }
+        }
+
         .tt-page {
           min-width: 0;
           width: 100%;
@@ -1614,15 +1899,112 @@ function Timetable() {
             margin-bottom: 8px;
           }
         }
+
+        /* --- Masthead (school name, title, generated time) --- */
+        .tt-masthead {
+          text-align: center;
+          margin: 6px 0 14px 0;
+          padding: 10px 12px;
+          border-bottom: 2px solid #244b72;
+        }
+        .tt-mast-school {
+          font-size: 18px;
+          font-weight: 800;
+          color: #18395f;
+          letter-spacing: 0.05em;
+          margin-bottom: 4px;
+        }
+        .tt-masthead .tt-title {
+          font-size: 22px;
+          font-weight: 900;
+          color: #0f172a;
+          letter-spacing: 0.08em;
+          margin: 0;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .tt-mast-line {
+          margin-top: 6px;
+          font-size: 12px;
+          color: #475569;
+          font-weight: 600;
+        }
+
+        /* --- Teacher roster below the table --- */
+        .tt-teacher-roster {
+          margin-top: 18px;
+          padding: 12px 14px;
+          background: #f8fafc;
+          border: 1px solid #d3dfeb;
+          border-radius: 8px;
+          page-break-inside: avoid;
+        }
+        .tt-tr-head {
+          font-size: 12px;
+          font-weight: 800;
+          color: #244b72;
+          letter-spacing: 0.08em;
+          margin-bottom: 8px;
+        }
+        .tt-tr-grid {
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          gap: 6px 14px;
+          font-size: 11px;
+          color: #1f2937;
+        }
+        .tt-tr-item {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .tt-tr-item b {
+          color: #244b72;
+          margin-right: 4px;
+        }
+
+        /* --- Cell sizing fixes --- */
+        /* Multi-subject cells (parallel blocks): allow rooms to wrap */
+        .tt-cell .tt-room,
+        .tt-cell .tt-subject,
+        .tt-cell .tt-teacher {
+          white-space: normal !important;
+          overflow: visible !important;
+          text-overflow: clip !important;
+          word-break: break-word;
+          line-height: 1.05 !important;
+        }
+        .tt-cell .tt-room { font-size: 8px !important; }
+        .tt-cell .tt-subject { font-size: 9px !important; }
+        .tt-cell .tt-teacher { font-size: 8px !important; }
+        .tt-cell .tt-subject-name { font-size: 7px !important; }
+
+        .tt-class-head, .tt-class {
+          width: 66px !important;
+          min-width: 66px !important;
+          max-width: 66px !important;
+        }
+        .tt-room { font-size: 10px !important; }
+        .tt-subject { font-size: 11px !important; }
+        .tt-subject-name { font-size: 7px !important; }
+
+        @media print {
+          .tt-masthead { page-break-after: avoid; }
+        
+          .tt-masthead { display: block; page-break-after: avoid; }
+          .tt-mast-school { font-size: 15px; }
+          .tt-masthead .tt-title { font-size: 18px; }
+          .tt-mast-line { font-size: 11px; }
+          .tt-teacher-roster { display: block; page-break-inside: avoid; margin-top: 14px; }
+          .tt-tr-grid { grid-template-columns: repeat(5, 1fr); }
+}
       `}</style>
 
       <main className="tt-page">
         <header className="tt-header">
           <div>
-            <h1 className="tt-title">
-              SCHOOL TIMETABLE
-              <span className="tt-live">LIVE</span>
-            </h1><button type="button" className="tt-hard-reload" onClick={() => window.location.reload()} title="Hard reload the whole page">&#x21BB; Hard Reload</button>
+            <button type="button" className="tt-hard-reload" onClick={() => window.location.reload()} title="Hard reload the whole page">&#x21BB; Hard Reload</button>
         <button type="button" className="tt-dl-png" onClick={() => void downloadTimetablePNG()} title="Download visible timetable as PNG">📷 PNG</button>
         <button type="button" className="tt-dl-pdf" onClick={() => void downloadTimetablePDF()} title="Download visible timetable as PDF">📄 PDF</button>
         <button type="button" className="tt-highlight-toggle" onClick={() => setHighlightOn((v) => !v)} title="Toggle highlight of cells that differ from the previous load"> {highlightOn ? "✦ Highlight ON" : "✦ Highlight OFF"}</button>
@@ -1740,7 +2122,15 @@ function Timetable() {
             Showing {visibleClasses.length} of {CLASSES.length} classes · {scheduledEntries} of {entries.length} lessons
           </span>
         </div>
-        <div className="tt-table-wrap" data-tt-capture>
+                <div className="tt-masthead">
+          <div className="tt-mast-school">{schoolName}</div>
+          <h1 className="tt-title">MASTER TIMETABLE<span className="tt-live">LIVE</span></h1>
+          <div className="tt-mast-line">
+            {termDisplay || "Current Term"}{runCompletedAt ? ` • Generated: ${new Date(runCompletedAt).toLocaleString()}` : ""}
+          </div>
+        </div>
+
+<div className="tt-table-wrap" data-tt-capture>
           <table className="tt-table">
             <thead>
               <tr>
@@ -1946,7 +2336,22 @@ function Timetable() {
               )}
             </tbody>
           </table>
-        </div>
+</div>
+
+
+        {teacherRoster.length > 0 && (
+          <section className="tt-teacher-roster">
+            <div className="tt-tr-head">TEACHER ROSTER ({teacherRoster.length})</div>
+            <div className="tt-tr-grid">
+              {teacherRoster.map((t) => (
+                <div key={t.code} className="tt-tr-item">
+                  <b>{t.code}</b>{t.name ? ` · ${t.name}` : ""}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
 
         <footer className="tt-footer">
           {/* Fresh-load badge */}
@@ -1954,7 +2359,13 @@ function Timetable() {
           <select
             className="tt-run-picker"
             value={selectedRunId}
-            onChange={(e) => setSelectedRunId(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              userPickedRef.current = !!v;
+              // eslint-disable-next-line no-console
+              console.log("[Timetable] user picked run:", v || "(auto)", "explicit:", userPickedRef.current);
+              setSelectedRunId(v);
+            }}
             title="Choose which generation to display"
           >
             <option value="">Newest completed (auto)</option>
@@ -1988,7 +2399,7 @@ function Timetable() {
 
           <span>All times are local time</span>
         </footer>
-      </main>
+        </main>
     </>
   );
 }

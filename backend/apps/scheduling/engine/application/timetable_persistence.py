@@ -499,6 +499,10 @@ class TimetablePersistenceService:
             "ICT": "LAB1",
             "MUSD": "BDRM",
             "PE": "DHL",
+            # Practicals must use their specialist labs
+            "BIOPRAC": "CHEM/BIO LAB",
+            "CHEMPRAC": "CHEM/BIO LAB",
+            "PHYPRAC": "PHY-LAB",
         }
 
         rooms_by_code = {r.code: r for r in _Room.objects.filter(is_active=True)}

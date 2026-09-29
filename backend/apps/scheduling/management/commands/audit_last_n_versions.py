@@ -2,56 +2,60 @@
 from django.apps import apps
 from collections import defaultdict, Counter
 
+
 def M(n):
     for m in apps.get_models():
-        if m.__name__ == n: return m
+        if m.__name__ == n:
+            return m
     raise LookupError(n)
 
 
 class Command(BaseCommand):
     help = "Audit last N versions: requirement compliance + blank cells + teacher load"
+
     def add_arguments(self, p):
         p.add_argument("--versions", type=int, default=5)
-    def handle(self, *a, **kw):
-        TV = M("TimetableVersion"); TE = M("TimetableEntry")
-        LR = M("LessonRequirement"); IG = M("InstructionalGroup")
-        Per = M("Period"); Teacher = M("Teacher"); TA = M("TeacherAssignment")
-        from apps.scheduling.engine.application.grade10_parallel_blocks import (
-            get_grade10_parallel_block_for_subject,
-            get_senior_school_block_for_subject,
-            is_grade10_instructional_group,
-            is_senior_school_instructional_group,
-        )
 
-        # Teaching periods only
+    def handle(self, *a, **kw):
+        TV = M("TimetableVersion")
+        TE = M("TimetableEntry")
+        LR = M("LessonRequirement")
+        IG = M("InstructionalGroup")
+        Per = M("Period")
+        Teacher = M("Teacher")
+        TA = M("TeacherAssignment")
+
         teaching_periods = set(
             str(p.pk) for p in Per.objects.filter(is_teaching_period=True, number__lte=10)
         )
         all_classes = list(IG.objects.filter(is_active=True).order_by("name"))
 
-        # Required per class (block-aware: count one member per block as the block quota)
         required = defaultdict(Counter)
-        for r in LR.objects.filter(is_active=True).select_related("instructional_group", "subject"):
+        for r in LR.objects.filter(is_active=True).select_related(
+            "instructional_group", "subject"
+        ):
             ig_name = r.instructional_group.name if r.instructional_group else "?"
             subj = r.subject.code if r.subject else "?"
             required[ig_name][subj] += r.lessons_per_week
 
         versions = list(TV.objects.order_by("-version_number")[: kw["versions"]])
         if not versions:
-            print("No versions found"); return
+            print("No versions found")
+            return
 
         for v in versions:
             print("=" * 78)
             print(f"VERSION v{v.version_number}  id={str(v.pk)[:8]}  {v.name}")
             print("=" * 78)
 
-            entries = list(TE.objects.filter(timetable_version=v).select_related(
-                "instructional_group", "lesson_requirement__subject"
-            ))
+            entries = list(
+                TE.objects.filter(timetable_version=v).select_related(
+                    "instructional_group", "lesson_requirement__subject"
+                )
+            )
 
-            # Block-aware placed counts
             placed = defaultdict(Counter)
-            filled_keys = set()  # (ig_id, day, period_id) actually occupied
+            filled_keys = set()
             for e in entries:
                 ig_obj = e.instructional_group
                 ig_name = ig_obj.name if ig_obj else "?"
@@ -60,20 +64,16 @@ class Command(BaseCommand):
                     if e.lesson_requirement and e.lesson_requirement.subject
                     else "?"
                 )
-                block = None
-                if is_grade10_instructional_group(ig_obj):
-                    block = get_grade10_parallel_block_for_subject(subj)
-                elif is_senior_school_instructional_group(ig_obj):
-                    block = get_senior_school_block_for_subject(subj)
-                if block is not None:
-                    for code in block.subject_codes:
-                        placed[ig_name][str(code).upper()] += 1
-                else:
-                    placed[ig_name][subj] += 1
+                placed[ig_name][subj] += 1
                 if e.period_id:
-                    filled_keys.add((str(e.instructional_group_id), str(e.day or "").upper(), str(e.period_id)))
+                    filled_keys.add(
+                        (
+                            str(e.instructional_group_id),
+                            str(e.day or "").upper(),
+                            str(e.period_id),
+                        )
+                    )
 
-            # Per-class report
             for ig in all_classes:
                 ig_name = ig.name
                 req = required.get(ig_name, Counter())
@@ -82,7 +82,6 @@ class Command(BaseCommand):
                 req_total = sum(req.values())
                 plc_total = sum(plc.values())
 
-                # Empty slots = teaching slots not filled
                 empty = 0
                 for day in ("MON", "TUE", "WED", "THU", "FRI"):
                     for pid in teaching_periods:
@@ -97,17 +96,20 @@ class Command(BaseCommand):
                         mism.append(f"{subj}:req{rq}/pl{pq}")
 
                 status = "OK " if not mism else "MISMATCH"
-                print(f"  {ig_name:14s} req={req_total:3d}  placed={plc_total:3d}  empty={empty:3d}  {status}")
-                if mism:
-                    for m in mism:
-                        print(f"      {m}")
+                print(
+                    f"  {ig_name:14s} req={req_total:3d}  placed={plc_total:3d}  "
+                    f"empty={empty:3d}  {status}"
+                )
+                for m in mism:
+                    print(f"      {m}")
 
-            # Teacher load check (informational)
             loads = []
             for t in Teacher.objects.filter(is_active=True):
                 total = sum(
                     ta.lesson_requirement.lessons_per_week
-                    for ta in TA.objects.filter(teacher=t, is_active=True).select_related("lesson_requirement")
+                    for ta in TA.objects.filter(
+                        teacher=t, is_active=True
+                    ).select_related("lesson_requirement")
                     if ta.lesson_requirement
                 )
                 if total > 0:
@@ -115,8 +117,5 @@ class Command(BaseCommand):
             if loads:
                 loads.sort(key=lambda x: -x[1])
                 top3 = ", ".join(f"{c}={n}" for c, n in loads[:3])
-                over = [f"{c}={n}" for c, n in loads if n > 46]
-                print(f"  TEACHER LOADS top3: {top3}")
-                if over:
-                    print(f"  OVER 46: {over}")
+                print(f"  TEACHER LOADS top3 (row count, see audit_teacher_slots): {top3}")
             print()

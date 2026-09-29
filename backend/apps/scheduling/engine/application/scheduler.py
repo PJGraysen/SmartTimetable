@@ -6,7 +6,9 @@ from apps.scheduling.engine.domain.problem import SchedulingProblem
 from apps.scheduling.engine.solver.model import SolverModelBuilder
 from apps.scheduling.engine.solver.objective import (
     BalancedTeacherWorkloadObjective,
+    ComplexSubjectAdjacencyObjective,
     CompositeSolverObjective,
+    MathsMorningPreferenceObjective,
     SolverObjective,
     TeacherConsecutivePeriodObjective,
 )
@@ -143,6 +145,11 @@ def create_default_scheduler(
             objectives=(
                 BalancedTeacherWorkloadObjective(),
                 TeacherConsecutivePeriodObjective(),
+                # --- New pedagogical soft rules ---
+                # Science/science and science/maths adjacency is penalized,
+                # practicals excluded. Maths is preferred in morning periods.
+                ComplexSubjectAdjacencyObjective(),
+                MathsMorningPreferenceObjective(),
             ),
         )
     )

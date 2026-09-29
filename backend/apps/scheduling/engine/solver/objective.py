@@ -570,6 +570,231 @@ class TeacherConsecutivePeriodObjective:
         return penalty_terms
 
 
+# --------------------------------------------------------------------------
+# Complex-subject adjacency (Soft)
+# --------------------------------------------------------------------------
+SCIENCE_CODES = frozenset({"BIO", "CHEM", "PHY"})
+PRACTICAL_CODES = frozenset({"BIOPRAC", "CHEMPRAC", "PHYPRAC"})
+MATHS_CODES = frozenset({"MAT"})
+COMPLEX_CODES = SCIENCE_CODES | MATHS_CODES
+
+
+@dataclass(slots=True)
+class ComplexSubjectAdjacencyObjective:
+    """
+    Soft objective penalizing two COMPLEX subjects scheduled in
+    consecutive periods on the same day for the same instructional group.
+
+    A "complex" subject is any of the pure sciences (BIO, CHEM, PHY) or
+    maths (MAT). Practicals (BIOPRAC, CHEMPRAC, PHYPRAC) are excluded by
+    design so that the existing practical block rule is not disturbed.
+
+    Rule:
+        period N and period N+1 are adjacent.
+        If both carry a complex subject AND the two subject codes differ,
+        add a penalty.
+        Same-code adjacency (e.g. a double BIO lesson) is allowed.
+    """
+
+    weight: int = 20
+
+    def __post_init__(self) -> None:
+        if self.weight <= 0:
+            raise ValueError(
+                "Complex-subject adjacency weight must be greater than zero."
+            )
+
+    def build_expression(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> object:
+        penalty_terms = self._adjacency_terms(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+        if not penalty_terms:
+            return 0
+        return self.weight * sum(penalty_terms)
+
+    def apply(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> None:
+        expression = self.build_expression(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+        if _is_empty_objective_expression(expression):
+            return
+        model.minimize(expression)
+
+    def _adjacency_terms(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> list[cp_model.IntVar]:
+        subject_by_lr: dict[str, str] = {}
+        for lr in getattr(problem, "lesson_requirements", ()) or ():
+            lr_id = getattr(lr, "id", None)
+            code = (
+                getattr(lr, "subject_code", None)
+                or getattr(getattr(lr, "subject", None), "code", None)
+            )
+            if lr_id is not None and code:
+                subject_by_lr[str(lr_id)] = str(code).upper()
+
+        period_by_id = problem.period_by_id
+        indexed: dict[tuple[str, str], dict[int, list[tuple[str, cp_model.IntVar]]]] = {}
+
+        for a in variables:
+            period = period_by_id.get(a.period_id)
+            if period is None or not period.is_active or not period.is_teaching_period:
+                continue
+            lr_id = (
+                getattr(a, "lesson_requirement_id", None)
+                or getattr(a, "requirement_id", None)
+            )
+            code = subject_by_lr.get(str(lr_id), "") if lr_id else ""
+            if not code:
+                continue
+            ig_id = str(getattr(a, "instructional_group_id", ""))
+            indexed.setdefault((ig_id, a.day), {}).setdefault(
+                period.number, []
+            ).append((code, a.variable))
+
+        penalty_terms: list[cp_model.IntVar] = []
+
+        for (ig_id, day), periods in indexed.items():
+            nums = sorted(periods)
+            for i in range(len(nums) - 1):
+                n1 = nums[i]
+                n2 = nums[i + 1]
+                if n2 != n1 + 1:
+                    continue
+                for c1, v1 in periods[n1]:
+                    if c1 not in COMPLEX_CODES:
+                        continue
+                    for c2, v2 in periods[n2]:
+                        if c2 not in COMPLEX_CODES:
+                            continue
+                        if c1 == c2:
+                            continue
+                        penalty = model.new_bool_var(
+                            "complex_adjacency_"
+                            f"{ig_id}_{day}_{n1}_{n2}_{len(penalty_terms)}"
+                        )
+                        model.add(penalty <= v1)
+                        model.add(penalty <= v2)
+                        model.add(penalty >= v1 + v2 - 1)
+                        penalty_terms.append(penalty)
+
+        return penalty_terms
+
+
+# --------------------------------------------------------------------------
+# Maths morning preference (Soft)
+# --------------------------------------------------------------------------
+MATHS_EARLY_CUTOFF_PERIOD = 4
+
+
+@dataclass(slots=True)
+class MathsMorningPreferenceObjective:
+    """
+    Soft objective penalizing maths (MAT) scheduled after period 4
+    (i.e. after the mid-morning break).
+
+    Lower weight than the adjacency objective, because morning placement
+    is a preference, not a rule.
+    """
+
+    weight: int = 5
+
+    def __post_init__(self) -> None:
+        if self.weight <= 0:
+            raise ValueError(
+                "Maths morning preference weight must be greater than zero."
+            )
+
+    def build_expression(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> object:
+        penalty_terms = self._afternoon_maths_terms(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+        if not penalty_terms:
+            return 0
+        return self.weight * sum(penalty_terms)
+
+    def apply(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> None:
+        expression = self.build_expression(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+        if _is_empty_objective_expression(expression):
+            return
+        model.minimize(expression)
+
+    def _afternoon_maths_terms(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> list[cp_model.IntVar]:
+        subject_by_lr: dict[str, str] = {}
+        for lr in getattr(problem, "lesson_requirements", ()) or ():
+            lr_id = getattr(lr, "id", None)
+            code = (
+                getattr(lr, "subject_code", None)
+                or getattr(getattr(lr, "subject", None), "code", None)
+            )
+            if lr_id is not None and code:
+                subject_by_lr[str(lr_id)] = str(code).upper()
+
+        period_by_id = problem.period_by_id
+        penalty_terms: list[cp_model.IntVar] = []
+
+        for a in variables:
+            period = period_by_id.get(a.period_id)
+            if period is None or not period.is_active or not period.is_teaching_period:
+                continue
+            if period.number <= MATHS_EARLY_CUTOFF_PERIOD:
+                continue
+            lr_id = (
+                getattr(a, "lesson_requirement_id", None)
+                or getattr(a, "requirement_id", None)
+            )
+            code = subject_by_lr.get(str(lr_id), "") if lr_id else ""
+            if code not in MATHS_CODES:
+                continue
+            penalty_terms.append(a.variable)
+
+        return penalty_terms
+
+
 @dataclass(slots=True)
 class CompositeSolverObjective:
     """

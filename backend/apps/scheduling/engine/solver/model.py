@@ -703,6 +703,12 @@ class SolverModelBuilder:
             variables=variables,
         )
 
+        self._add_practical_double_lesson_constraints(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
         self._add_room_clash_constraints(
             model=model,
             variables=variables,
@@ -1645,7 +1651,16 @@ class SolverModelBuilder:
             # of teaching days. The per-day cap is therefore derived
             # from the weekly quota, not fixed at 1.
             weekly = max(1, int(requirement.periods_per_week))
-            per_day_cap = max(1, math.ceil(weekly / 5))
+            _subj_code = str(
+                getattr(requirement, "subject_code", "") or ""
+            ).strip().upper()
+            if _subj_code.endswith("PRAC"):
+                # Practicals are delivered as adjacent double lessons.
+                # Allow up to the weekly quota on the same day; the
+                # dedicated practical constraint enforces the pairing.
+                per_day_cap = weekly
+            else:
+                per_day_cap = max(1, math.ceil(weekly / 5))
             model.add(sum(day_variables) <= per_day_cap)
 
     # ------------------------------------------------------------------
@@ -2893,6 +2908,95 @@ class SolverModelBuilder:
     # ------------------------------------------------------------------
     # Room availability
     # ------------------------------------------------------------------
+
+    def _add_practical_double_lesson_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+        """Practicals (subject_code endswith 'PRAC', lpw=2):
+          - exactly one adjacent pair per week
+          - same day, consecutive periods
+          - window P5..P12 (start P5..P11); P1..P4 forbidden
+        """
+        PAIRS = [(5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12)]
+        DAYS = ("MON", "TUE", "WED", "THU", "FRI")
+
+        reqs_by_id = {
+            r.id: r
+            for r in problem.lesson_requirements
+            if getattr(r, "is_active", False)
+        }
+        pnum_by_id: dict = {}
+        for per in problem.periods:
+            try:
+                pnum_by_id[getattr(per, "id")] = int(
+                    getattr(per, "number", 0) or 0
+                )
+            except Exception:
+                pass
+
+        vars_by_req: dict = {}
+        for v in variables:
+            rid = getattr(v, "lesson_requirement_id", None)
+            if rid in reqs_by_id:
+                vars_by_req.setdefault(rid, []).append(v)
+
+        def _new_bool(name: str):
+            try:
+                return model.new_bool_var(name)
+            except AttributeError:
+                return model.NewBoolVar(name)
+
+        for req_id, req_vars in vars_by_req.items():
+            req = reqs_by_id[req_id]
+            subj = str(getattr(req, "subject_code", "") or "").strip().upper()
+            if not subj.endswith("PRAC"):
+                continue
+            lpw = int(getattr(req, "periods_per_week", 0) or 0)
+            if lpw != 2:
+                continue
+
+            # Index variables by (day, period-number)
+            by_dp: dict = {}
+            for v in req_vars:
+                pnum = pnum_by_id.get(v.period_id)
+                if pnum is None:
+                    continue
+                by_dp[(str(v.day).upper(), pnum)] = v
+
+            # Forbid everything outside the P5..P12 window
+            for (day, pnum), v in by_dp.items():
+                if pnum < 5 or pnum > 12:
+                    model.add(v.variable == 0)
+
+            # Build candidate pair booleans
+            pair_bools = []
+            for day in DAYS:
+                for (p1, p2) in PAIRS:
+                    v1 = by_dp.get((day, p1))
+                    v2 = by_dp.get((day, p2))
+                    if v1 is None or v2 is None:
+                        continue
+                    b = _new_bool(f"prac_{str(req_id)[:8]}_{day}_{p1}")
+                    # When b is true, both periods must be scheduled...
+                    model.add(v1.variable == 1).only_enforce_if(b)
+                    model.add(v2.variable == 1).only_enforce_if(b)
+                    # ...and every other slot for this requirement must be 0
+                    for (d2, p3), v_other in by_dp.items():
+                        if d2 == day and p3 in (p1, p2):
+                            continue
+                        model.add(v_other.variable == 0).only_enforce_if(b)
+                    pair_bools.append(b)
+
+            if pair_bools:
+                model.add(sum(pair_bools) == 1)
+            else:
+                # No valid pair — force the requirement off entirely
+                for v in req_vars:
+                    model.add(v.variable == 0)
 
     def _add_room_availability_constraints(
         self,

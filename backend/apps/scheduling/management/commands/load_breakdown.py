@@ -54,7 +54,7 @@ class Command(BaseCommand):
             if rl == 0:
                 print(f"{t.employee_code:6s} {str(t)[:26]:26s} {rw:4d} {rl:5d}  (no load)")
                 continue
-            marker = "  <<< OVER" if rl > 46 else ("  (near cap)" if rl >= 42 else "")
+            marker = ""  # false-alarm removed; use `manage.py audit_teacher_slots`
             delta = f"  Δ-{rw-rl}" if rw != rl else ""
             print(f"{t.employee_code:6s} {str(t)[:26]:26s} {rw:4d} {rl:5d}{marker}{delta}")
             for label, subj, lpw, streams in sorted(detail[t.pk]):
@@ -64,3 +64,4 @@ class Command(BaseCommand):
         print("-" * 110)
         print(f"Grand total raw:       {sum(raw.values())}")
         print(f"Grand total effective: {sum(real.values())}")
+

@@ -48,5 +48,6 @@ class Command(BaseCommand):
         for t in Teacher.objects.filter(is_active=True).order_by("employee_code"):
             load = by_teacher.get(t.pk, 0)
             classes = sorted(by_teacher_classes.get(t.pk, []))
-            warn = "  <<< OVER" if load > 46 else ("  (near cap)" if load >= 42 else "")
+            warn = ""  # false-alarm removed; use `manage.py audit_teacher_slots`
             print(f"  {t.employee_code:6s}  {str(t)[:30]:30s}  load={load:3d}  classes={classes}{warn}")
+

@@ -60,3 +60,8 @@ _fix_*.py
 # OS
 .DS_Store
 Thumbs.db
+
+staticfiles/
+.env
+.env.*
+!.env.example

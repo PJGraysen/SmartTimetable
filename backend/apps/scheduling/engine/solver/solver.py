@@ -42,9 +42,34 @@ class CPSATSolver:
         *,
         time_limit_seconds: float = 900.0,
         num_workers: Optional[int] = None,
+        seed: Optional[int] = None,
     ) -> None:
         self.time_limit_seconds = time_limit_seconds
         self.num_workers = num_workers
+        self.seed = seed
+
+    def _resolve_seed(self) -> int:
+        """Deterministic CP-SAT seed.
+
+        Resolution order:
+          1. explicit self.seed (constructor arg)
+          2. Django setting TIMETABLE_SOLVER_SEED:
+               -1 -> legacy random-per-run (diversity mode)
+                0 -> deterministic (default)
+                N -> deterministic with fixed seed N
+          3. fallback: 0 (deterministic)
+        """
+        if self.seed is not None:
+            return int(self.seed) & 0x7FFFFFFF
+        try:
+            from django.conf import settings
+            value = getattr(settings, "TIMETABLE_SOLVER_SEED", 0)
+        except Exception:
+            value = 0
+        if value == -1:
+            import os as _oo
+            return int.from_bytes(_oo.urandom(4), "little") & 0x7FFFFFFF
+        return int(value) & 0x7FFFFFFF
 
     def solve(
         self,
@@ -59,15 +84,7 @@ class CPSATSolver:
 
 
 
-        # Diversity injection (SmartTimetable Pro):
-
-        # Every generation uses a fresh seed so CP-SAT explores
-
-        # a different region of the feasible space.
-
-        import time as _tt, os as _oo
-
-        solver.parameters.random_seed = int.from_bytes(_oo.urandom(4), 'little') & 0x7FFFFFFF
+        solver.parameters.random_seed = self._resolve_seed()
 
 
         solver.parameters.num_search_workers = 1
