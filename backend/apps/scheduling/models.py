@@ -734,3 +734,48 @@ class SchedulingErrorLog(TimeStampedModel):
 
     def __str__(self):
         return f"[{self.severity}] {self.source}: {self.message[:60]}"
+
+
+# ---------------------------------------------------------------------
+# Duty Roster (Session 3)
+# ---------------------------------------------------------------------
+class DutyShift(models.TextChoices):
+    DAY   = "DAY",   "Day (6:00 ? 18:00)"
+    NIGHT = "NIGHT", "Night (18:00 ? 6:00)"
+
+
+class DutyAssignment(TimeStampedModel):
+    """
+    One teacher, one shift, one date. Two rows per day (day + night).
+
+    Constraints:
+      * (date, shift) is unique ? exactly one teacher per shift per day.
+      * Backend also blocks the same teacher appearing on both shifts
+        the same day.
+    """
+    date = models.DateField(db_index=True)
+    shift = models.CharField(max_length=10, choices=DutyShift.choices)
+    teacher = models.ForeignKey(
+        "users.Teacher",
+        on_delete=models.PROTECT,
+        related_name="duty_assignments",
+    )
+    notes = models.CharField(max_length=300, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "duty_assignment"
+        ordering = ["-date", "shift"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["date", "shift"],
+                name="uniq_duty_per_date_shift",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["date", "shift"]),
+            models.Index(fields=["teacher", "-date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.date} {self.shift} ? {self.teacher}"

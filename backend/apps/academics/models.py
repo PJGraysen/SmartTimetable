@@ -684,3 +684,41 @@ class RankingRun(TimeStampedModel):
 
     def __str__(self):
         return f"{self.rule.name} — {self.scope_label} — {self.created_at:%Y-%m-%d}"
+
+# ------------------------------------------------------------------
+# Result publication gate (SmartTimetable Pro)
+# ------------------------------------------------------------------
+from django.conf import settings as _settings
+from django.db import models as _models
+
+
+class ResultPublication(_models.Model):
+    """
+    Per-term flag controlling whether teachers can still edit marks.
+
+    When `is_published` is True, teachers lose edit rights and marks become
+    read-only until the flag is turned off by the dean/principal/admin.
+    Admin-like roles always retain edit access.
+    """
+
+    term = _models.OneToOneField(
+        "core.Term",
+        on_delete=_models.CASCADE,
+        related_name="result_publication",
+    )
+    is_published = _models.BooleanField(default=False)
+    published_at = _models.DateTimeField(null=True, blank=True)
+    published_by = _models.ForeignKey(
+        _settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=_models.SET_NULL,
+        related_name="result_publications",
+    )
+
+    class Meta:
+        verbose_name = "Result publication"
+        verbose_name_plural = "Result publications"
+
+    def __str__(self):
+        return f"{self.term} - {'PUBLISHED' if self.is_published else 'OPEN'}"

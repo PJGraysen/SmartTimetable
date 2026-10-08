@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Search, BookOpen, Filter, X } from "lucide-react";
+import { useAuth } from "../../auth/AuthContext";
 import * as lib from "../../services/library";
 
 export default function CataloguePage() {
+  const { role } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [q, setQ] = useState(searchParams.get("q") || "");
@@ -84,7 +86,7 @@ export default function CataloguePage() {
           ) : null}
           <p style={{ color: "#748095" }}>Search and browse the collection.</p>
         </div>
-        <Link to="/library/catalogue/new" className="primary-button">Add Book</Link>
+        {role !== "STUDENT" && (<Link to="/library/catalogue/new" className="primary-button">Add Book</Link>)}
       </div>
 
 

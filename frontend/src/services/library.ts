@@ -615,3 +615,73 @@ export function resourceStreamUrlWithToken(id: string, mode: "view" | "download"
   const q = tok ? `?token=${encodeURIComponent(tok)}` : "";
   return `${base}/library/resources/${id}/${mode}/${q}`;
 }
+
+
+// ================================================================
+// Book requests (student → teacher → librarian)
+// ================================================================
+export type BookRequest = {
+  id: string;
+  book_id: string;
+  book_title: string;
+  book_author: string;
+  member_name: string;
+  approval_stage:
+    | "PENDING_TEACHER"
+    | "PENDING_LIBRARIAN"
+    | "HOLD"
+    | "APPROVED"
+    | "AWARDED"
+    | "REJECTED"
+    | "FULFILLED"
+    | "CANCELLED";
+  status: string;
+  requested_at: string;
+  teacher_note: string;
+  librarian_note: string;
+  rejection_reason: string;
+  subject_teacher: string | null;
+  teacher_approved_at: string | null;
+  librarian_approved_at: string | null;
+};
+
+export async function requestBook(bookId: string): Promise<BookRequest> {
+  const { data } = await http.post<BookRequest>(
+    "/library/book-requests/request/",
+    { book_id: bookId },
+  );
+  return data;
+}
+
+export async function myRequests(): Promise<BookRequest[]> {
+  const { data } = await http.get<BookRequest[]>(
+    "/library/book-requests/mine/",
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+export async function pendingApprovals(): Promise<BookRequest[]> {
+  const { data } = await http.get<BookRequest[]>(
+    "/library/book-requests/pending/",
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+export async function requestAction(
+  id: string,
+  action:
+    | "teacher-approve"
+    | "teacher-reject"
+    | "librarian-approve"
+    | "librarian-reject"
+    | "hold"
+    | "award"
+    | "cancel",
+  note = "",
+): Promise<BookRequest> {
+  const { data } = await http.post<BookRequest>(
+    `/library/book-requests/${id}/action/`,
+    { action, note },
+  );
+  return data;
+}

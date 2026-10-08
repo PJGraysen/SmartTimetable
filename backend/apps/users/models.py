@@ -4,6 +4,11 @@ from django.db import models
 from apps.core.models import TimeStampedModel
 
 
+class DutyPreference(models.TextChoices):
+    ANY      = "ANY", "Any shift (day or night)"
+    DAY_ONLY = "DAY_ONLY", "Day shift only"
+
+
 class Teacher(TimeStampedModel):
     """
     Represents a teacher who can be assigned teaching responsibilities
@@ -47,10 +52,22 @@ class Teacher(TimeStampedModel):
     )
 
     is_frozen = models.BooleanField(default=False)
+    duty_eligible = models.BooleanField(
+        default=True,
+        help_text="If False, teacher is skipped in duty roster rotation (e.g. librarian, principal).",
+    )
+
+    duty_preference = models.CharField(
+        max_length=20,
+        choices=DutyPreference.choices,
+        default=DutyPreference.ANY,
+    )
 
     # ---- Extended profile (SmartTimetable Pro) ----
     ROLE_CHOICES = [
         ("SUPER_ADMIN", "Super Admin (full access)"),
+        ("PRINCIPAL", "Principal / Rector"),
+        ("SECRETARY", "Secretary"),
         ("DEPT_HEAD", "Department Head"),
         ("TEACHER", "Teacher"),
         ("LAB_TECH", "Lab Technician"),

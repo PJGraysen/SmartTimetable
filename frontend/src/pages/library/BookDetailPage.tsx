@@ -1,6 +1,7 @@
-﻿import { BookOpen, useEffect, useState, type FormEvent } from "react";
+﻿import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Plus } from "lucide-react";
+import { useAuth } from "../../auth/AuthContext";
+import { ArrowLeft, BookOpen, Plus } from "lucide-react";
 import * as lib from "../../services/library";
 
 export default function BookDetailPage() {
@@ -9,6 +10,9 @@ export default function BookDetailPage() {
   const [copies, setCopies] = useState<lib.Copy[]>([]);
   const [error, setError] = useState("");
 
+  const { role } = useAuth();
+  const [requestBusy, setRequestBusy] = useState(false);
+  const [requestMsg, setRequestMsg] = useState("");
   const [showAddCopy, setShowAddCopy] = useState(false);
   const [barcode, setBarcode] = useState("");
   const [accession, setAccession] = useState("");
@@ -21,6 +25,28 @@ export default function BookDetailPage() {
       .then(([b, c, s]) => { setBook(b); setCopies(c); setShelves(s); })
       .catch((e) => setError(e?.response?.data?.detail || "Failed to load book."));
   }, [id]);
+
+  async function submitRequest() {
+    if (!book) return;
+    setRequestBusy(true);
+    setRequestMsg("");
+    try {
+      await lib.requestBook(book.id);
+      setRequestMsg("Request submitted — awaiting teacher approval.");
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const detail =
+        e?.response?.data?.detail ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Unknown error";
+      setRequestMsg(
+        status ? `[${status}] ${detail}` : `Network error: ${detail}`
+      );
+    } finally {
+      setRequestBusy(false);
+    }
+  }
 
   async function submitCopy(e: FormEvent) {
     e.preventDefault();
@@ -49,7 +75,22 @@ export default function BookDetailPage() {
 
       <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "1.5rem", marginBottom: "1.5rem" }}>
         <h1 style={{ margin: 0 }}>{book.title}</h1>
-        <div style={{ marginTop: "0.5rem" }}>
+        <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          {role === "STUDENT" ? (
+            <button
+              type="button"
+              onClick={submitRequest}
+              disabled={requestBusy}
+              style={{
+                padding: "0.55rem 1rem", borderRadius: 6,
+                background: "#059669", color: "#fff",
+                fontWeight: 700, border: "none", cursor: "pointer",
+                display: "inline-flex", alignItems: "center", gap: "0.4rem",
+              }}
+            >
+              <BookOpen size={15} /> {requestBusy ? "Requesting…" : "Request this book"}
+            </button>
+          ) : null}
           {book.read_asset ? (
             <Link to={`/library/read/${book.id}`}
                   style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem",
@@ -60,6 +101,13 @@ export default function BookDetailPage() {
           ) : null}
         </div>
         {book.subtitle ? <p style={{ color: "#748095", marginTop: "0.35rem" }}>{book.subtitle}</p> : null}
+        {requestMsg ? (
+          <div style={{ marginTop: "0.75rem", padding: "0.55rem 0.85rem",
+                        background: "#ecfdf5", border: "1px solid #a7f3d0",
+                        borderRadius: 6, color: "#065f46", fontSize: "0.85rem" }}>
+            {requestMsg}
+          </div>
+        ) : null}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginTop: "1rem" }}>
           <Field label="Authors" value={book.authors.map((a) => a.name).join(", ") || "—"} />

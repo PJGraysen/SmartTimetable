@@ -15,12 +15,19 @@ import LoginPage from "./pages/LoginPage";
 import HomeHub from "./pages/HomeHub";
 import Dashboard from "./pages/Dashboard";
 import Placeholder from "./pages/Placeholder";
+import SettingsPage from "./pages/SettingsPage";
 import AIAssistant from "./pages/AIAssistant";
 import Scheduling from "./Scheduling";
 import AcademicsManagement from "./pages/AcademicsManagement";
+import AcademicsEntry from "./pages/AcademicsEntry";
+import SchoolAnalyticsPage from "./pages/SchoolAnalyticsPage";
 import Timetable from "./pages/Timetable";
 
 import LibraryDashboard from "./pages/library/LibraryDashboard";
+import LibraryEntry from "./pages/LibraryEntry";
+import BookRequestsPage from "./pages/library/BookRequestsPage";
+import MyLibraryPage from "./pages/MyLibraryPage";
+import MyReportsPage from "./pages/MyReportsPage";
 import CataloguePage from "./pages/library/CataloguePage";
 import BookDetailPage from "./pages/library/BookDetailPage";
 import BookFormPage from "./pages/library/BookFormPage";
@@ -43,6 +50,7 @@ import ClassComparisonPage from "./pages/academics/ClassComparisonPage";
 import StreamSummaryPage from "./pages/academics/StreamSummaryPage";
 import BulkReportsPage from "./pages/academics/BulkReportsPage";
 import AuditTrailPage from "./pages/academics/AuditTrailPage";
+import LiveActivityPage from "./pages/admin/LiveActivityPage";
 import CommentsPage from "./pages/academics/CommentsPage";
 import GradingSchemePage from "./pages/academics/GradingSchemePage";
 import RankingPage from "./pages/academics/RankingPage";
@@ -50,6 +58,8 @@ import RankingPage from "./pages/academics/RankingPage";
 import AdminConsole from "./pages/AdminConsole";
 import ErrorLogsPage from "./pages/admin/ErrorLogsPage";
 import TeachersAdminPage from "./pages/admin/TeachersAdminPage";
+import DutyRosterPage from "./pages/admin/DutyRosterPage";
+import MergeTeachersPage from "./pages/admin/MergeTeachersPage";
 import InventoryDashboard from "./pages/inventory/Dashboard";
 import InventoryDepartments from "./pages/inventory/Departments";
 import InventoryLocations from "./pages/inventory/Locations";
@@ -62,6 +72,7 @@ import InventoryMovements from "./pages/inventory/Movements";
 import InventoryMaintenance from "./pages/inventory/Maintenance";
 import InventoryAudits from "./pages/inventory/Audits";
 import InventoryReports from "./pages/inventory/Reports";
+import { Navigate } from "react-router-dom";
 
 export type AppRoute = {
   path: string;
@@ -92,7 +103,9 @@ export const PROTECTED_ROUTES: AppRoute[] = [
   { path: "/inventory/audits", element: <InventoryAudits /> },
   { path: "/inventory/reports", element: <InventoryReports /> },
 
-  { path: "/academics", element: <AcademicsManagement initialTab="groups" /> },
+  { path: "/academics", element: <AcademicsEntry /> },
+  { path: "/academics/manage", element: <AcademicsManagement initialTab="groups" /> },
+  { path: "/academics/school", element: <SchoolAnalyticsPage /> },
   { path: "/academics/students", element: <StudentsPage /> },
   { path: "/academics/students/:id/analysis", element: <StudentAnalysisPage /> },
   { path: "/academics/students/:id/report-card", element: <ReportCardPage /> },
@@ -114,7 +127,7 @@ export const PROTECTED_ROUTES: AppRoute[] = [
 
   { path: "/academic-analysis", element: <AnalysisDashboard /> },
 
-  { path: "/library", element: <LibraryShell><LibraryDashboard /></LibraryShell> },
+  { path: "/library", element: <LibraryEntry /> },
   { path: "/library/catalogue", element: <LibraryShell><CataloguePage /></LibraryShell> },
   { path: "/library/public", element: <PublicCataloguePage /> },
   { path: "/library/subject/:code", element: <LibraryShell><SubjectLandingPage /></LibraryShell> },
@@ -131,16 +144,26 @@ export const PROTECTED_ROUTES: AppRoute[] = [
   { path: "/library/audits", element: <LibraryShell><AuditsPage /></LibraryShell> },
   { path: "/library/analytics", element: <LibraryShell><AnalyticsPage /></LibraryShell> },
   { path: "/library/my", element: <LibraryShell><StudentPortalPage /></LibraryShell> },
+  { path: "/library/my-reports", element: <LibraryShell><MyReportsPage /></LibraryShell> },
+  { path: "/library/book-requests", element: <LibraryShell><BookRequestsPage /></LibraryShell> },
+  // Redirect any /admin/approvals/<id> link to the working page
+  { path: "/admin/approvals/:id", element: <Navigate to="/library/book-requests" replace /> },
   { path: "/library/resources", element: <LibraryShell><ResourcesPage /></LibraryShell> },
   { path: "/library/resources/:id", element: <LibraryShell><ResourceViewerPage /></LibraryShell> },
+  { path: "/library/rules", element: <LibraryShell><LoanRulesPage /></LibraryShell> },
   { path: "/library/settings", element: <LibraryShell><LoanRulesPage /></LibraryShell> },
 
   { path: "/validation", element: <Placeholder title="Validation" /> },
-  { path: "/settings", element: <Placeholder title="Settings" /> },
+  { path: "/settings", element: <SettingsPage /> },
 
   { path: "/ai", element: <AIAssistant /> },
 
   { path: "/admin", element: <AdminConsole /> },
   { path: "/admin/errors", element: <ErrorLogsPage /> },
+  { path: "/admin/audit-trail", element: <AuditTrailPage /> },
+  { path: "/admin/live", element: <LiveActivityPage /> },
   { path: "/admin/teachers", element: <TeachersAdminPage /> },
+  { path: "/admin/teachers/merge", element: <MergeTeachersPage /> },
+  { path: "/admin/duty-roster", element: <DutyRosterPage /> },
 ];
+

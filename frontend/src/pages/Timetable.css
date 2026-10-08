@@ -337,3 +337,30 @@
 }
 
 @keyframes slideInRight { from { transform: translate(100%, -50%); opacity: 0; } to { transform: translate(0, -50%); opacity: 1; } }
+
+/* ---------- Student mode: timetable view-only ---------- */
+.tt-page[data-student] .tt-hard-reload,
+.tt-page[data-student] .tt-dl-png,
+.tt-page[data-student] .tt-dl-pdf,
+.tt-page[data-student] .tt-highlight-toggle,
+.tt-page[data-student] .tt-nuke-cache,
+.tt-page[data-student] .tt-fingerprint,
+.tt-page[data-student] .tt-changes-banner,
+.tt-page[data-student] .tt-run-picker,
+.tt-page[data-student] .tt-force-btn,
+.tt-page[data-student] .tt-fresh-badge,
+.tt-page[data-student] .tt-actions,
+.tt-page[data-student] .tt-subtitle,
+.tt-page[data-student] .tt-footer,
+.tt-page[data-student] .no-print,
+.tt-page[data-student] [class*="tt-filter"],
+.tt-page[data-student] [class*="tt-highlight"] {
+  display: none !important;
+}
+.tt-page[data-student] .tt-header {
+  justify-content: center;
+  text-align: center;
+}
+.tt-page[data-student] .tt-masthead {
+  text-align: center;
+}

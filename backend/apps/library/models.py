@@ -294,6 +294,45 @@ class Reservation(LibraryBase):
     expires_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True)
 
+    # --- Approval workflow ---
+    APPROVAL_STAGE_CHOICES = [
+        ("PENDING_TEACHER",   "Pending subject teacher"),
+        ("PENDING_LIBRARIAN", "Pending librarian"),
+        ("HOLD",              "On hold"),
+        ("APPROVED",          "Approved"),
+        ("AWARDED",           "Awarded to student"),
+        ("REJECTED",          "Rejected"),
+        ("FULFILLED",         "Fulfilled"),
+        ("CANCELLED",         "Cancelled"),
+    ]
+    approval_stage = models.CharField(
+        max_length=24, choices=APPROVAL_STAGE_CHOICES,
+        default="PENDING_TEACHER",
+    )
+    subject_teacher = models.ForeignKey(
+        "users.Teacher", null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="book_request_approvals",
+        help_text="Subject teacher who must approve first",
+    )
+    teacher_approved_by = models.ForeignKey(
+        "auth.User", null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="book_requests_teacher_approved",
+    )
+    teacher_approved_at = models.DateTimeField(null=True, blank=True)
+    teacher_note = models.TextField(blank=True, default="")
+
+    librarian_approved_by = models.ForeignKey(
+        "auth.User", null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="book_requests_librarian_approved",
+    )
+    librarian_approved_at = models.DateTimeField(null=True, blank=True)
+    librarian_note = models.TextField(blank=True, default="")
+
+    rejection_reason = models.TextField(blank=True, default="")
+
     class Meta:
         ordering = ["status", "position", "requested_at"]
         constraints = [

@@ -2,6 +2,12 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from . import views
+from .views import (
+    request_book_view,
+    my_requests_view,
+    pending_approvals_view,
+    request_action_view,
+)
 
 router = DefaultRouter()
 router.register("books", views.BookViewSet, basename="book")
@@ -142,4 +148,13 @@ from apps.library.api.views import reports_pdf as _reports_pdf
 
 urlpatterns += [
     path("reports/pdf/<slug:report_name>/", _reports_pdf, name="library-reports-pdf"),
+]
+
+
+# --- Book request workflow ---
+urlpatterns += [
+    path("book-requests/request/", request_book_view, name="book-request-create"),
+    path("book-requests/mine/", my_requests_view, name="book-request-mine"),
+    path("book-requests/pending/", pending_approvals_view, name="book-request-pending"),
+    path("book-requests/<uuid:pk>/action/", request_action_view, name="book-request-action"),
 ]

@@ -42,6 +42,8 @@ ALLOWED_HOSTS = ["127.0.0.1", "localhost", ".onrender.com"]
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
+    "channels",
     # Django applications
     'django.contrib.admin',
     'django.contrib.auth',
@@ -84,6 +86,9 @@ SPECTACULAR_SETTINGS = {
 }
 
 MIDDLEWARE = [
+    "apps.core.middleware.ErrorEnvelopeMiddleware",
+    "apps.core.middleware.AuditMutationsMiddleware",
+    "apps.core.rbac_middleware.ModuleAccessMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -211,3 +216,31 @@ CSRF_TRUSTED_ORIGINS = [
 # ---- Production static storage (WhiteNoise) ----
 if not DEBUG:
     STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+
+# ------------------------------------------------------------------
+# Iframe embedding (needed for in-app PDF reader)
+# ------------------------------------------------------------------
+# We allow SAMEORIGIN globally. The PDF stream endpoints additionally
+# exempt themselves (see apps/library/api/views.py) and set an explicit
+# Content-Security-Policy frame-ancestors header that trusts the
+# frontend origins.
+X_FRAME_OPTIONS = "SAMEORIGIN"
+
+
+# ---- Channels / ASGI ----
+ASGI_APPLICATION = "config.asgi.application"
+
+# In-memory channel layer for dev ? single-process only.
+# In production switch to channels_redis:
+#   CHANNEL_LAYERS = {
+#       "default": {
+#           "BACKEND": "channels_redis.core.RedisChannelLayer",
+#           "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
+#       }
+#   }
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
+}

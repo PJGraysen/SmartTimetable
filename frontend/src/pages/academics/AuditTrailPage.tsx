@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Filter, RefreshCw, ScrollText, X } from "lucide-react";
-import { listAuditEvents, type AuditEvent } from "../../services/audit";
+import { listAuditLogs, type AuditLog as AuditEvent } from "../../services/auditLogs";
 
 const BROWN = "#2b1a0f", BROWN2 = "#5a3a1e", SKY = "#22b4f0", CREAM = "#f5eee2";
 
@@ -44,7 +44,7 @@ export default function AuditTrailPage() {
   async function load() {
     setLoading(true); setError(null);
     try {
-      const data = await listAuditEvents({
+      const data = await listAuditLogs({
         entity_type: entityType || undefined,
         action: actionFilter || undefined,
         q: q || undefined,
@@ -52,7 +52,7 @@ export default function AuditTrailPage() {
         to: toDate || undefined,
         page_size: 500,
       });
-      setEvents(data.results);
+      setEvents(Array.isArray(data.results) ? data.results : []);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load audit trail");
     } finally { setLoading(false); }

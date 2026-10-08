@@ -1,5 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useAuth } from "../auth/AuthContext";
 import { Printer, RefreshCw } from "lucide-react";
 import {
   getSchedulingRunResults,
@@ -694,6 +695,8 @@ function Timetable() {
   const [runCompletedAt, setRunCompletedAt] = useState<string | null>(null);
   const [availableRuns, setAvailableRuns] = useState<any[]>([]);
   const [entrySignature, setEntrySignature] = useState<string>("");
+  const { role: _ttRole } = useAuth();
+  const isStudentView = _ttRole === "STUDENT";
   const [changedKeys, setChangedKeys] = useState<Set<string>>(new Set());
   const [highlightOn, setHighlightOn] = useState(true);
   const [changesSummary, setChangesSummary] = useState<{
@@ -2001,7 +2004,23 @@ function Timetable() {
 }
       `}</style>
 
-      <main className="tt-page">
+      <main className="tt-page" data-student={isStudentView || undefined}>
+      {isStudentView && (
+        <style>{`
+          .tt-hard-reload, .tt-dl-png, .tt-dl-pdf, .tt-highlight-toggle,
+          .tt-nuke-cache, .tt-fingerprint, .tt-changes-banner, .tt-run-picker,
+          .tt-force-btn, .tt-fresh-badge, .tt-actions, .tt-subtitle,
+          .tt-footer, .tt-fp-label, .tt-fp-hash, .tt-fp-ver, .tt-fp-time,
+          [class*="tt-filter"], [class*="tt-highlight"],
+          [class*="tt-force"], [class*="tt-fresh"], [class*="tt-run-picker"] {
+            display: none !important;
+            visibility: hidden !important;
+          }
+          .tt-header { justify-content: center !important; text-align: center !important; }
+          .tt-masthead { text-align: center !important; }
+        `}</style>
+      )}
+
         <header className="tt-header">
           <div>
             <button type="button" className="tt-hard-reload" onClick={() => window.location.reload()} title="Hard reload the whole page">&#x21BB; Hard Reload</button>

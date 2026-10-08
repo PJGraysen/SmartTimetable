@@ -411,12 +411,154 @@ def teacher_delete(request, pk):
             "suggestion": "deactivate",
         }, status=409)
 
-    # Count assignments
-    lr_count = t.lesson_requirements.count() if hasattr(t, "lesson_requirements") else 0
+    # Refuse if teacher has active LessonRequirements ? retire first
+    active_lrs = LessonRequirement.objects.filter(teacher=t, is_active=True)
+    active_count = active_lrs.count()
+    if active_count > 0:
+        return Response({
+            "detail": (
+                f"Cannot delete: this teacher has {active_count} active "
+                "assignment(s). Retire and deactivate first, then delete."
+            ),
+            "lr_count": active_count,
+            "suggestion": "retire",
+        }, status=409)
+
+    # Count all (including inactive) for reporting
+    lr_count = LessonRequirement.objects.filter(teacher=t).count()
 
     with transaction.atomic():
         if lr_count:
-            t.lesson_requirements.all().delete()
+            LessonRequirement.objects.filter(teacher=t).delete()
+        TeacherFreeAfternoon.objects.filter(teacher=t).delete()
         t.delete()
 
     return Response({"ok": True, "deleted_assignments": lr_count}, status=200)
+
+
+
+# ---------------------------------------------------------------------
+# Free-afternoon + retire (Session 1)
+# ---------------------------------------------------------------------
+from apps.scheduling.models import TeacherFreeAfternoon
+
+
+@api_view(["GET", "PUT", "PATCH"])
+@permission_classes([IsAdminUser])
+def teacher_free_afternoon(request, pk):
+    """Get or set a teacher's weekly free afternoon for the active term.
+
+    GET   -> {"day": "MON"|null, "term": "..."}
+    PUT   -> body {"day": "MON" | null}  (null clears it)
+    """
+    from apps.core.models import Term
+
+    try:
+        t = Teacher.objects.get(id=pk)
+    except Teacher.DoesNotExist:
+        return Response({"detail": "teacher not found"}, status=404)
+
+    term = Term.objects.filter(is_active=True).first() or Term.objects.first()
+    if not term:
+        return Response({"detail": "no term"}, status=400)
+
+    if request.method == "GET":
+        row = TeacherFreeAfternoon.objects.filter(
+            teacher=t, term=term, is_active=True
+        ).first()
+        return Response({
+            "day": row.day if row else None,
+            "term": term.name,
+            "term_id": str(term.id),
+        })
+
+    # PUT/PATCH
+    day = request.data.get("day")
+    if day in ("", None, "null"):
+        TeacherFreeAfternoon.objects.filter(
+            teacher=t, term=term, is_active=True
+        ).update(is_active=False)
+        return Response({"ok": True, "day": None})
+
+    day = str(day).upper()
+    valid = {c for c, _ in TeacherFreeAfternoon._meta.get_field("day").choices}
+    if day not in valid:
+        return Response({"detail": f"invalid day. valid: {sorted(valid)}"}, status=400)
+
+    with transaction.atomic():
+        TeacherFreeAfternoon.objects.filter(
+            teacher=t, term=term, is_active=True
+        ).exclude(day=day).update(is_active=False)
+
+        row, _created = TeacherFreeAfternoon.objects.update_or_create(
+            teacher=t, term=term, day=day,
+            defaults={"is_active": True},
+        )
+
+    return Response({"ok": True, "day": row.day, "term": term.name})
+
+
+@api_view(["POST"])
+@permission_classes([IsAdminUser])
+def teacher_retire(request, pk):
+    """Retire a teacher: soft-deactivate. Refuses if they appear in any
+    open/published timetable version (would break the schedule)."""
+    from apps.scheduling.models import TimetableEntry
+
+    try:
+        t = Teacher.objects.select_related("user").get(id=pk)
+    except Teacher.DoesNotExist:
+        return Response({"detail": "teacher not found"}, status=404)
+
+    if not t.is_active:
+        return Response({"detail": "already retired"}, status=400)
+
+    # Refuse if referenced by any active timetable entry
+    te_count = TimetableEntry.objects.filter(teacher=t).count()
+    if te_count > 0:
+        return Response({
+            "detail": (
+                f"Cannot retire now: this teacher appears in {te_count} "
+                "timetable entries. Remove or regenerate the affected "
+                "timetable first."
+            ),
+            "te_count": te_count,
+        }, status=409)
+
+    with transaction.atomic():
+        t.is_active = False
+        t.is_frozen = True
+        t.save(update_fields=["is_active", "is_frozen", "updated_at"])
+
+        # Deactivate the linked user (they can't log in)
+        if t.user_id:
+            t.user.is_active = False
+            t.user.save(update_fields=["is_active"])
+
+        # Deactivate their lesson requirements
+        LessonRequirement.objects.filter(teacher=t, is_active=True).update(is_active=False)
+
+        # Deactivate free-afternoon rows
+        TeacherFreeAfternoon.objects.filter(teacher=t, is_active=True).update(is_active=False)
+
+    return Response({"ok": True, "retired": True})
+
+
+@api_view(["POST"])
+@permission_classes([IsAdminUser])
+def teacher_reactivate(request, pk):
+    """Reverse of retire ? brings the teacher back."""
+    try:
+        t = Teacher.objects.select_related("user").get(id=pk)
+    except Teacher.DoesNotExist:
+        return Response({"detail": "teacher not found"}, status=404)
+
+    with transaction.atomic():
+        t.is_active = True
+        t.is_frozen = False
+        t.save(update_fields=["is_active", "is_frozen", "updated_at"])
+        if t.user_id:
+            t.user.is_active = True
+            t.user.save(update_fields=["is_active"])
+
+    return Response({"ok": True, "reactivated": True})

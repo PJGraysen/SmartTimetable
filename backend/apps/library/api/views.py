@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.db.models import Count, Q
+from django.views.decorators.clickjacking import xframe_options_exempt
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -1447,3 +1448,168 @@ def reports_pdf(request, report_name):
     resp = _HR2(data, content_type="application/pdf")
     resp["Content-Disposition"] = f'inline; filename="library-{report_name}.pdf"'
     return resp
+
+
+# =====================================================================
+# Book requests (student → teacher → librarian workflow)
+# =====================================================================
+from apps.library.services.reservations import (
+    request_book as _req_book,
+    teacher_approve as _t_approve,
+    teacher_reject as _t_reject,
+    librarian_approve as _l_approve,
+    librarian_reject as _l_reject,
+    cancel_request as _cancel_req,
+    hold_request as _hold_req,
+    resume_request as _resume_req,
+    award_request as _award_req,
+    RequestError as _ReqErr,
+)
+
+
+def _reservation_row(r):
+    return {
+        "id": str(r.id),
+        "book_id": str(r.book_id),
+        "book_title": r.book.title,
+        "book_author": ", ".join(a.name for a in r.book.authors.all()[:3]),
+        "member_name": r.member.full_name,
+        "approval_stage": r.approval_stage,
+        "status": r.status,
+        "requested_at": r.requested_at,
+        "teacher_note": r.teacher_note,
+        "librarian_note": r.librarian_note,
+        "rejection_reason": r.rejection_reason,
+        "subject_teacher": (
+            f"{r.subject_teacher.first_name} {r.subject_teacher.last_name}"
+            if r.subject_teacher else None
+        ),
+        "subject_teacher_code": (
+            r.subject_teacher.employee_code if r.subject_teacher else None
+        ),
+        "teacher_approved_at": r.teacher_approved_at,
+        "librarian_approved_at": r.librarian_approved_at,
+    }
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def request_book_view(request):
+    book_id = request.data.get("book_id")
+    if not book_id:
+        return Response({"detail": "book_id required"}, status=400)
+    try:
+        res = _req_book(request.user, book_id)
+        return Response(_reservation_row(res), status=201)
+    except _ReqErr as e:
+        return Response({"detail": str(e)}, status=400)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_requests_view(request):
+    """Requests made by the current user."""
+    from apps.library.services.reservations import _member_for_user
+    member = _member_for_user(request.user)
+    if not member:
+        return Response([])
+    from apps.library.models import Reservation as _R3
+    qs = (
+        _R3.objects
+        .filter(member=member)
+        .select_related("book", "subject_teacher")
+        .order_by("-requested_at")
+    )
+    return Response([_reservation_row(r) for r in qs])
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def pending_approvals_view(request):
+    """Pending requests + history for the current user.
+
+    - Teachers see requests for their subjects (pending) and any they
+      have approved / held / rejected.
+    - Librarians see PENDING_LIBRARIAN, plus anything they acted on.
+    - Admin / Principal see everything pending + the last 100 acted on.
+    """
+    from apps.library.models import Reservation as _R
+    from django.db.models import Q
+
+    u = request.user
+    is_librarian = u.groups.filter(name="LIBRARIAN").exists() or u.is_superuser
+    is_admin = (
+        u.groups.filter(name__in=("ADMIN", "PRINCIPAL", "SUPER_ADMIN")).exists()
+        or u.is_superuser
+    )
+
+    base = _R.objects.select_related("book", "member", "subject_teacher")
+
+    if is_admin:
+        qs = base.filter(approval_stage__in=(
+            "PENDING_TEACHER", "PENDING_LIBRARIAN", "HOLD",
+            "APPROVED", "AWARDED",
+        )).order_by("-requested_at")[:100]
+    elif is_librarian:
+        qs = base.filter(
+            Q(approval_stage="PENDING_LIBRARIAN")
+            | Q(librarian_approved_by=u)
+        ).order_by("-requested_at")[:100]
+    else:
+        # Teacher — find their Teacher record
+        teacher = None
+        for attr in ("teacher_profile", "teacher"):
+            try:
+                v = getattr(u, attr, None)
+                if v is not None:
+                    teacher = v
+                    break
+            except Exception:
+                pass
+        if teacher is None:
+            from apps.users.models import Teacher as _T
+            teacher = _T.objects.filter(user=u).first()
+        if teacher is None:
+            return Response([])
+        qs = base.filter(
+            Q(subject_teacher=teacher)
+            | Q(teacher_approved_by=u)
+        ).order_by("-requested_at")[:100]
+
+    return Response([_reservation_row(r) for r in qs])
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def request_action_view(request, pk):
+    """Approve / reject / cancel a request."""
+    action = request.data.get("action")
+    note = request.data.get("note", "")
+    from apps.library.models import Reservation as _R2
+    res = _R2.objects.filter(id=pk).select_related("book", "member").first()
+    if not res:
+        return Response({"detail": "Request not found"}, status=404)
+
+    try:
+        if action == "teacher-approve":
+            _t_approve(res, request.user, note)
+        elif action == "teacher-reject":
+            _t_reject(res, request.user, note)
+        elif action == "librarian-approve":
+            _l_approve(res, request.user, note)
+        elif action == "librarian-reject":
+            _l_reject(res, request.user, note)
+        elif action == "cancel":
+            _cancel_req(res, request.user)
+        elif action == "hold":
+            _hold_req(res, request.user, note)
+        elif action == "resume":
+            _resume_req(res, request.user)
+        elif action == "award":
+            _award_req(res, request.user, note)
+        else:
+            return Response({"detail": f"Unknown action: {action}"}, status=400)
+    except _ReqErr as e:
+        return Response({"detail": str(e)}, status=400)
+
+    res.refresh_from_db()
+    return Response(_reservation_row(res))

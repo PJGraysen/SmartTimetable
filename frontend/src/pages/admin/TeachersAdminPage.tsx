@@ -8,10 +8,13 @@ import {
   deleteTeacher, listTeachers, teacherAction,
   getTeacherAssignments, assignTeacher, unassignTeacher, createTeacher,
   listSubjects, listClasses, listDepartments, updateTeacherProfile, bulkAssignTeacher,
+  getFreeAfternoon, setFreeAfternoon, retireTeacher, reactivateTeacher,
   ROLE_OPTIONS,
   type TeacherRow, type Assignment,
 } from "../../services/teachersAdmin";
 import { useToast } from "../../components/Toast";
+import { useConfirm } from "../../components/ConfirmDialog";
+import { Avatar } from "../../components/Avatar";
 
 const BROWN = "#2b1a0f", BROWN2 = "#5a3a1e", SKY = "#22b4f0";
 const GREEN = "#10b981", RED = "#ef4444", AMBER = "#f59e0b", BLUE = "#3b82f6";
@@ -50,6 +53,7 @@ type Filter = "ALL" | "ACTIVE" | "FROZEN" | "DEACTIVATED" | "OVERLOADED";
 export default function TeachersAdminPage() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { ask: askConfirm } = useConfirm();
   const [rows, setRows] = useState<TeacherRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,11 +107,13 @@ export default function TeachersAdminPage() {
   }
 
   async function removeTeacher(id: string, name: string) {
-    if (!confirm(
-      `Delete ${name}?\n\n` +
-      `This will remove all of their lesson assignments.\n` +
-      `Timetable history will be preserved.`
-    )) return;
+    const ok = await askConfirm({
+      title: `Delete ${name}?`,
+      message: "This will remove all of their lesson assignments. Timetable history will be preserved.",
+      variant: "danger",
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
     try {
       const res = await deleteTeacher(id);
       setRows(prev => prev.filter(r => r.id !== id));
@@ -123,10 +129,12 @@ export default function TeachersAdminPage() {
       const suggestion = e?.response?.data?.suggestion;
       if (status === 409 && suggestion === "deactivate") {
         // Offer to deactivate instead
-        const doDeactivate = confirm(
-          detail + "\n\nDeactivate this teacher instead? " +
-          "(History preserved, teacher hidden from future generation)"
-        );
+        const doDeactivate = await askConfirm({
+          title: "Deactivate instead?",
+          message: detail + " Deactivate this teacher instead? History preserved, teacher hidden from future generation.",
+          variant: "warning",
+          confirmLabel: "Deactivate",
+        });
         if (doDeactivate) {
           try {
             const updated = await teacherAction(id, "deactivate");
@@ -215,81 +223,146 @@ export default function TeachersAdminPage() {
         </div>
       )}
 
-      {loading ? <div>Loading...</div> : (
-        <div style={{ ...cardStyle, padding: 0, overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
-            <thead>
-              <tr style={{ background: "#f8fafc", textAlign: "left" }}>
-                <th style={th}>Code</th>
-                <th style={th}>#</th>
-                <th style={th}>Name</th>
-                <th style={th}>Role</th>
-                <th style={th}>Department</th>
-                <th style={th}>Load</th>
-                <th style={th}>State</th>
-                <th style={th}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: "1rem", textAlign: "center", color: MUTED }}>No teachers match.</td></tr>
-              )}
-              {filtered.map(r => {
-                const load = r.lr_count || 0;
-                const over = load > CAP;
-                const roleLabel = ROLE_OPTIONS.find(o => o.value === (r as any).role)?.label
-                                || (r as any).role || "Teacher";
-                return (
-                  <tr key={r.id} style={{ borderTop: "1px solid #f1f5f9" }}>
-                    <td style={{ padding: "0.5rem 0.6rem", fontWeight: 600 }}>
-                      <a href="#" onClick={e => { e.preventDefault(); setDrawerId(r.id); }}
-                         style={{ color: BROWN, textDecoration: "none" }}>{r.employee_code}</a>
-                    </td>
-                    <td style={{ padding: "0.5rem 0.6rem", color: MUTED }}>{r.teacher_number ?? "-"}</td>
-                    <td style={{ padding: "0.5rem 0.6rem" }}>{r.full_name}</td>
-                    <td style={{ padding: "0.5rem 0.6rem", color: MUTED, fontSize: "0.78rem" }}>{roleLabel}</td>
-                    <td style={{ padding: "0.5rem 0.6rem", color: MUTED }}>{(r as any).department_name || "-"}</td>
-                    <td style={{ padding: "0.5rem 0.6rem", fontWeight: 700, color: over ? RED : BROWN }}>
-                      {load}/{CAP}{over ? " !" : ""}
-                    </td>
-                    <td style={{ padding: "0.5rem 0.6rem" }}>
-                      {!r.is_active ? <Badge text="DEACTIVATED" color={RED} /> :
-                       r.is_frozen  ? <Badge text="FROZEN" color={AMBER} /> :
-                                      <Badge text="ACTIVE" color={GREEN} />}
-                    </td>
-                    <td style={{ padding: "0.5rem 0.6rem" }}>
-                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        <button style={smallBtn} onClick={() => setDrawerId(r.id)}>Manage</button>
-                        {r.is_active && !r.is_frozen && (
-                          <button style={smallBtn} title="Freeze" onClick={() => runAction(r.id, "freeze")}>
-                            <Snowflake size={11} />
-                          </button>
-                        )}
-                        {r.is_frozen && (
-                          <button style={smallBtn} title="Unfreeze" onClick={() => runAction(r.id, "unfreeze")}>
-                            <UserCheck size={11} />
-                          </button>
-                        )}
-                        {r.is_active ? (
-                          <button style={smallBtn} title="Deactivate" onClick={() => runAction(r.id, "deactivate")}>
-                            <UserX size={11} />
-                          </button>
-                        ) : (
-                          <button style={smallBtn} title="Activate" onClick={() => runAction(r.id, "activate")}>
-                            <UserCheck size={11} />
-                          </button>
-                        )}
-                        <button style={{ ...smallBtn, color: RED, borderColor: RED }}
-                                title="Delete" onClick={() => removeTeacher(r.id, r.full_name)}>
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {loading ? (
+        <div style={{ padding: "2rem", textAlign: "center", color: MUTED }}>Loading...</div>
+      ) : filtered.length === 0 ? (
+        <div style={{
+          padding: "2rem", textAlign: "center", color: MUTED,
+          background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 14,
+        }}>
+          No teachers match.
+        </div>
+      ) : (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+          gap: 14,
+        }}>
+          {filtered.map(r => {
+            const load = r.lr_count || 0;
+            const over = load > CAP;
+            const roleLabel = ROLE_OPTIONS.find(o => o.value === (r as any).role)?.label
+                            || (r as any).role || "Teacher";
+            const assignments = r.assignments || [];
+            const freeDay = (r as any).free_day || null;
+            // derive class / subject counts from assignment strings if provided
+            return (
+              <div
+                key={r.id}
+                onClick={() => setDrawerId(r.id)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-3px)";
+                  e.currentTarget.style.boxShadow = "0 14px 34px rgba(10,18,29,0.12)";
+                  e.currentTarget.style.borderColor = BROWN + "66";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 2px 8px rgba(10,18,29,0.05)";
+                  e.currentTarget.style.borderColor = BORDER;
+                }}
+                style={{
+                  background: "#fff",
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 16,
+                  padding: 16,
+                  cursor: "pointer",
+                  transition: "transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease",
+                  position: "relative",
+                  boxShadow: "0 2px 8px rgba(10,18,29,0.05)",
+                  display: "flex", flexDirection: "column",
+                }}
+              >
+                {/* State badge */}
+                <div style={{ position: "absolute", top: 12, right: 12 }}>
+                  {!r.is_active ? <Badge text="RETIRED" color={RED} /> :
+                   r.is_frozen  ? <Badge text="FROZEN"  color={AMBER} /> :
+                                  <Badge text="ACTIVE"  color={GREEN} />}
+                </div>
+
+                {/* Avatar + identity */}
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
+                  <Avatar name={r.full_name} code={r.employee_code} size={52} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{
+                      fontWeight: 800, fontSize: "1rem", color: "#1e2e40",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {r.full_name}
+                    </div>
+                    <div style={{
+                      fontSize: "0.7rem", color: MUTED, fontWeight: 800,
+                      letterSpacing: 0.6, textTransform: "uppercase", marginTop: 2,
+                    }}>
+                      {r.employee_code}{r.teacher_number ? ` ? #${r.teacher_number}` : ""}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Role + dept */}
+                <div style={{ fontSize: "0.78rem", color: MUTED, marginBottom: 12, minHeight: 34 }}>
+                  <div style={{ fontWeight: 700, color: "#334155" }}>{roleLabel}</div>
+                  {(r as any).department_name && (
+                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: 2 }}>
+                      {(r as any).department_name}
+                    </div>
+                  )}
+                </div>
+
+                {/* Stats */}
+                <div style={{
+                  display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
+                  gap: 8, paddingTop: 10, borderTop: `1px solid #f1f5f9`,
+                }}>
+                  <div>
+                    <div style={{ fontSize: "0.62rem", color: "#94a3b8", fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>Lessons</div>
+                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: over ? RED : BROWN }}>
+                      {load}<span style={{ fontSize: "0.7rem", color: MUTED, fontWeight: 600 }}>/{CAP}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.62rem", color: "#94a3b8", fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>Free</div>
+                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: freeDay ? "#0369a1" : "#cbd5e1" }}>
+                      {freeDay || "?"}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.62rem", color: "#94a3b8", fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>Assigned</div>
+                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: BROWN }}>
+                      {assignments.length}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Assignment preview */}
+                {assignments.length > 0 && (
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 10 }}>
+                    {assignments.slice(0, 3).map((a, i) => (
+                      <span key={i} style={{
+                        background: "#f1f5f9", color: "#475569",
+                        padding: "2px 8px", borderRadius: 999,
+                        fontSize: "0.68rem", fontWeight: 700,
+                        maxWidth: 170, overflow: "hidden",
+                        textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>{a}</span>
+                    ))}
+                    {assignments.length > 3 && (
+                      <span style={{ color: "#94a3b8", fontSize: "0.68rem", alignSelf: "center", fontWeight: 700 }}>
+                        +{assignments.length - 3}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Hover hint */}
+                <div style={{
+                  marginTop: 12, fontSize: "0.7rem", color: "#94a3b8",
+                  fontWeight: 700, letterSpacing: 0.4, textAlign: "right",
+                }}>
+                  Click to manage ?
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -321,6 +394,7 @@ function TeacherDrawer({
   teacherId, onClose, onChanged,
 }: { teacherId: string | null; onClose: () => void; onChanged: () => void }) {
   const toast = useToast();
+  const { ask: askConfirm } = useConfirm();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -331,6 +405,9 @@ function TeacherDrawer({
 
   // Profile edit draft
   const [p, setP] = useState<any>({});
+  // Free afternoon (Session 1)
+  const [freeDay, setFreeDay] = useState<string>("");
+  const [retiring, setRetiring] = useState(false);
 
   // Add-assignment mode: 'single' | 'bulk' | null
   const [addMode, setAddMode] = useState<"single" | "bulk" | null>(null);
@@ -368,6 +445,13 @@ function TeacherDrawer({
     listSubjects().then(r => setSubjects(r.results || []));
     listClasses().then(r => setClasses(r.results || []));
     listDepartments().then(r => setDepartments(r.results || []));
+    if (teacherId) {
+      getFreeAfternoon(teacherId)
+        .then((r) => setFreeDay(r.day || ""))
+        .catch(() => setFreeDay(""));
+    } else {
+      setFreeDay("");
+    }
   }, [teacherId]);
 
   if (teacherId == null) return null;
@@ -452,7 +536,14 @@ function TeacherDrawer({
   }
 
   async function removeAssignment(lrId: string) {
-    if (!teacherId || !confirm("Remove this assignment?")) return;
+    if (!teacherId) return;
+    const okRm = await askConfirm({
+      title: "Remove assignment?",
+      message: "This will remove the lesson requirement from this teacher.",
+      variant: "warning",
+      confirmLabel: "Remove",
+    });
+    if (!okRm) return;
     try {
       await unassignTeacher(teacherId, lrId);
       await loadDrawer();
@@ -513,10 +604,108 @@ function TeacherDrawer({
                     </select>
                   </L>
                 </div>
+                <L label="Free Afternoon (weekly)">
+                  <select
+                    style={inputStyle}
+                    value={freeDay}
+                    onChange={async (e) => {
+                      const day = e.target.value || null;
+                      setFreeDay(e.target.value);
+                      if (!teacherId) return;
+                      try {
+                        await setFreeAfternoon(teacherId, day as any);
+                        toast.push({
+                          type: "success",
+                          title: day ? `Free afternoon set: ${day}` : "Free afternoon cleared",
+                        });
+                      } catch (err: any) {
+                        toast.push({
+                          type: "error",
+                          title: "Could not save free afternoon",
+                          message: err?.response?.data?.detail || String(err),
+                        });
+                      }
+                    }}
+                  >
+                    <option value="">- None -</option>
+                    <option value="MON">Monday</option>
+                    <option value="TUE">Tuesday</option>
+                    <option value="WED">Wednesday</option>
+                    <option value="THU">Thursday</option>
+                    <option value="FRI">Friday</option>
+                  </select>
+                </L>
                 <L label="Hire Date"><input style={inputStyle} type="date" value={p.hire_date || ""} onChange={e => setP({ ...p, hire_date: e.target.value })} /></L>
-                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
                   <button style={btnPrimary} disabled={saving} onClick={saveProfile}>
                     <Save size={12} /> {saving ? "Saving..." : "Save Profile"}
+                  </button>
+
+                  <button
+                    style={{ ...btnSecondary, color: AMBER, borderColor: AMBER }}
+                    disabled={retiring}
+                    onClick={async () => {
+                      if (!teacherId) return;
+                      const okRet = await askConfirm({
+                        title: "Retire this teacher?",
+                        message: "This deactivates their account, assignments, and removes them from future runs. Timetable history is preserved.",
+                        variant: "warning",
+                        confirmLabel: "Retire",
+                      });
+                      if (!okRet) return;
+                      setRetiring(true);
+                      try {
+                        const r: any = await retireTeacher(teacherId);
+                        if (r.ok) {
+                          toast.push({ type: "success", title: "Retired", message: data?.full_name });
+                          onChanged();
+                          onClose();
+                        } else {
+                          toast.push({ type: "error", title: "Retire refused", message: r.detail || "" });
+                        }
+                      } catch (err: any) {
+                        toast.push({
+                          type: "error",
+                          title: "Retire failed",
+                          message: err?.response?.data?.detail || String(err),
+                        });
+                      } finally { setRetiring(false); }
+                    }}
+                  >
+                    <UserX size={12} /> Retire
+                  </button>
+
+                  <button
+                    style={{ ...btnSecondary, color: GREEN, borderColor: GREEN }}
+                    disabled={retiring}
+                    onClick={async () => {
+                      if (!teacherId) return;
+                      const okRe = await askConfirm({
+                        title: "Reactivate this teacher?",
+                        message: "Their account and assignments will be re-enabled.",
+                        variant: "primary",
+                        confirmLabel: "Reactivate",
+                      });
+                      if (!okRe) return;
+                      setRetiring(true);
+                      try {
+                        const r: any = await reactivateTeacher(teacherId);
+                        if (r.ok) {
+                          toast.push({ type: "success", title: "Reactivated", message: data?.full_name });
+                          onChanged();
+                        } else {
+                          toast.push({ type: "error", title: "Reactivate failed", message: r.detail || "" });
+                        }
+                      } catch (err: any) {
+                        toast.push({
+                          type: "error",
+                          title: "Reactivate failed",
+                          message: err?.response?.data?.detail || String(err),
+                        });
+                      } finally { setRetiring(false); }
+                    }}
+                  >
+                    <UserCheck size={12} /> Reactivate
                   </button>
                 </div>
               </div>

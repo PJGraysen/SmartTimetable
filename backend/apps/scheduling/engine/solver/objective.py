@@ -596,7 +596,7 @@ class ComplexSubjectAdjacencyObjective:
         Same-code adjacency (e.g. a double BIO lesson) is allowed.
     """
 
-    weight: int = 20
+    weight: int = 40
 
     def __post_init__(self) -> None:
         if self.weight <= 0:
@@ -717,8 +717,7 @@ class MathsMorningPreferenceObjective:
     is a preference, not a rule.
     """
 
-    weight: int = 5
-
+    weight: int = 12
     def __post_init__(self) -> None:
         if self.weight <= 0:
             raise ValueError(

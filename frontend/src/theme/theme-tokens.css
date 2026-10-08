@@ -1,0 +1,337 @@
+﻿/* ==================================================================
+   SmartTimetable Pro — theme tokens + dark overrides
+   The app stores preferences via ThemeContext which sets data-theme,
+   data-density, and data-accent on <html>. These rules pick that up.
+   ================================================================== */
+
+:root {
+  --accent: #244b72;
+  --accent-hover: #1a3a5c;
+  --accent-soft: #e6eef6;
+}
+
+/* ---------- Light baseline (matches existing palette) ---------- */
+[data-theme="light"] {
+  --bg: #f5f7fb;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #f8fafc;
+  --border: #e2e8f0;
+  --text: #172033;
+  --text-muted: #64748b;
+  --text-subtle: #94a3b8;
+  --sidebar-bg: #172033;
+  --sidebar-text: #d8deea;
+  --sidebar-muted: #94a3b8;
+  --card-bg: #ffffff;
+  --shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+/* ---------- Dark overrides ---------- */
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --bg-elevated: #1e293b;
+  --bg-subtle: #172033;
+  --border: #334155;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-subtle: #64748b;
+  --sidebar-bg: #0a1120;
+  --sidebar-text: #cbd5e1;
+  --sidebar-muted: #64748b;
+  --card-bg: #1e293b;
+  --shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+}
+
+/* ---------- Backgrounds + text ---------- */
+[data-theme="dark"] body,
+[data-theme="dark"] .app-shell {
+  background: var(--bg);
+  color: var(--text);
+}
+[data-theme="dark"] .main-area {
+  background: var(--bg);
+  color: var(--text);
+}
+[data-theme="dark"] .content {
+  background: var(--bg);
+}
+[data-theme="dark"] .sidebar {
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+}
+[data-theme="dark"] .topbar {
+  background: #0a1120;
+  border-bottom-color: var(--border);
+  color: var(--text);
+}
+
+/* ---------- Cards / panels / tables ---------- */
+[data-theme="dark"] .ssp-card,
+[data-theme="dark"] .card,
+[data-theme="dark"] [style*="background: #fff"],
+[data-theme="dark"] [style*="background:#fff"],
+[data-theme="dark"] [style*="background: white"] {
+  background: var(--card-bg) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+
+[data-theme="dark"] table {
+  color: var(--text);
+}
+[data-theme="dark"] thead tr,
+[data-theme="dark"] table tr[style*="background: #f8fafc"],
+[data-theme="dark"] table tr[style*="background:#f8fafc"] {
+  background: var(--bg-subtle) !important;
+}
+[data-theme="dark"] tbody tr {
+  border-top-color: var(--border) !important;
+}
+[data-theme="dark"] td,
+[data-theme="dark"] th {
+  color: var(--text);
+}
+[data-theme="dark"] th {
+  color: var(--text-muted) !important;
+}
+
+/* ---------- Forms ---------- */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: #0f172a;
+  color: var(--text);
+  border-color: var(--border);
+}
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: #64748b;
+}
+
+/* ---------- Focus rings ---------- */
+[data-theme="dark"] button:focus-visible,
+[data-theme="dark"] input:focus-visible,
+[data-theme="dark"] a:focus-visible {
+  outline: 2px solid #22b4f0;
+  outline-offset: 2px;
+}
+
+/* ---------- Density ---------- */
+[data-density="compact"] .ssp-card,
+[data-density="compact"] .card {
+  padding: 0.75rem !important;
+}
+[data-density="compact"] .sidebar-nav {
+  padding: 12px 8px;
+}
+[data-density="compact"] .nav-link {
+  padding: 8px 10px !important;
+  font-size: 12.5px;
+}
+[data-density="compact"] table td,
+[data-density="compact"] table th {
+  padding: 0.35rem 0.5rem !important;
+  font-size: 0.8rem;
+}
+
+/* ---------- Accent-aware highlights ---------- */
+[data-accent] .nav-link.active,
+[data-accent] .ssp-pill {
+  background: var(--accent) !important;
+}
+[data-accent] a:hover,
+[data-accent] .notif-link {
+  color: var(--accent);
+}
+
+/* ==================================================================
+   SmartTimetable Pro — dark mode text visibility (2026.09)
+   Many inline styles use dark hex values that become invisible on a
+   dark background. These rules brighten them selectively.
+   ================================================================== */
+
+/* ---- Force the base text color in dark mode ---- */
+[data-theme="dark"] body,
+[data-theme="dark"] .app-shell,
+[data-theme="dark"] .main-area,
+[data-theme="dark"] .content,
+[data-theme="dark"] .page-content,
+[data-theme="dark"] main {
+  color: var(--text) !important;
+}
+
+/* ---- Neutralise common dark inline colors ---- */
+/* React renders inline styles literally; we match each hex/theme value. */
+[data-theme="dark"] [style*="color: #172033"],
+[data-theme="dark"] [style*="color:#172033"],
+[data-theme="dark"] [style*="color: #0f172a"],
+[data-theme="dark"] [style*="color:#0f172a"],
+[data-theme="dark"] [style*="color: #1e293b"],
+[data-theme="dark"] [style*="color:#1e293b"],
+[data-theme="dark"] [style*="color: #1f2937"],
+[data-theme="dark"] [style*="color:#1f2937"],
+[data-theme="dark"] [style*="color: #111827"],
+[data-theme="dark"] [style*="color:#111827"],
+[data-theme="dark"] [style*="color: #0b1220"],
+[data-theme="dark"] [style*="color:#0b1220"],
+[data-theme="dark"] [style*="color: black"],
+[data-theme="dark"] [style*="color: rgb(0, 0, 0)"],
+[data-theme="dark"] [style*="color:rgb(0, 0, 0)"],
+[data-theme="dark"] [style*="color: rgb(15, 23, 42)"],
+[data-theme="dark"] [style*="color:rgb(15, 23, 42)"],
+[data-theme="dark"] [style*="color: rgb(23, 32, 51)"],
+[data-theme="dark"] [style*="color:rgb(23, 32, 51)"],
+[data-theme="dark"] [style*="color: rgb(30, 41, 59)"],
+[data-theme="dark"] [style*="color:rgb(30, 41, 59)"],
+[data-theme="dark"] [style*="color: rgb(31, 41, 55)"],
+[data-theme="dark"] [style*="color:rgb(31, 41, 55)"] {
+  color: #f1f5f9 !important;
+}
+
+/* Muted values should still be readable but softer than body */
+[data-theme="dark"] [style*="color: #64748b"],
+[data-theme="dark"] [style*="color:#64748b"],
+[data-theme="dark"] [style*="color: #94a3b8"],
+[data-theme="dark"] [style*="color:#94a3b8"],
+[data-theme="dark"] [style*="color: rgb(100, 116, 139)"],
+[data-theme="dark"] [style*="color:rgb(100, 116, 139)"],
+[data-theme="dark"] [style*="color: rgb(148, 163, 184)"],
+[data-theme="dark"] [style*="color:rgb(148, 163, 184)"] {
+  color: #cbd5e1 !important;
+}
+
+/* Accent colors — keep their hue, bump brightness */
+[data-theme="dark"] [style*="color: #244b72"],
+[data-theme="dark"] [style*="color:#244b72"],
+[data-theme="dark"] [style*="color: #18395f"],
+[data-theme="dark"] [style*="color:#18395f"] {
+  color: #7dd3fc !important;
+}
+[data-theme="dark"] [style*="color: #065f46"],
+[data-theme="dark"] [style*="color:#065f46"],
+[data-theme="dark"] [style*="color: #166534"],
+[data-theme="dark"] [style*="color:#166534"] {
+  color: #6ee7b7 !important;
+}
+[data-theme="dark"] [style*="color: #991b1b"],
+[data-theme="dark"] [style*="color:#991b1b"],
+[data-theme="dark"] [style*="color: #7f1d1d"],
+[data-theme="dark"] [style*="color:#7f1d1d"],
+[data-theme="dark"] [style*="color: #b91c1c"],
+[data-theme="dark"] [style*="color:#b91c1c"] {
+  color: #fca5a5 !important;
+}
+
+/* ---- Tables: brighten every cell + header ---- */
+[data-theme="dark"] table,
+[data-theme="dark"] table thead,
+[data-theme="dark"] table tbody,
+[data-theme="dark"] table tr,
+[data-theme="dark"] table th,
+[data-theme="dark"] table td {
+  color: #f1f5f9 !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] table th {
+  color: #cbd5e1 !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.03em;
+}
+[data-theme="dark"] table tbody tr:hover {
+  background: #1e293b !important;
+}
+
+/* ---- Headings ---- */
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+[data-theme="dark"] h5,
+[data-theme="dark"] h6 {
+  color: #f8fafc !important;
+}
+
+/* ---- Links + interactive text ---- */
+[data-theme="dark"] a,
+[data-theme="dark"] a:visited {
+  color: #7dd3fc;
+}
+[data-theme="dark"] a:hover {
+  color: #a5e4ff;
+}
+
+/* ---- Labels, forms, help text ---- */
+[data-theme="dark"] label,
+[data-theme="dark"] legend,
+[data-theme="dark"] .label {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  color: #f1f5f9 !important;
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] option {
+  color: #f1f5f9;
+  background: #0f172a;
+}
+
+/* ---- Cards + panels with hard-coded white ---- */
+[data-theme="dark"] [style*="background: #fff"],
+[data-theme="dark"] [style*="background:#fff"],
+[data-theme="dark"] [style*="background: white"],
+[data-theme="dark"] [style*="background: rgb(255, 255, 255)"],
+[data-theme="dark"] [style*="background: #ffffff"],
+[data-theme="dark"] [style*="background:#ffffff"] {
+  background: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-color: #334155 !important;
+}
+
+/* ---- Borders with light hex values ---- */
+[data-theme="dark"] [style*="border: 1px solid #e2e8f0"],
+[data-theme="dark"] [style*="border: 1px solid #f1f5f9"],
+[data-theme="dark"] [style*="border:1px solid #e2e8f0"],
+[data-theme="dark"] [style*="border:1px solid #f1f5f9"] {
+  border-color: #334155 !important;
+}
+
+/* ---- Buttons ---- */
+[data-theme="dark"] button:not(.stg-tab):not(.notif-tab):not(.theme-toggle):not(.notif-bell-btn) {
+  color: inherit;
+}
+
+/* ---- Specific page-level text slots ---- */
+[data-theme="dark"] .ssp-card,
+[data-theme="dark"] .ssp-page-header,
+[data-theme="dark"] .ssp-page-title,
+[data-theme="dark"] .ssp-empty,
+[data-theme="dark"] .ssp-help,
+[data-theme="dark"] .ssp-muted {
+  color: #f1f5f9 !important;
+}
+[data-theme="dark"] .ssp-muted,
+[data-theme="dark"] small {
+  color: #94a3b8 !important;
+}
+
+/* ---- Timetable cells ---- */
+[data-theme="dark"] .tt-subject,
+[data-theme="dark"] .tt-teacher,
+[data-theme="dark"] .tt-room {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .tt-room {
+  color: #86efac !important;
+}
+[data-theme="dark"] .tt-table th {
+  color: #cbd5e1 !important;
+}

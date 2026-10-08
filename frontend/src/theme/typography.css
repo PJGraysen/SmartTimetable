@@ -1,0 +1,181 @@
+﻿/* ==================================================================
+   SmartTimetable Pro — typography
+   Pro-grade font stack, weights, sizes, and rendering.
+   ================================================================== */
+
+:root {
+  /* Body font: Inter first, then modern system stack */
+  --font-body:
+    "Inter", "Inter var", "SF Pro Text", -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable", "Segoe UI", system-ui, "Roboto", "Helvetica Neue",
+    Arial, sans-serif;
+
+  /* Display font: heavier, tighter, for headings */
+  --font-display:
+    "Inter Display", "Inter", "SF Pro Display", -apple-system,
+    BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI",
+    system-ui, sans-serif;
+
+  /* Monospace for codes / room tags */
+  --font-mono:
+    "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  --tracking-tight: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+  --tracking-wide2: 0.08em;
+}
+
+html, body {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01", "kern", "liga";
+  font-variant-ligatures: common-ligatures;
+}
+
+/* Headings — display font, tighter tracking, heavier */
+h1, h2, h3, h4, h5, h6,
+.ssp-page-title,
+.tt-title,
+.settings-page h1,
+.settings-page h2 {
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-tight);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+h1 { font-size: 1.85rem; font-weight: 900; }
+h2 { font-size: 1.3rem;  font-weight: 800; }
+h3 { font-size: 1.1rem;  font-weight: 800; }
+h4 { font-size: 1rem;    font-weight: 700; }
+
+/* Tables — every cell bold and readable */
+table th {
+  font-weight: 800;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+table td {
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+/* Nav + buttons — slightly heavier for pro feel */
+.nav-link,
+button,
+.stg-tab,
+.notif-tab {
+  font-weight: 700;
+}
+
+/* Small labels — wide tracking for caps */
+.nav-section-title,
+.stg-field label,
+.ssp-label {
+  font-weight: 800;
+  letter-spacing: var(--tracking-wide2);
+  text-transform: uppercase;
+  font-size: 0.7rem;
+}
+
+/* Codes and IDs */
+code, kbd, samp, pre,
+.tt-room,
+.tt-teacher,
+.notif-fp-hash,
+[class*="fingerprint"] {
+  font-family: var(--font-mono);
+  font-feature-settings: "calt" 0;
+}
+
+/* Numbers align nicely in tables */
+table td,
+table th {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Selection color */
+::selection {
+  background: var(--accent, #244b72);
+  color: #fff;
+}
+[data-theme="dark"] ::selection {
+  background: #22b4f0;
+  color: #0f172a;
+}
+
+/* Scrollbar (WebKit) — pro look */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+  background-clip: padding-box;
+}
+[data-theme="dark"] ::webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  background-clip: padding-box;
+}
+
+/* ---------- Dark mode: force brightest text + heavier weight ---------- */
+[data-theme="dark"] body {
+  color: #f1f5f9;
+  font-weight: 500;
+}
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4 {
+  color: #ffffff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+}
+[data-theme="dark"] table td {
+  font-weight: 600;
+  color: #f1f5f9;
+}
+[data-theme="dark"] table th {
+  font-weight: 800;
+  color: #cbd5e1;
+}
+[data-theme="dark"] .tt-subject {
+  color: #ffffff;
+  font-weight: 800;
+}
+[data-theme="dark"] .tt-teacher {
+  color: #cbd5e1;
+  font-weight: 700;
+}
+[data-theme="dark"] .tt-room {
+  color: #86efac;
+  font-weight: 800;
+}
+[data-theme="dark"] .stg-help,
+[data-theme="dark"] small,
+[data-theme="dark"] .stg-sub,
+[data-theme="dark"] .notif-time,
+[data-theme="dark"] .notif-meta {
+  color: #cbd5e1;
+}
+
+/* ---------- Density: compact mode tightens fonts slightly ---------- */
+[data-density="compact"] body { font-size: 14px; }
+[data-density="compact"] table td { font-size: 0.82rem; }
+[data-density="compact"] h1 { font-size: 1.6rem; }
+[data-density="compact"] h2 { font-size: 1.15rem; }

@@ -276,12 +276,26 @@ from apps.users.models import Teacher as _Teacher
 from apps.academics.models import LessonRequirement as _LR
 
 
+def _free_day_for(t):
+    """Return the active free-afternoon day (MON..FRI) or None."""
+    try:
+        from apps.scheduling.models import TeacherFreeAfternoon
+        return (
+            TeacherFreeAfternoon.objects
+            .filter(teacher=t, is_active=True)
+            .values_list("day", flat=True)
+            .first()
+        )
+    except Exception:
+        return None
+
+
 def _teacher_payload(t):
     lrs = _LR.objects.filter(teacher=t, is_active=True).select_related(
         "subject", "instructional_group__teaching_group"
     )
     assignments = sorted({
-        f"{lr.subject.code} / {lr.instructional_group.teaching_group.name}"
+        f"{lr.subject.code} / {(lr.instructional_group.teaching_group.name if lr.instructional_group and lr.instructional_group.teaching_group else 'School-wide')}"
         for lr in lrs
     })
     return {
@@ -296,7 +310,8 @@ def _teacher_payload(t):
         "is_active": t.is_active,
         "is_frozen": getattr(t, "is_frozen", False),
         "lr_count": lrs.count(),
-        "assignments": assignments,
+        "free_day": _free_day_for(t),
+                "assignments": assignments,
     }
 
 

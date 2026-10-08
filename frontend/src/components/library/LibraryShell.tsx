@@ -1,16 +1,21 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import LibraryTabs from "./LibraryTabs";
+import StudentLibraryTabs from "./StudentLibraryTabs";
 import NotificationBell from "./NotificationBell";
+import { useAuth } from "../../auth/AuthContext";
 
 export default function LibraryShell({ children }: { children: ReactNode }) {
+  const { role } = useAuth();
+  const isStudent = role === "STUDENT";
+
   return (
     <div className="lib-shell" style={{ position: "relative", minHeight: "100vh" }}>
       <div className="lib-shelf-bg" aria-hidden="true" />
-      <div className="lib-shell-content" style={{ position: "relative", zIndex: 1 }}>
+      <div className="lib-shell-content" style={{ position: "relative", zIndex:1 }}>
         <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 0 0.25rem" }}>
           <NotificationBell />
         </div>
-        <LibraryTabs />
+        {isStudent ? <StudentLibraryTabs /> : <LibraryTabs />}
         {children}
       </div>
       <style>{`

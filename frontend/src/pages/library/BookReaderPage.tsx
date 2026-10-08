@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, ShieldCheck, ShieldAlert, Loader2 } from "lucide-react";
 import * as lib from "../../services/library";
+import PDFRenderer from "../../components/PDFRenderer";
 
 export default function BookReaderPage() {
   const { bookId = "" } = useParams();
@@ -124,11 +125,19 @@ export default function BookReaderPage() {
         }}
         onContextMenu={(e) => e.preventDefault()}
       >
-        <iframe
-          src={stream}
-          title={book.title}
-          style={{ width: "100%", height: "100%", border: "none" }}
-        />
+        {asset.format === "PDF" ? (
+          <PDFRenderer
+            src={stream}
+            title={book.title}
+            allowDownload={asset.allow_download}
+          />
+        ) : (
+          <iframe
+            src={stream}
+            title={book.title}
+            style={{ width: "100%", height: "100%", border: "none" }}
+          />
+        )}
         {asset.watermark_text ? (
           <div aria-hidden="true" style={{
             position: "absolute", inset: 0, pointerEvents: "none",

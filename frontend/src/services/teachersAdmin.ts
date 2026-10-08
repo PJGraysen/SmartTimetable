@@ -108,6 +108,8 @@ export async function listDepartments(): Promise<{ results: { id: number; code: 
 
 export const ROLE_OPTIONS = [
   { value: "SUPER_ADMIN", label: "Super Admin (full access)" },
+  { value: "PRINCIPAL",   label: "Principal / Rector" },
+  { value: "SECRETARY",   label: "Secretary" },
   { value: "DEPT_HEAD",   label: "Department Head" },
   { value: "TEACHER",     label: "Teacher" },
   { value: "LAB_TECH",    label: "Lab Technician" },
@@ -152,5 +154,82 @@ export async function bulkAssignTeacher(
   over_capacity: boolean;
 }> {
   const { data } = await http.post(`/platform/admin/teachers/${id}/bulk-assign/`, payload);
+  return data;
+}
+
+
+// ---------- Session 1: free afternoon + retire ----------
+export type FreeAfternoon = {
+  day: "MON" | "TUE" | "WED" | "THU" | "FRI" | null;
+  term: string;
+  term_id: string;
+};
+
+export async function getFreeAfternoon(id: string): Promise<FreeAfternoon> {
+  const { data } = await http.get<FreeAfternoon>(
+    `/platform/admin/teachers/${id}/free-afternoon/`,
+  );
+  return data;
+}
+
+export async function setFreeAfternoon(
+  id: string,
+  day: "MON" | "TUE" | "WED" | "THU" | "FRI" | null,
+): Promise<{ ok: boolean; day: string | null }> {
+  const { data } = await http.put(
+    `/platform/admin/teachers/${id}/free-afternoon/`,
+    { day },
+  );
+  return data;
+}
+
+export async function retireTeacher(id: string): Promise<{ ok: boolean; retired?: boolean; detail?: string }> {
+  const { data } = await http.post(
+    `/platform/admin/teachers/${id}/retire/`,
+  );
+  return data;
+}
+
+export async function reactivateTeacher(id: string): Promise<{ ok: boolean; reactivated?: boolean }> {
+  const { data } = await http.post(
+    `/platform/admin/teachers/${id}/reactivate/`,
+  );
+  return data;
+}
+
+
+// ---------- Session 4: merge / dedup ----------
+export type DupTeacher = {
+  id: string;
+  code: string;
+  name: string;
+  role: string;
+  is_active: boolean;
+  lr_count: number;
+  email: string;
+};
+
+export type DupCandidate = {
+  reason: string;
+  a: DupTeacher;
+  b: DupTeacher;
+};
+
+export async function scanTeacherDuplicates(): Promise<{ count: number; candidates: DupCandidate[] }> {
+  const { data } = await http.get("/platform/admin/teachers/duplicates/");
+  return data;
+}
+
+export async function mergeTeachers(
+  keepId: string, dropId: string,
+): Promise<{
+  ok: boolean;
+  kept: { id: string; code: string; name: string };
+  dropped: { id: string; code: string; name: string };
+  relinked: Record<string, number>;
+}> {
+  const { data } = await http.post("/platform/admin/teachers/merge/", {
+    keep_id: keepId, drop_id: dropId,
+  });
   return data;
 }

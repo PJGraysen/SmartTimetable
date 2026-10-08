@@ -1,3 +1,4 @@
+from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 """
@@ -17,6 +18,7 @@ urlpatterns = [
     path("api/library/", include("apps.library.urls")),
     path("api/platform/", include("apps.platform.urls")),
     path("api/ai/", include("apps.core.api.ai_urls")),
+    path("api/audit/", include("apps.audit.urls")),
 
     path(
         "admin/",
@@ -88,3 +90,20 @@ urlpatterns = urlpatterns + _events_router.urls
 # ---- Serve uploaded media in dev ----
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+# ------------------------------------------------------------------
+# Notifications + approvals (SmartTimetable Pro)
+# ------------------------------------------------------------------
+from rest_framework.routers import DefaultRouter as _NotifRouter
+from apps.core.notifications_api import (
+    NotificationViewSet as _NVS, ApprovalRequestViewSet as _AVS,
+)
+
+_notif_router = _NotifRouter()
+_notif_router.register("notifications", _NVS, basename="notification")
+_notif_router.register("approvals", _AVS, basename="approval")
+
+urlpatterns += [
+    path("api/", include(_notif_router.urls)),
+]

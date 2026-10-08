@@ -8,10 +8,13 @@ from .admin_views import (
     AdminHealthView, AdminWarningsView,
     TeacherAdminViewSet,
 )
+from apps.platform.teacher_merge import (
+    teacher_scan_duplicates, teacher_merge,
+)
 from apps.platform.teacher_extra import (
     teacher_assignments, teacher_assign, teacher_unassign,
     teacher_create, teacher_update_profile, teacher_bulk_assign,
-    teacher_delete,
+    teacher_delete, teacher_free_afternoon, teacher_retire, teacher_reactivate,
     subjects_list as admin_subjects_list,
     classes_list as admin_classes_list,
 )
@@ -21,6 +24,8 @@ from apps.platform.teacher_extra import (
 # admin/teachers/create/ is captured by admin/teachers/<pk>/.
 # ------------------------------------------------------------------
 custom_teacher_routes = [
+    path("admin/teachers/duplicates/", teacher_scan_duplicates, name="teacher-scan-duplicates"),
+    path("admin/teachers/merge/", teacher_merge, name="teacher-merge"),
     path("admin/teachers/create/", teacher_create, name="teacher-create"),
     path("admin/teachers/<uuid:pk>/delete/", teacher_delete, name="teacher-delete"),
     path("admin/teachers/<uuid:pk>/assignments/", teacher_assignments, name="teacher-assignments"),
@@ -28,6 +33,9 @@ custom_teacher_routes = [
     path("admin/teachers/<uuid:pk>/assign/<uuid:lr_id>/", teacher_unassign, name="teacher-unassign"),
     path("admin/teachers/<uuid:pk>/profile/", teacher_update_profile, name="teacher-update-profile"),
     path("admin/teachers/<uuid:pk>/bulk-assign/", teacher_bulk_assign, name="teacher-bulk-assign"),
+    path("admin/teachers/<uuid:pk>/free-afternoon/", teacher_free_afternoon, name="teacher-free-afternoon"),
+    path("admin/teachers/<uuid:pk>/retire/", teacher_retire, name="teacher-retire"),
+    path("admin/teachers/<uuid:pk>/reactivate/", teacher_reactivate, name="teacher-reactivate"),
     path("admin/subjects/", admin_subjects_list, name="admin-subjects"),
     path("admin/classes/", admin_classes_list, name="admin-classes"),
 ]

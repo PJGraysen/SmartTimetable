@@ -218,3 +218,30 @@ from apps.academics.views import StreamTrendView as _STV
 urlpatterns += [
     _apath("analysis/stream-trend/", _STV.as_view(), name="analysis-stream-trend"),
 ]
+
+
+
+# ---------------------------------------------------------------------
+# Teacher analytics (added 2026-10-05)
+# ---------------------------------------------------------------------
+from apps.academics.views import AnalysisTeacherPerformanceView as _ATPV
+from apps.academics.views import AnalysisTeacherStudentView as _ATSV
+
+urlpatterns += [
+    _apath("analysis/teacher/me/", _ATPV.as_view(), name="analysis-teacher-me"),
+    _apath("analysis/teacher/me/student/<uuid:student_id>/", _ATSV.as_view(), name="analysis-teacher-student"),
+]
+
+# ---------------------------------------------------------------------
+# Whole-school analytics (admin) — added 2026-10-05
+# ---------------------------------------------------------------------
+from apps.academics.views import AnalysisSchoolView as _ASV
+urlpatterns += [
+    _apath("analysis/school/", _ASV.as_view(), name="analysis-school"),
+]
+
+from apps.academics.views import AnalysisSchoolFiltersView as _ASFV
+urlpatterns += [
+    _apath("analysis/school/filters/", _ASFV.as_view(), name="analysis-school-filters"),
+]
+

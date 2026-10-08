@@ -201,10 +201,92 @@ def serve_asset(asset: DigitalAsset, *, user, action: str, request=None):
     if not os.path.exists(path):
         raise DAMError("Asset file is missing on disk.")
 
-    ctype, _ = mimetypes.guess_type(path)
+    # --- Robust content-type detection ---
+    # Django's FileField may store files with UUID names, losing the
+    # extension. mimetypes.guess_type() then returns None, and we
+    # default to application/octet-stream — which forces browsers to
+    # download instead of rendering PDFs inline.
+    #
+    # Fix: try several sources in order:
+    #   1. The file's own extension
+    #   2. asset.format (explicit model field, e.g. "PDF")
+    #   3. The original filename if the model keeps one
+    #   4. Fallback to guess_type on the original filename
+    #
+    # Content types we care about:
+    MIME_MAP = {
+        ".pdf":  "application/pdf",
+        ".jpg":  "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png":  "image/png",
+        ".gif":  "image/gif",
+        ".webp": "image/webp",
+        ".svg":  "image/svg+xml",
+        ".txt":  "text/plain; charset=utf-8",
+        ".mp3":  "audio/mpeg",
+        ".m4a":  "audio/mp4",
+        ".mp4":  "video/mp4",
+        ".epub": "application/epub+zip",
+        ".doc":  "application/msword",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".ppt":  "application/vnd.ms-powerpoint",
+        ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".xls":  "application/vnd.ms-excel",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+    FORMAT_TO_MIME = {
+        "PDF":  "application/pdf",
+        "JPG":  "image/jpeg",
+        "JPEG": "image/jpeg",
+        "PNG":  "image/png",
+        "GIF":  "image/gif",
+        "WEBP": "image/webp",
+        "SVG":  "image/svg+xml",
+        "TXT":  "text/plain; charset=utf-8",
+        "MP3":  "audio/mpeg",
+        "M4A":  "audio/mp4",
+        "MP4":  "video/mp4",
+        "EPUB": "application/epub+zip",
+        "DOC":  "application/msword",
+        "DOCX": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "PPT":  "application/vnd.ms-powerpoint",
+        "PPTX": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "XLS":  "application/vnd.ms-excel",
+        "XLSX": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+
+    ext = os.path.splitext(path)[1].lower()
+    ctype = None
+    if ext in MIME_MAP:
+        ctype = MIME_MAP[ext]
+
+    if ctype is None:
+        fmt = (getattr(asset, "format", "") or "").upper()
+        ctype = FORMAT_TO_MIME.get(fmt)
+
+    if ctype is None:
+        # Try the original filename that the model may have kept
+        original = getattr(asset, "original_filename", None) or getattr(asset, "file_name", None)
+        if original:
+            ctype, _ = mimetypes.guess_type(original)
+
+    if ctype is None:
+        ctype, _ = mimetypes.guess_type(path)
+
     ctype = ctype or "application/octet-stream"
+
+    # --- Disposition ---
     disposition = "inline" if action == "view" else "attachment"
+
+    # --- Filename: keep the original extension so browsers recognise the type ---
     filename = os.path.basename(path)
+    if not os.path.splitext(filename)[1]:
+        # UUID-only filename — append the format extension
+        fmt = (getattr(asset, "format", "") or "").lower()
+        if fmt:
+            filename = f"{filename}.{fmt}"
+    # Strip any characters that break the Content-Disposition header
+    filename = filename.replace('"', "")
 
     body = None
     size = asset.size_bytes or os.path.getsize(path)
@@ -214,18 +296,62 @@ def serve_asset(asset: DigitalAsset, *, user, action: str, request=None):
             body = wm
             size = len(wm)
 
+    # --- Build the response ---
+    # Use a plain HttpResponse (not Streaming) for reliability.
+    # StreamingHttpResponse uses chunked transfer encoding, which Vite's
+    # dev proxy and some browsers handle poorly — often truncating the
+    # body to 0 bytes. Files here are 5–15 MB max, so buffering is fine.
+    from django.http import HttpResponse as _HR
+
     if body is not None:
-        from django.http import HttpResponse as _HR
-        resp = _HR(body, content_type=ctype)
+        payload = body
     else:
-        resp = StreamingHttpResponse(_file_chunks(path), content_type=ctype)
-    resp["Content-Length"] = str(size)
+        with open(path, "rb") as fh:
+            payload = fh.read()
+
+    actual_size = len(payload)
+
+    # --- Backend logging: one line per stream request ---
+    try:
+        import sys as _sys
+        print(
+            f"[DAM-STREAM] asset={asset.id} action={action} "
+            f"file={os.path.basename(path)} "
+            f"size={actual_size} ctype={ctype} disp={disposition}",
+            file=_sys.stderr,
+        )
+    except Exception:
+        pass
+
+    resp = _HR(payload, content_type=ctype)
+    resp["Content-Length"] = str(actual_size)
     resp["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+    resp["Accept-Ranges"] = "bytes"
+
     resp["X-DRM-ReadOnly"] = "1" if asset.read_only else "0"
     resp["X-DRM-Allow-Download"] = "1" if asset.allow_download else "0"
     resp["X-DRM-Allow-Print"] = "1" if asset.allow_print else "0"
     if asset.watermark_text:
         resp["X-DRM-Watermark"] = asset.watermark_text
+
+    resp["Content-Security-Policy"] = (
+        "default-src 'self' 'unsafe-inline' blob: data:; "
+        "frame-ancestors 'self' "
+        "http://localhost:5173 "
+        "http://127.0.0.1:5173 "
+        "https://*.onrender.com"
+    )
+
+    # Allow embedding in our own frontend (localhost dev + production domain).
+    # Without this, Django's XFrameOptionsMiddleware returns DENY and the
+    # browser refuses to render the PDF inside our <iframe>/<object>.
+    resp["Content-Security-Policy"] = (
+        "frame-ancestors 'self' "
+        "http://localhost:5173 "
+        "http://127.0.0.1:5173 "
+        "https://*.onrender.com"
+    )
+
     log_view(asset, user=user, action=(
         DigitalAssetView.Action.DOWNLOAD if action == "download"
         else DigitalAssetView.Action.VIEW

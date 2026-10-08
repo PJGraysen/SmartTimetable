@@ -16,11 +16,14 @@ import type {
 type AuthState = {
   user: PlatformUser | null;
   applications: PlatformApplication[];
+  modules: string[];   // e.g. ["academics", "library"], or ["*"] for superadmin
+  role: string;        // primary role name: SUPER_ADMIN / TEACHER / STUDENT ...
   loading: boolean;
   error: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  hasModule: (name: string) => boolean;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -28,18 +31,28 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<PlatformUser | null>(null);
   const [applications, setApplications] = useState<PlatformApplication[]>([]);
+  const [modules, setModules] = useState<string[]>([]);
+  const [role, setRole] = useState<string>("GUEST");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const data = await platformApi.getMe();
+      const data: any = await platformApi.getMe();
+      // eslint-disable-next-line no-console
+      console.log("[Auth] /me response:", data);
+      // eslint-disable-next-line no-console
+      console.log("[Auth] modules =", data.modules, "  role =", data.role);
       setUser(data.user);
       setApplications(data.applications);
+      setModules(Array.isArray(data.modules) ? data.modules : []);
+      setRole(typeof data.role === "string" ? data.role : "GUEST");
       setError(null);
     } catch (err) {
       setUser(null);
       setApplications([]);
+      setModules([]);
+      setRole("GUEST");
       setError(null);
     } finally {
       setLoading(false);
@@ -51,10 +64,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const login = useCallback(async (username: string, password: string) => {
-    const data = await platformApi.login(username, password);
+    const data: any = await platformApi.login(username, password);
     setUser(data.user);
     setApplications(data.applications);
+    setModules(Array.isArray(data.modules) ? data.modules : []);
+    setRole(typeof data.role === "string" ? data.role : "GUEST");
     setError(null);
+    // Ensure modules/role are always canonical: re-fetch from /me after login.
+    try {
+      const me: any = await platformApi.getMe();
+      setUser(me.user);
+      setApplications(me.applications);
+      setModules(Array.isArray(me.modules) ? me.modules : []);
+      setRole(typeof me.role === "string" ? me.role : "GUEST");
+    } catch {
+      /* login response already applied; /me is best-effort */
+    }
   }, []);
 
   const logout = useCallback(async () => {
@@ -63,20 +88,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setUser(null);
       setApplications([]);
+      setModules([]);
+      setRole("GUEST");
     }
   }, []);
+
+  const hasModule = useCallback(
+    (name: string) => {
+      if (!name) return true;
+      if (modules.includes("*")) return true;
+      return modules.includes(name);
+    },
+    [modules],
+  );
 
   const value = useMemo<AuthState>(
     () => ({
       user,
       applications,
+      modules,
+      role,
       loading,
       error,
       login,
       logout,
       refresh,
+      hasModule,
     }),
-    [user, applications, loading, error, login, logout, refresh],
+    [user, applications, modules, role, loading, error, login, logout, refresh, hasModule],
   );
 
   return (

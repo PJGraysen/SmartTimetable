@@ -37,3 +37,21 @@ path(
     path("errors/report/", SchedulingErrorReportView.as_view(), name="scheduling-error-report"),
     path("errors/", SchedulingErrorListView.as_view(), name="scheduling-error-list"),
 ]
+
+
+# ---------------------------------------------------------------------
+# Duty Roster (Session 3)
+# ---------------------------------------------------------------------
+from django.urls import path
+from apps.scheduling.duty_api import (
+    duty_roster, duty_assign, duty_unassign, teacher_duty_preference,
+    duty_auto_rotate,
+)
+
+urlpatterns += [
+    path("duty-roster/", duty_roster, name="duty-roster"),
+    path("duty-roster/assign/", duty_assign, name="duty-assign"),
+    path("duty-roster/<uuid:pk>/", duty_unassign, name="duty-unassign"),
+    path("duty-roster/preference/<uuid:teacher_id>/", teacher_duty_preference, name="teacher-duty-preference"),
+    path("duty-roster/auto-rotate/", duty_auto_rotate, name="duty-auto-rotate"),
+]

@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { setToastHandler } from "../services/http";
 import { AlertCircle, CheckCircle2, Info, X, XCircle } from "lucide-react";
 
 export type ToastType = "success" | "error" | "warning" | "info";
@@ -75,6 +76,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       setItems((prev) => prev.filter((x) => x.id !== id));
     }, ttl);
   }, []);
+
+  // Bridge: give axios a way to push toasts from anywhere
+  useEffect(() => {
+    setToastHandler((t) => push(t));
+  }, [push]);
 
   return (
     <ToastCtx.Provider value={{ push }}>

@@ -141,3 +141,27 @@ class ErrorRecord(TimeStampedModel):
             f"{self.severity} - {self.subsystem} - "
             f"{self.error_code} - {self.message[:80]}"
         )
+
+
+# ---------------------------------------------------------------------
+# UserHeartbeat  (Layer 3 ? live activity tracking)
+# ---------------------------------------------------------------------
+class UserHeartbeat(TimeStampedModel):
+    """Last time each user touched the app. Updated by /api/audit/heartbeat/."""
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="heartbeat",
+    )
+    last_seen = models.DateTimeField(auto_now=True, db_index=True)
+    last_path = models.CharField(max_length=500, blank=True)
+    user_agent = models.CharField(max_length=300, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        db_table = "user_heartbeat"
+        ordering = ["-last_seen"]
+
+    def __str__(self):
+        return f"{self.user} @ {self.last_seen}"
