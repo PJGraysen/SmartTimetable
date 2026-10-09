@@ -768,7 +768,11 @@ class AnalysisTeacherPerformanceView(_AnalysisBase):
                 student_id__in=student_ids,
                 subject_id__in=subject_ids,
                 status=ResultStatus.VALID,
-            ).select_related("assessment", "subject", "student")
+            ).values(
+                "id", "student_id", "subject_id", "assessment_id", "raw_mark",
+                "assessment__date", "assessment__name", "assessment__max_mark",
+                "subject__code", "subject__name",
+            )
         )
 
         # Class-wide results: all subjects taught in the teacher's classes
@@ -785,43 +789,51 @@ class AnalysisTeacherPerformanceView(_AnalysisBase):
                 student_id__in=student_ids,
                 subject_id__in=all_class_subject_ids,
                 status=ResultStatus.VALID,
-            ).select_related("assessment", "subject", "student")
+            ).values(
+                "id", "student_id", "subject_id", "assessment_id", "raw_mark",
+                "assessment__date", "assessment__name", "assessment__max_mark",
+                "subject__code", "subject__name",
+            )
         )
         school_results = list(
             Result.objects.filter(
                 subject_id__in=subject_ids,
                 status=ResultStatus.VALID,
-            ).select_related("assessment", "subject")
+            ).values(
+                "id", "student_id", "subject_id", "assessment_id", "raw_mark",
+                "assessment__date", "assessment__name", "assessment__max_mark",
+                "subject__code", "subject__name",
+            )
         )
 
         # ---- Buckets ----
         school_by_subject = {}
         for r in school_results:
-            pct = A._pct(r.raw_mark, r.assessment.max_mark)
+            pct = A._pct(r["raw_mark"], r["assessment__max_mark"])
             if pct is None:
                 continue
-            school_by_subject.setdefault(str(r.subject_id), []).append(pct)
+            school_by_subject.setdefault(str(r["subject_id"]), []).append(pct)
 
         my_by_subject = {}
         my_by_student = {}
         my_by_class = {}
         for r in my_results:
-            pct = A._pct(r.raw_mark, r.assessment.max_mark)
+            pct = A._pct(r["raw_mark"], r["assessment__max_mark"])
             if pct is None:
                 continue
             grade = (A.grade_for(scheme, pct) or {}).get("grade", "\u2014")
-            aid = str(r.assessment_id)
-            sid = str(r.subject_id)
-            stid = str(r.student_id)
+            aid = str(r["assessment_id"])
+            sid = str(r["subject_id"])
+            stid = str(r["student_id"])
             entry = {
                 "student_id": stid,
                 "assessment_id": aid,
-                "name": r.assessment.name,
-                "date": r.assessment.date.isoformat() if r.assessment.date else "",
+                "name": r["assessment__name"],
+                "date": r["assessment__date"].isoformat() if r["assessment__date"] else "",
                 "pct": round(pct, 2),
                 "grade": grade,
-                "subject_code": r.subject.code,
-                "subject_name": r.subject.name,
+                "subject_code": r["subject__code"],
+                "subject_name": r["subject__name"],
             }
             my_by_subject.setdefault(sid, []).append(entry)
             my_by_student.setdefault(stid, []).append(entry)
@@ -829,21 +841,21 @@ class AnalysisTeacherPerformanceView(_AnalysisBase):
         # Class-wide bucket: every subject, every student in the class
         my_by_class_wide = {}
         for r in class_wide_results:
-            pct = A._pct(r.raw_mark, r.assessment.max_mark)
+            pct = A._pct(r["raw_mark"], r["assessment__max_mark"])
             if pct is None:
                 continue
             grade = (A.grade_for(scheme, pct) or {}).get("grade", "\u2014")
             entry = {
-                "student_id": str(r.student_id),
-                "assessment_id": str(r.assessment_id),
-                "name": r.assessment.name,
-                "date": r.assessment.date.isoformat() if r.assessment.date else "",
+                "student_id": str(r["student_id"]),
+                "assessment_id": str(r["assessment_id"]),
+                "name": r["assessment__name"],
+                "date": r["assessment__date"].isoformat() if r["assessment__date"] else "",
                 "pct": round(pct, 2),
                 "grade": grade,
-                "subject_code": r.subject.code,
-                "subject_name": r.subject.name,
+                "subject_code": r["subject__code"],
+                "subject_name": r["subject__name"],
             }
-            for tid in student_groups.get(str(r.student_id), ()):
+            for tid in student_groups.get(str(r["student_id"]), ()):
                 for g in my_groups:
                     if g.teaching_group_id == tid:
                         my_by_class_wide.setdefault(str(g.id), []).append(entry)
