@@ -72,6 +72,25 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": (
         "drf_spectacular.openapi.AutoSchema"
     ),
+    # ---- Default authentication ----
+    # Every view is authenticated unless it explicitly declares
+    # @permission_classes([AllowAny]). This is the correct secure default:
+    # forgetting to add permissions to a new view fails closed, not open.
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    # ---- Global throttling ----
+    # Anon: protects unauthenticated endpoints (including login attempt floods)
+    # User: caps how much a single authenticated user can hammer the API
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "200/hour",
+        "user": "20000/hour",
+        "login": "10/minute",
+    },
 }
 
 
@@ -244,3 +263,33 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
 }
+
+
+# ------------------------------------------------------------------
+# Production security headers
+# ------------------------------------------------------------------
+# These only activate when DEBUG=False. Locally (DEBUG=True) everything
+# stays relaxed so you can develop over plain HTTP.
+if not DEBUG:
+    # --- HTTPS / HSTS ---
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_HSTS_SECONDS = 31536000               # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    # --- Cookie hardening ---
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_HTTPONLY = False                 # JS needs to read this
+    CSRF_COOKIE_SAMESITE = "Lax"
+
+    # --- Browser hardening ---
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+    SECURE_BROWSER_XSS_FILTER = True
+
+    # --- Prevent clickjacking for admin ---
+    X_FRAME_OPTIONS = "SAMEORIGIN"
