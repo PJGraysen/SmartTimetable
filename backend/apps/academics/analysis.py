@@ -22,19 +22,76 @@ PASS_THRESHOLD = 50.0
 INTERVENTION_THRESHOLD = 45.0
 
 
+from functools import lru_cache
+from django.core.cache import cache
+
+
+# ---------------------------------------------------------------------
+# Grading-band cache
+# ---------------------------------------------------------------------
+# grade_for() used to hit the DB on every single call ? 20k+ queries
+# per analytics request. We now cache the scheme's bands for 5 minutes
+# and expose invalidate_grading_cache() for the admin CRUD endpoints.
+# ---------------------------------------------------------------------
+_SCHEME_CACHE_KEY = "academics:active_scheme_id"
+_BANDS_VERSION_KEY = "academics:bands:version"
+_SCHEME_TTL = 300
+
+
+def _bands_version() -> int:
+    v = cache.get(_BANDS_VERSION_KEY)
+    if v is None:
+        v = 1
+        cache.set(_BANDS_VERSION_KEY, v, None)
+    return v
+
+
+def _bands_for_scheme(scheme_id):
+    """Cached tuple of (grade, min_score, max_score, points, descriptor)."""
+    v = _bands_version()
+    key = f"academics:bands:{scheme_id}:v{v}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    from apps.academics.models import GradingBand
+    bands = tuple(
+        GradingBand.objects
+        .filter(scheme_id=scheme_id)
+        .order_by("-min_score")
+        .values_list("grade", "min_score", "max_score", "points", "descriptor")
+    )
+    cache.set(key, bands, _SCHEME_TTL)
+    return bands
+
+
+def invalidate_grading_cache():
+    """Drop cached scheme + bands. Call after admin changes grading."""
+    cache.set(_BANDS_VERSION_KEY, _bands_version() + 1, None)
+    cache.delete(_SCHEME_CACHE_KEY)
+
+
 def _active_scheme():
-    return GradingScheme.objects.filter(is_active=True).order_by("-created_at").first()
+    cached_id = cache.get(_SCHEME_CACHE_KEY)
+    if cached_id:
+        s = GradingScheme.objects.filter(pk=cached_id).first()
+        if s:
+            return s
+    s = GradingScheme.objects.filter(is_active=True).order_by("-created_at").first()
+    if s:
+        cache.set(_SCHEME_CACHE_KEY, s.pk, _SCHEME_TTL)
+    return s
 
 
 def grade_for(scheme, score):
     if scheme is None or score is None:
         return None
-    for band in scheme.bands.all().order_by("-min_score"):
-        if float(band.min_score) <= float(score) <= float(band.max_score):
+    score_f = float(score)
+    for grade, min_s, max_s, points, descriptor in _bands_for_scheme(scheme.pk):
+        if float(min_s) <= score_f <= float(max_s):
             return {
-                "grade": band.grade,
-                "points": float(band.points),
-                "descriptor": band.descriptor,
+                "grade": grade,
+                "points": float(points),
+                "descriptor": descriptor,
             }
     return None
 

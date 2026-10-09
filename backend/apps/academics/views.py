@@ -1496,8 +1496,11 @@ class AnalysisSchoolView(_AnalysisBase):
         scheme = A._active_scheme()
 
         # ---- Base query ----------
-        results = Result.objects.filter(status=ResultStatus.VALID).select_related(
-            "student", "subject", "assessment", "assessment__term"
+        results = Result.objects.filter(status=ResultStatus.VALID).values(
+            "id", "student_id", "subject_id", "assessment_id", "raw_mark",
+            "assessment__date", "assessment__name", "assessment__max_mark",
+            "assessment__term_id",
+            "subject__code", "subject__name",
         )
 
         if f_term:
@@ -1555,13 +1558,13 @@ class AnalysisSchoolView(_AnalysisBase):
 
         # ---- Overall ----------
         all_pcts = [
-            A._pct(r.raw_mark, r.assessment.max_mark) for r in results
+            A._pct(r["raw_mark"], r["assessment__max_mark"]) for r in results
         ]
         all_pcts = [p for p in all_pcts if p is not None]
         overall_mean = round(sum(all_pcts) / len(all_pcts), 2) if all_pcts else 0
 
-        student_ids_set = {r.student_id for r in results}
-        subject_ids_set = {r.subject_id for r in results}
+        student_ids_set = {r["student_id"] for r in results}
+        subject_ids_set = {r["subject_id"] for r in results}
 
         # ---- Deviation helper: previous exam mean vs current ----------
         def _deviation_from_assessments(assessment_ids_and_means):
@@ -1578,15 +1581,16 @@ class AnalysisSchoolView(_AnalysisBase):
         def _by_subject(rows):
             buckets = {}
             for r in rows:
-                pct = A._pct(r.raw_mark, r.assessment.max_mark)
+                pct = A._pct(r["raw_mark"], r["assessment__max_mark"])
                 if pct is None:
                     continue
-                buckets.setdefault(str(r.subject_id), {}).setdefault(
-                    r.assessment_id, {"date": r.assessment.date, "pcts": []}
+                buckets.setdefault(str(r["subject_id"]), {}).setdefault(
+                    r["assessment_id"], {"date": r["assessment__date"], "pcts": []}
                 )["pcts"].append(pct)
+            subject_lookup = {str(s.id): s for s in Subject.objects.filter(id__in=list(buckets.keys()))}
             out = []
             for sid, exams in buckets.items():
-                subj = Subject.objects.filter(id=sid).first()
+                subj = subject_lookup.get(str(sid))
                 if not subj:
                     continue
                 exam_means = []
@@ -1604,7 +1608,7 @@ class AnalysisSchoolView(_AnalysisBase):
                     "deviation": dev,
                     "exam_count": len(exam_means),
                     "student_count": len({
-                        r.student_id for r in rows if str(r.subject_id) == sid
+                        r["student_id"] for r in rows if str(r["subject_id"]) == sid
                     }),
                 })
             out.sort(key=lambda x: -x["mean"])
@@ -1620,16 +1624,17 @@ class AnalysisSchoolView(_AnalysisBase):
                 stu_to_groups.setdefault(str(sid), set()).add(str(tg))
             buckets = {}
             for r in rows:
-                pct = A._pct(r.raw_mark, r.assessment.max_mark)
+                pct = A._pct(r["raw_mark"], r["assessment__max_mark"])
                 if pct is None:
                     continue
-                for gid in stu_to_groups.get(str(r.student_id), ()):
+                for gid in stu_to_groups.get(str(r["student_id"]), ()):
                     buckets.setdefault(gid, {}).setdefault(
-                        r.assessment_id, {"date": r.assessment.date, "pcts": []}
+                        r["assessment_id"], {"date": r["assessment__date"], "pcts": []}
                     )["pcts"].append(pct)
+            tg_lookup = {str(tg.id): tg for tg in TeachingGroup.objects.filter(id__in=list(buckets.keys()))}
             out = []
             for gid, exams in buckets.items():
-                tg = TeachingGroup.objects.filter(id=gid).first()
+                tg = tg_lookup.get(str(gid))
                 if not tg:
                     continue
                 exam_means = []
@@ -1655,73 +1660,101 @@ class AnalysisSchoolView(_AnalysisBase):
             return out
 
         def _by_teacher(rows):
+            # -----------------------------------------------------------------
+            # PERFORMANCE: this used to iterate `rows` twice for every teacher
+            # (24 ? 22k ? 2 = ~1M iterations ? ~20s). Now we preload the
+            # teacher?subject map in two queries and iterate `rows` once,
+            # touching only the teachers who actually teach each subject.
+            # -----------------------------------------------------------------
             from apps.users.models import Teacher
             from apps.scheduling.models import TeacherAssignment
+            from collections import defaultdict
+
+            teachers = list(Teacher.objects.all())
+            teacher_by_id = {t.id: t for t in teachers}
+
+            # teacher_id -> set(subject_id)
+            teacher_subjects = defaultdict(set)
+
+            # Direct LessonRequirement assignments
+            for t_id, subj_id in (
+                LessonRequirement.objects
+                .filter(is_active=True, teacher_id__isnull=False)
+                .values_list("teacher_id", "subject_id")
+            ):
+                if subj_id:
+                    teacher_subjects[t_id].add(subj_id)
+
+            # Scheduling TeacherAssignment side
+            for t_id, subj_id in (
+                TeacherAssignment.objects
+                .filter(is_active=True)
+                .values_list("teacher_id", "lesson_requirement__subject_id")
+            ):
+                if subj_id:
+                    teacher_subjects[t_id].add(subj_id)
+
+            # Invert: subject_id -> set(teacher_id)
+            subject_to_teachers = defaultdict(set)
+            for t_id, subjs in teacher_subjects.items():
+                for s in subjs:
+                    subject_to_teachers[s].add(t_id)
+
+            # One pass over rows; update only the affected teachers.
+            per_teacher_pcts = defaultdict(list)
+            per_teacher_by_assessment = defaultdict(lambda: defaultdict(list))
+            per_teacher_students = defaultdict(set)
+
+            for r in rows:
+                if r["subject_id"] is None:
+                    continue
+                pct = A._pct(r["raw_mark"], r["assessment__max_mark"])
+                if pct is None:
+                    continue
+                for t_id in subject_to_teachers.get(r["subject_id"], ()):
+                    per_teacher_pcts[t_id].append(pct)
+                    per_teacher_by_assessment[t_id][r["assessment_id"]].append(
+                        (r["assessment__date"], pct)
+                    )
+                    per_teacher_students[t_id].add(r["student_id"])
 
             buckets = {}
-            for t in Teacher.objects.all():
-                direct = set(
-                    LessonRequirement.objects.filter(teacher=t, is_active=True)
-                    .values_list("id", flat=True)
-                )
-                assigned = set(
-                    TeacherAssignment.objects.filter(teacher=t, is_active=True)
-                    .values_list("lesson_requirement_id", flat=True)
-                )
-                lrs = direct | assigned
-                subj_ids = set(
-                    LessonRequirement.objects.filter(id__in=lrs)
-                    .values_list("subject_id", flat=True)
-                )
-                if not subj_ids:
+            for t_id, pcts in per_teacher_pcts.items():
+                t = teacher_by_id.get(t_id)
+                if t is None or not pcts:
                     continue
-                pcts = [
-                    A._pct(r.raw_mark, r.assessment.max_mark)
-                    for r in rows if r.subject_id in subj_ids
-                ]
-                pcts = [p for p in pcts if p is not None]
-                if not pcts:
-                    continue
-                # Deviation: mean of last exam vs previous
-                teacher_exam_means = {}
-                for r in rows:
-                    if r.subject_id not in subj_ids:
-                        continue
-                    pct = A._pct(r.raw_mark, r.assessment.max_mark)
-                    if pct is None:
-                        continue
-                    teacher_exam_means.setdefault(
-                        r.assessment_id, {"date": r.assessment.date, "pcts": []}
-                    )["pcts"].append(pct)
                 exam_means = []
-                for aid, node in teacher_exam_means.items():
-                    m = sum(node["pcts"]) / len(node["pcts"])
-                    exam_means.append((node["date"], round(m, 2)))
+                for aid, plist in per_teacher_by_assessment[t_id].items():
+                    avg = sum(p for _, p in plist) / len(plist)
+                    date = plist[0][0]
+                    exam_means.append((date, round(avg, 2)))
                 dev = _deviation_from_assessments(exam_means)
-                buckets[str(t.id)] = {
-                    "teacher_id": str(t.id),
+                buckets[str(t_id)] = {
+                    "teacher_id": str(t_id),
                     "name": (f"{t.first_name} {t.last_name}".strip()
                              or t.employee_code),
                     "code": t.employee_code,
                     "mean": round(sum(pcts) / len(pcts), 2),
                     "deviation": dev,
-                    "student_count": len({
-                        r.student_id for r in rows if r.subject_id in subj_ids
-                    }),
-                    "subject_count": len(subj_ids),
+                    "student_count": len(per_teacher_students[t_id]),
+                    "subject_count": len(teacher_subjects[t_id]),
                 }
+
             out = sorted(buckets.values(), key=lambda x: -x["mean"])
             for i, row in enumerate(out, 1):
                 row["rank"] = i
             return out
 
         def _by_term(rows):
+            from apps.core.models import Term as _Term
+            term_lookup = {t.id: t for t in _Term.objects.all()}
             buckets = {}
             for r in rows:
-                pct = A._pct(r.raw_mark, r.assessment.max_mark)
+                pct = A._pct(r["raw_mark"], r["assessment__max_mark"])
                 if pct is None:
                     continue
-                t = getattr(r.assessment, "term", None)
+                t_id = r.get("assessment__term_id")
+                t = term_lookup.get(t_id) if t_id else None
                 if not t:
                     continue
                 buckets.setdefault(str(t.id), {
@@ -1729,13 +1762,10 @@ class AnalysisSchoolView(_AnalysisBase):
                     "name": t.name,
                     "pcts": [],
                 })["pcts"].append(pct)
-            ordered = sorted(
-                buckets.values(),
-                key=lambda x: x["name"],
-            )
+            ordered = sorted(buckets.values(), key=lambda x: x["name"])
             out = []
             prev_mean = None
-            for i, node in enumerate(ordered, 1):
+            for node in ordered:
                 m = round(sum(node["pcts"]) / len(node["pcts"]), 2)
                 dev = round(m - prev_mean, 2) if prev_mean is not None else None
                 out.append({
@@ -1789,14 +1819,14 @@ class AnalysisSchoolView(_AnalysisBase):
         # Recent exams across school
         exam_map = {}
         for r in results:
-            pct = A._pct(r.raw_mark, r.assessment.max_mark)
+            pct = A._pct(r["raw_mark"], r["assessment__max_mark"])
             if pct is None:
                 continue
-            key = str(r.assessment_id)
+            key = str(r["assessment_id"])
             node = exam_map.setdefault(key, {
                 "assessment_id": key,
-                "name": r.assessment.name,
-                "date": r.assessment.date.isoformat() if r.assessment.date else "",
+                "name": r["assessment__name"],
+                "date": r["assessment__date"].isoformat() if r["assessment__date"] else "",
                 "pcts": [],
             })
             node["pcts"].append(pct)
@@ -2070,11 +2100,49 @@ class GradingSchemeViewSet(viewsets.ModelViewSet):
     serializer_class = _GS_Ser
     permission_classes = [IsAuthenticated, CanEditGrading]
 
+    def _invalidate(self):
+        try:
+            from apps.academics.analysis import invalidate_grading_cache
+            invalidate_grading_cache()
+        except Exception:
+            pass
+
+    def perform_create(self, serializer):
+        serializer.save()
+        self._invalidate()
+
+    def perform_update(self, serializer):
+        serializer.save()
+        self._invalidate()
+
+    def perform_destroy(self, instance):
+        instance.delete()
+        self._invalidate()
+
 
 class GradingBandViewSet(viewsets.ModelViewSet):
     queryset = _GB_Model.objects.all()
     serializer_class = _GB_Ser
     permission_classes = [IsAuthenticated, CanEditGrading]
+
+    def _invalidate(self):
+        try:
+            from apps.academics.analysis import invalidate_grading_cache
+            invalidate_grading_cache()
+        except Exception:
+            pass
+
+    def perform_create(self, serializer):
+        serializer.save()
+        self._invalidate()
+
+    def perform_update(self, serializer):
+        serializer.save()
+        self._invalidate()
+
+    def perform_destroy(self, instance):
+        instance.delete()
+        self._invalidate()
 
 
 
@@ -2292,62 +2360,58 @@ class MarksEntryContextView(APIView):
 
 class StreamSummaryView(_AnalysisBase):
     def get(self, request):
-        from apps.academics.teacher_scope import (
-            teacher_classes, teacher_subject_ids, teacher_student_ids,
-            is_admin_like,
-        )
-        scope_whole = (request.query_params.get("scope") or "").lower() == "whole"
-        scope_classes = None if (is_admin_like(request.user) or scope_whole) else set(teacher_classes(request.user).values_list("id", flat=True))
-        scope_subjects = None if (is_admin_like(request.user) or scope_whole) else teacher_subject_ids(request.user)
-        scope_students = None if (is_admin_like(request.user) or scope_whole) else teacher_student_ids(request.user)
-        aid = request.query_params.get("assessment")
-        tgid = request.query_params.get("stream")
-        if not aid or not tgid:
-            return Response({"detail": "assessment and stream required"}, status=400)
-        # Teacher scope: block if they don't teach this stream
-        if scope_classes is not None:
-            from apps.academics.models import InstructionalGroup as _IG
-            stream_igs = set(
-                _IG.objects.filter(teaching_group_id=tgid)
-                .values_list("id", flat=True)
-            )
-            if not (stream_igs & scope_classes):
-                return Response(
-                    {"detail": "You do not teach this stream."},
-                    status=403,
-                )
         try:
-            data = _analysis.stream_summary(aid, tgid)
-        except _Assessment.DoesNotExist:
-            return Response({"detail": "assessment not found"}, status=404)
-        return Response(data)
+            from apps.academics.teacher_scope import (
+                teacher_classes, teacher_subject_ids, teacher_student_ids,
+                is_admin_like,
+            )
+            scope_whole = (request.query_params.get("scope") or "").lower() == "whole"
+            scope_classes = None if (is_admin_like(request.user) or scope_whole) else set(teacher_classes(request.user).values_list("id", flat=True))
+            scope_subjects = None if (is_admin_like(request.user) or scope_whole) else teacher_subject_ids(request.user)
+            scope_students = None if (is_admin_like(request.user) or scope_whole) else teacher_student_ids(request.user)
+            aid = request.query_params.get("assessment")
+            tgid = request.query_params.get("stream")
+            if not aid or not tgid:
+                return Response({"detail": "assessment and stream required"}, status=400)
+            try:
+                data = _analysis.stream_summary(aid, tgid)
+            except _Assessment.DoesNotExist:
+                return Response({"detail": "assessment not found"}, status=404)
+            return Response(data)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("StreamSummaryView failed")
+            return Response({
+                "detail": "Could not load the stream report.",
+                "hint": "Please try again. If it persists, contact your administrator.",
+                "code": "STREAM_SUMMARY_FAILED",
+            }, status=500)
 
 
 
 class StreamTrendView(_AnalysisBase):
     def get(self, request):
-        from apps.academics.teacher_scope import (
-            teacher_classes, teacher_subject_ids, teacher_student_ids,
-            is_admin_like,
-        )
-        scope_whole = (request.query_params.get("scope") or "").lower() == "whole"
-        scope_classes = None if (is_admin_like(request.user) or scope_whole) else set(teacher_classes(request.user).values_list("id", flat=True))
-        scope_subjects = None if (is_admin_like(request.user) or scope_whole) else teacher_subject_ids(request.user)
-        scope_students = None if (is_admin_like(request.user) or scope_whole) else teacher_student_ids(request.user)
-        tgid = request.query_params.get("stream")
-        if not tgid:
-            return Response({"detail": "stream required"}, status=400)
-        # Teacher scope
-        if scope_classes is not None:
-            from apps.academics.models import InstructionalGroup as _IG
-            stream_igs = set(
-                _IG.objects.filter(teaching_group_id=tgid)
-                .values_list("id", flat=True)
+        try:
+            from apps.academics.teacher_scope import (
+                teacher_classes, teacher_subject_ids, teacher_student_ids,
+                is_admin_like,
             )
-            if not (stream_igs & scope_classes):
-                return Response(
-                    {"detail": "You do not teach this stream."},
-                    status=403,
-                )
-        limit = int(request.query_params.get("limit", "3"))
-        return Response(_analysis.stream_trend(tgid, assessment_limit=limit))
+            scope_whole = (request.query_params.get("scope") or "").lower() == "whole"
+            scope_classes = None if (is_admin_like(request.user) or scope_whole) else set(teacher_classes(request.user).values_list("id", flat=True))
+            scope_subjects = None if (is_admin_like(request.user) or scope_whole) else teacher_subject_ids(request.user)
+            scope_students = None if (is_admin_like(request.user) or scope_whole) else teacher_student_ids(request.user)
+            tgid = request.query_params.get("stream")
+            if not tgid:
+                return Response({"detail": "stream required"}, status=400)
+            limit = int(request.query_params.get("limit", "3"))
+            return Response(_analysis.stream_trend(tgid, assessment_limit=limit))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("StreamTrendView failed")
+            return Response({
+                "detail": "Could not load the stream trend.",
+                "hint": "Please try again. If it persists, contact your administrator.",
+                "code": "STREAM_TREND_FAILED",
+            }, status=500)
+
+
