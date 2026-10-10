@@ -45,12 +45,26 @@ http.interceptors.request.use((config) => {
   return config;
 });
 
+// Login + verification endpoints handle their own errors inline on the
+// login page. Skip the global error toast for them.
+const SILENT_LOGIN_URLS = [
+  "/platform/auth/login/",
+  "/platform/auth/verify/",
+  "/platform/auth/resend-code/",
+];
+
 http.interceptors.response.use(
   (r) => r,
   (error) => {
     const resp = error?.response;
     const data = resp?.data || {};
     const status = resp?.status;
+
+    // Login endpoints handle their own errors inline
+    const requestUrl = error?.config?.url || "";
+    if (SILENT_LOGIN_URLS.some((u) => requestUrl.includes(u))) {
+      return Promise.reject(error);
+    }
 
     // ---------------------------------------------------------------------
     // Build a human-readable message from any of the shapes Django/DRF

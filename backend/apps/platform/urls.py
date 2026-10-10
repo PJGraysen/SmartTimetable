@@ -46,6 +46,8 @@ router.register(r"admin/teachers", TeacherAdminViewSet, basename="admin-teacher"
 urlpatterns = [
     # Base platform
     path("auth/login/", views.login_view, name="platform-login"),
+    path("auth/verify/", views.verify_login_view, name="platform-verify"),
+    path("auth/resend-code/", views.resend_code_view, name="platform-resend-code"),
     path("auth/logout/", views.logout_view, name="platform-logout"),
     path("auth/me/", views.me_view, name="platform-me"),
     path("applications/", views.applications_view, name="platform-applications"),

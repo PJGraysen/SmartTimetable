@@ -1,4 +1,4 @@
-﻿from django.contrib.auth.models import User
+from django.contrib.auth.models import User
 from django.db import models
 
 from apps.core.models import TimeStampedModel
@@ -165,3 +165,81 @@ class UserHeartbeat(TimeStampedModel):
 
     def __str__(self):
         return f"{self.user} @ {self.last_seen}"
+
+
+# ---------------------------------------------------------------------
+# Login security (2026-10-09)
+# ---------------------------------------------------------------------
+class LoginOutcome(models.TextChoices):
+    SUCCESS          = "SUCCESS",          "Success"
+    BAD_PASSWORD     = "BAD_PASSWORD",     "Bad password"
+    BAD_CODE         = "BAD_CODE",         "Bad verification code"
+    NO_SUCH_USER     = "NO_SUCH_USER",     "No such user"
+    INACTIVE         = "INACTIVE",         "Account inactive"
+    THROTTLED        = "THROTTLED",        "Rate limited"
+    LOCKED           = "LOCKED",           "Account locked"
+    PENDING_VERIFY   = "PENDING_VERIFY",   "Awaiting verification"
+
+
+class LoginAttempt(TimeStampedModel):
+    """Every login attempt ? good or bad. Immutable audit record."""
+    username_attempted = models.CharField(max_length=150, db_index=True)
+    user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="login_attempts",
+    )
+    outcome = models.CharField(max_length=20, choices=LoginOutcome.choices, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=500, blank=True)
+    device_fingerprint = models.CharField(max_length=64, blank=True, db_index=True)
+    details = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = "login_attempt"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["username_attempted", "-created_at"]),
+            models.Index(fields=["ip_address", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.created_at:%Y-%m-%d %H:%M} {self.username_attempted} {self.outcome}"
+
+
+class VerificationChannel(models.TextChoices):
+    EMAIL = "EMAIL", "Email"
+    PHONE = "PHONE", "Phone"
+
+
+class UserSecurity(TimeStampedModel):
+    """Per-user security state: failed attempts, lockout, 2FA-lite."""
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="security",
+    )
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+    requires_verification = models.BooleanField(default=False)
+    verification_code_hash = models.CharField(max_length=128, blank=True)
+    verification_sent_at = models.DateTimeField(null=True, blank=True)
+    verification_purpose = models.CharField(max_length=40, blank=True)
+    preferred_channel = models.CharField(
+        max_length=10, choices=VerificationChannel.choices,
+        default=VerificationChannel.EMAIL,
+    )
+    last_successful_login_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "user_security"
+
+    def __str__(self):
+        return f"Security({self.user.username})"
+
+    def is_locked(self):
+        from django.utils import timezone
+        return self.locked_until is not None and self.locked_until > timezone.now()
+
+
+def security_for(user):
+    """Return the UserSecurity row for a user, creating if needed."""
+    obj, _ = UserSecurity.objects.get_or_create(user=user)
+    return obj

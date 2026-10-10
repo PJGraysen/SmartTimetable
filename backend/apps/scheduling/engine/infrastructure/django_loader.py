@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Iterable
 
@@ -65,6 +65,7 @@ class DjangoSchedulingLoader:
             .filter(
                 teaching_group__stream__grade__academic_year=term.academic_year,
                 is_active=True,
+                teaching_group__is_active=True,
             )
             .select_related(
                 "teaching_group",
@@ -73,11 +74,21 @@ class DjangoSchedulingLoader:
             )
         )
 
+        from django.db.models import Q
+        # School-wide LRs (instructional_group=None) are NOT schedulable ?
+        # the solver places lessons in a specific class's slot. Exclude them.
         lesson_requirements = (
             LessonRequirement.objects
             .filter(
                 term=term,
                 is_active=True,
+                subject__is_active=True,
+                instructional_group__isnull=False,
+                instructional_group__is_active=True,
+                instructional_group__teaching_group__is_active=True,
+            )
+            .filter(
+                Q(teacher__isnull=True) | Q(teacher__is_active=True)
             )
             .select_related(
                 "instructional_group",
@@ -86,8 +97,19 @@ class DjangoSchedulingLoader:
             )
         )
 
+        # Only teachers with at least one active lesson requirement for
+        # this term participate in the solve. Non-teaching staff (librarian,
+        # lab tech, etc.) don't appear in the schedule and don't need a
+        # free-afternoon assignment.
+        teacher_ids_in_scope = set(
+            lesson_requirements.values_list("teacher_id", flat=True)
+            .distinct()
+        )
+        teacher_ids_in_scope.discard(None)
+
         teachers = Teacher.objects.filter(
             is_active=True,
+            id__in=teacher_ids_in_scope,
         )
 
         teacher_assignments = (
@@ -95,8 +117,15 @@ class DjangoSchedulingLoader:
             .filter(
                 lesson_requirement__term=term,
                 is_active=True,
-                teacher__is_active=True,
+                teacher__in=teachers,
                 lesson_requirement__is_active=True,
+                lesson_requirement__subject__is_active=True,
+            )
+            .filter(
+                # Match the LR loader: only assignments whose LR targets a real class
+                lesson_requirement__instructional_group__isnull=False,
+                lesson_requirement__instructional_group__is_active=True,
+                lesson_requirement__instructional_group__teaching_group__is_active=True,
             )
             .select_related(
                 "teacher",
@@ -109,7 +138,7 @@ class DjangoSchedulingLoader:
             .filter(
                 term=term,
                 is_active=True,
-                teacher__is_active=True,
+                teacher__in=teachers,
             )
             .select_related("teacher")
         )
@@ -119,7 +148,7 @@ class DjangoSchedulingLoader:
             .filter(
                 term=term,
                 is_active=True,
-                teacher__is_active=True,
+                teacher__in=teachers,
             )
             .select_related(
                 "teacher",
