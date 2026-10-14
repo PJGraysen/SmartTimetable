@@ -119,6 +119,7 @@ export const MODULE_NAV: Record<string, NavItem[]> = {
 
     // ----- CRUD -----
     { to: "/academics/manage",         label: "Academic Management",  icon: UserCog,         requires: ADMINS_ONLY },
+    { to: "/academics/lesson-requirements", label: "Lesson Requirements", icon: ClipboardList, requires: ADMINS_ONLY },
   ],
   inventory: [
     { to: "/inventory/dashboard", label: "Dashboard", icon: LayoutDashboard },

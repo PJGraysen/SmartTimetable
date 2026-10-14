@@ -449,6 +449,13 @@ function teacherName(entry: TimetableEntryResult): string {
 }
 
 function groupName(entry: TimetableEntryResult): string {
+  // Prefer the authoritative instructional_group_code field.
+  // Falling back to the display name only when the code is absent.
+  const raw = entry as unknown as Record<string, unknown>;
+  const code = raw.instructional_group_code;
+  if (typeof code === "string" && code.trim()) {
+    return code.trim();
+  }
   return text(entry.instructional_group_name);
 }
 
@@ -498,14 +505,12 @@ function classMatches(
     return false;
   }
 
+  // Exact match only. Substring fallback previously caused
+  // cross-group leakage (e.g. an 11W entry appearing under 10W)
+  // when the aliases shared substrings.
   return definition.aliases.some((alias) => {
     const candidate = normalise(alias);
-
-    return (
-      group === candidate ||
-      group.includes(candidate) ||
-      candidate.includes(group)
-    );
+    return group === candidate;
   });
 }
 
@@ -691,6 +696,7 @@ async function waitForRenderFlush(): Promise<void> {
 function Timetable() {
   const [entries, setEntries] = useState<TimetableEntryResult[]>([]);
   const [version, setVersion] = useState("Live timetable");
+  const [activeTermId, setActiveTermId] = useState<string>("");
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
   const [runCompletedAt, setRunCompletedAt] = useState<string | null>(null);
   const [availableRuns, setAvailableRuns] = useState<any[]>([]);
@@ -775,7 +781,10 @@ function Timetable() {
       fetchSchedulingDashboard()
         .then((d: any) => {
           const t = d?.active_term;
-          if (t) setTermDisplay(`${t.academic_year_name} ${t.name}`);
+          if (t) {
+            setTermDisplay(`${t.academic_year_name} ${t.name}`);
+            setActiveTermId(String(t.id));
+          }
         })
         .catch(() => {});
     });
@@ -827,7 +836,16 @@ function Timetable() {
         return db - da;
       });
       // Honor explicit pick, else newest by completed_at
-      let latestRun = completed[0];
+      // Prefer the active term's newest completed run so the
+      // fingerprint matches the Scheduling page header. Fall
+      // back to global newest if the active term has no runs.
+      const completedInActiveTerm = activeTermId
+        ? completed.filter((r: any) => String(r.term) === activeTermId)
+        : completed;
+      let latestRun =
+        (completedInActiveTerm.length > 0
+          ? completedInActiveTerm
+          : completed)[0];
       if (selectedRunId) {
         const picked = completed.find((r: any) => r.id === selectedRunId);
         if (picked) latestRun = picked;
@@ -936,9 +954,9 @@ function Timetable() {
         const buildCellMap = (list: any[]): Map<string, string> => {
           const m = new Map<string, string>();
           for (const e of list) {
-            const raw = String(e?.instructional_group_name || "");
-            const parts = raw.split(" - ");
-            const c = (parts[1] || parts[0] || raw).trim();
+            const code = String(e?.instructional_group_code || "").trim();
+            const nm = String(e?.instructional_group_name || "");
+            const c = code || nm.split(" - ")[1] || nm;
             const d = String(e?.day || "");
             const pp = String(e?.period_number || "");
             const k = d + ":" + c + ":" + pp;
@@ -1021,7 +1039,7 @@ function Timetable() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedRunId]);
+  }, [selectedRunId, activeTermId]);
 
   // Sync URL ?run=<id> into selectedRunId (from "View" button)
   useEffect(() => {

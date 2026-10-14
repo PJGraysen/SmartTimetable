@@ -1,4 +1,4 @@
-﻿from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand, CommandError
 
 from apps.core.models import Term
 from apps.scheduling.models import Teacher, TeacherFreeAfternoon
@@ -12,16 +12,47 @@ class Command(BaseCommand):
 
     DAYS = ["MON", "TUE", "WED", "THU", "FRI"]
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--term",
+            dest="term_name",
+            default=None,
+            help=(
+                "Term name (e.g. 'Term 3'). Defaults to the "
+                "currently active term."
+            ),
+        )
+
     def handle(self, *args, **options):
         self.stdout.write(
             "\n=== ASSIGN TEACHER FREE AFTERNOONS ===\n"
         )
 
-        term = (
-            Term.objects
-            .order_by("-start_date", "name")
-            .first()
-        )
+        term_name = options.get("term_name")
+
+        if term_name:
+            term = (
+                Term.objects
+                .filter(name__iexact=term_name.strip())
+                .order_by("-start_date", "name")
+                .first()
+            )
+            if term is None:
+                available = list(
+                    Term.objects.values_list("name", flat=True)
+                    .order_by("name")
+                )
+                raise CommandError(
+                    f"Term {term_name!r} not found. "
+                    f"Available: {available}"
+                )
+        else:
+            term = (
+                Term.objects
+                .filter(is_active=True)
+                .order_by("-start_date", "name")
+                .first()
+            )
 
         if term is None:
             raise CommandError("No academic term exists.")

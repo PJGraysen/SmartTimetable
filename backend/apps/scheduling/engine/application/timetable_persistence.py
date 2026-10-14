@@ -106,6 +106,13 @@ class TimetablePersistenceService:
             assignments=assignments,
         )
 
+        entries.extend(
+            self._inject_gst_filler(
+                entries=entries,
+                timetable_version=timetable_version,
+            )
+        )
+
         if entries:
             TimetableEntry.objects.bulk_create(entries)
 
@@ -394,6 +401,99 @@ class TimetablePersistenceService:
     # ------------------------------------------------------------------
     # Timetable entry construction
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _inject_gst_filler(
+        *,
+        entries: list,
+        timetable_version,
+    ) -> list:
+        """
+        Return GST entries for every (group, day, teaching-period) cell
+        in the group's active grid that has no real lesson.
+
+        GST slots carry no teacher and no room; they represent guided
+        self-study. A per-group LessonRequirement(subject=GST,
+        lessons_per_week=1, is_active=False) is created lazily so the
+        FK on TimetableEntry.lesson_requirement resolves. The
+        requirement carries lessons_per_week=1 only to satisfy the
+        ck_lesson_requirement_lessons_positive check constraint;
+        because is_active=False the solver never loads it and never
+        places it. This is a persistence-only projection.
+        """
+        from apps.academics.models import (
+            LessonRequirement as _LR,
+            Subject as _Subject,
+        )
+        from apps.scheduling.models import Period as _Period
+
+        gst_subject = _Subject.objects.filter(
+            code="GST", is_active=True
+        ).first()
+        if gst_subject is None:
+            return []
+
+        group_ids = {
+            e.instructional_group_id
+            for e in entries
+            if e.instructional_group_id
+        }
+        if not group_ids:
+            return []
+
+        teaching_periods = list(
+            _Period.objects.filter(
+                is_active=True, is_teaching_period=True
+            ).order_by("number")
+        )
+        if not teaching_periods:
+            return []
+
+        occupied = {
+            (e.instructional_group_id, e.day, e.period_id)
+            for e in entries
+        }
+        days_by_group: dict = {}
+        for e in entries:
+            if e.instructional_group_id:
+                days_by_group.setdefault(e.instructional_group_id, set()).add(
+                    e.day
+                )
+
+        term = timetable_version.term
+        gst_lr_by_group: dict = {}
+        for gid in group_ids:
+            lr, _ = _LR.objects.get_or_create(
+                term=term,
+                instructional_group_id=gid,
+                subject=gst_subject,
+                defaults={
+                    "lessons_per_week": 1,
+                    "requirement_type": "STANDALONE",
+                    "is_active": False,
+                },
+            )
+            gst_lr_by_group[gid] = lr
+
+        filled: list = []
+        for gid, days in days_by_group.items():
+            lr = gst_lr_by_group[gid]
+            for day in sorted(days):
+                for period in teaching_periods:
+                    if (gid, day, period.id) in occupied:
+                        continue
+                    filled.append(
+                        type(entries[0])(
+                            timetable_version=timetable_version,
+                            day=day,
+                            period_id=period.id,
+                            instructional_group_id=gid,
+                            teacher_id=None,
+                            lesson_requirement_id=lr.id,
+                            room_id=None,
+                        )
+                    )
+        return filled
 
     @staticmethod
     def _build_entries(

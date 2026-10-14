@@ -133,7 +133,8 @@ class SeniorSchoolCurriculumContract:
 GRADE10_SUBJECTS = (
     ("ENG", "English", 5, "core", True),
     ("KIS", "Kiswahili", 5, "core", True),
-    ("EMCM", "Essential Mathematics / Core Mathematics", 5, "core", True),
+    ("ESS", "Essential Mathematics", 5, "core", True),
+    ("CORE", "Core Mathematics", 5, "core", True),
     ("CRE", "Christian Religious Education", 4, "core", True),
     ("PE", "Physical Education", 3, "core", True),
     ("CSL", "Community Service Learning", 3, "core", True),
@@ -165,11 +166,17 @@ GRADE10_ELECTIVE_SUBJECTS = tuple(
     if subject[3] == "elective"
 )
 
+# Authoritative Grade 10 elective block contract.
+# MUST match the runtime parallel-block definitions in
+# apps.scheduling.engine.application.grade10_parallel_blocks.
+# That runtime module is the single source of truth for the solver;
+# this tuple mirrors it so materialize produces the LRs the solver
+# actually enforces.
 GRADE10_ELECTIVE_BLOCKS = (
-    ("OPTION_1", "BIO / MUS / FRE", ("BIO", "MUS", "FRE")),
-    ("OPTION_2", "CHEM / PHY / LIT", ("CHEM", "PHY", "LIT")),
-    ("OPTION_3", "GEO / HIS / CS", ("GEO", "HIS", "CS")),
-    ("OPTION_4", "BUS / AGR", ("BUS", "AGR")),
+    ("OPTION_1", "COMP / CHEM", ("COMP", "CHEM")),
+    ("OPTION_2", "BIO / GEO / HIS", ("BIO", "GEO", "HIS")),
+    ("OPTION_3", "PHY / LIT / MUSD", ("PHY", "LIT", "MUSD")),
+    ("OPTION_4", "AGR / BUS", ("AGR", "BUS")),
 )
 
 GRADE10_PARALLEL_BLOCKS = tuple(

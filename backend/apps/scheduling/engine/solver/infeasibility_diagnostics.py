@@ -1,4 +1,5 @@
-﻿from dataclasses import dataclass
+from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -62,6 +63,25 @@ class InfeasibilityReport:
             lines.append("")
 
         return "\n".join(lines)
+
+
+def _grade_level_from_group_code(code: object) -> str:
+    """Extract the leading grade-level prefix from a group code.
+
+    '10E' -> '10'  |  '11W' -> '11'  |  '4E' -> '4'  |  '9W' -> '9'.
+
+    Used to deduplicate BLOCK-typed lesson requirements that are
+    synchronized across the streams of one grade level (e.g. 10E and
+    10W for the COMP/BUS/MUSD elective blocks). A teacher teaching
+    the same BLOCK subject to both streams is one physical teaching
+    event; without dedup, capacity diagnostics over-count by a factor
+    of the stream count.
+    """
+    c = str(code or "").strip().upper()
+    i = 0
+    while i < len(c) and c[i].isdigit():
+        i += 1
+    return c[:i] or c
 
 
 def _teacher_name(
@@ -745,7 +765,16 @@ def _diagnose_single_teacher_capacity(
     teacher_unavailable = _teacher_unavailable_slots(problem)
     teacher_free_afternoons = _teacher_free_afternoons(problem)
 
-    required_by_teacher: dict[UUID, int] = {}
+    # Deduplicate BLOCK-typed LRs within the same grade level.
+    #
+    # A BLOCK-typed LR's subject is synchronized across the streams of
+    # the same grade (e.g. 10E and 10W for COMP/BUS/MUSD). One teacher
+    # teaching BUS to both 10E and 10W represents ONE physical teaching
+    # event (5 slots) — not two. Without this dedup the diagnostic
+    # over-counts by the number of streams and reports a false
+    # TEACHER_CAPACITY finding on every infeasible model.
+    block_required_by_teacher: dict[UUID, dict[tuple, int]] = defaultdict(dict)
+    nonblock_required_by_teacher: dict[UUID, int] = defaultdict(int)
 
     for requirement in problem.lesson_requirements:
         if not requirement.is_active:
@@ -764,10 +793,51 @@ def _diagnose_single_teacher_capacity(
             continue
 
         teacher_id = eligible[0]
+        periods = int(getattr(requirement, "periods_per_week", 0) or 0)
 
+        rtype = str(
+            getattr(requirement, "requirement_type", "") or ""
+        ).strip().upper()
+
+        if rtype == "BLOCK":
+            subject_code = str(
+                getattr(requirement, "subject_code", "") or ""
+            ).strip().upper()
+
+            group_code = ""
+            group_id = getattr(requirement, "instructional_group_id", None)
+            if group_id is not None:
+                group = next(
+                    (
+                        g
+                        for g in problem.instructional_groups
+                        if getattr(g, "id", None) == group_id
+                    ),
+                    None,
+                )
+                if group is not None:
+                    group_code = str(getattr(group, "code", "") or "")
+
+            grade = _grade_level_from_group_code(group_code)
+            key = (subject_code, grade)
+
+            # Same key within the same teacher = same synchronized
+            # physical event; keep the max (they should all be equal
+            # when the block registry is consistent, but max is safe).
+            prev = block_required_by_teacher[teacher_id].get(key, 0)
+            if periods > prev:
+                block_required_by_teacher[teacher_id][key] = periods
+        else:
+            nonblock_required_by_teacher[teacher_id] += periods
+
+    required_by_teacher: dict[UUID, int] = {}
+    for teacher_id in (
+        set(block_required_by_teacher)
+        | set(nonblock_required_by_teacher)
+    ):
         required_by_teacher[teacher_id] = (
-            required_by_teacher.get(teacher_id, 0)
-            + requirement.periods_per_week
+            sum(block_required_by_teacher.get(teacher_id, {}).values())
+            + nonblock_required_by_teacher.get(teacher_id, 0)
         )
 
     for teacher_id, required_periods in required_by_teacher.items():

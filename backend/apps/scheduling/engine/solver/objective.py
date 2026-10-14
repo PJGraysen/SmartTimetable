@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
@@ -795,6 +795,142 @@ class MathsMorningPreferenceObjective:
 
 
 @dataclass(slots=True)
+class TeacherGapMinimizationObjective:
+    """
+    Soft objective penalizing idle teaching periods between a teacher's
+    lessons on the same day.
+
+    A "gap" is an empty teaching period sandwiched between two periods
+    where the teacher IS assigned. Longer gaps cost proportionally more.
+
+    Implementation:
+      * Group assignment variables by (teacher, day, period_number).
+      * For each (teacher, day), compute the OR of variables at each
+        period ? `used[p]` boolean.
+      * For each pair of periods (p_a, p_b) in the teacher's possible
+        period list where p_b > p_a + 1, penalize
+            (p_b - p_a - 1) * (used[p_a] AND used[p_b])
+        The multiplier is realized by appending the same penalty var
+        multiple times to the sum expression.
+    """
+
+    weight: int = 1
+
+    def __post_init__(self) -> None:
+        if self.weight <= 0:
+            raise ValueError(
+                "Teacher gap-minimization objective weight must be "
+                "greater than zero."
+            )
+
+    def build_expression(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> object:
+        penalty_terms = self._gap_terms(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        if not penalty_terms:
+            return 0
+
+        return self.weight * sum(penalty_terms)
+
+    def apply(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> None:
+        expression = self.build_expression(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        if _is_empty_objective_expression(expression):
+            return
+
+        model.minimize(expression)
+
+    def _gap_terms(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> list[cp_model.IntVar]:
+        period_by_id = problem.period_by_id
+
+        # teacher_id -> day -> period_number -> [vars]
+        by_teacher_day: dict[
+            tuple[UUID, str],
+            dict[int, list[cp_model.IntVar]],
+        ] = {}
+
+        for assignment in variables:
+            period = period_by_id.get(assignment.period_id)
+            if period is None:
+                continue
+            if not period.is_active or not period.is_teaching_period:
+                continue
+
+            key = (assignment.teacher_id, assignment.day)
+            by_teacher_day.setdefault(key, {}).setdefault(
+                period.number, []
+            ).append(assignment.variable)
+
+        penalty_terms: list[cp_model.IntVar] = []
+
+        for (teacher_id, day), periods in by_teacher_day.items():
+            period_numbers = sorted(periods)
+            if len(period_numbers) < 3:
+                continue
+
+            # used[p] = OR(variables at period p)
+            used: dict[int, cp_model.IntVar] = {}
+            for pnum, vars_here in periods.items():
+                if len(vars_here) == 1:
+                    used[pnum] = vars_here[0]
+                else:
+                    u = model.new_bool_var(
+                        f"gap_used_{teacher_id}_{day}_{pnum}_{len(penalty_terms)}"
+                    )
+                    model.add_max_equality(u, vars_here)
+                    used[pnum] = u
+
+            # For every non-adjacent pair, penalize (p_b - p_a - 1) *
+            # (used[p_a] AND used[p_b])
+            for i in range(len(period_numbers) - 1):
+                p_a = period_numbers[i]
+                for j in range(i + 1, len(period_numbers)):
+                    p_b = period_numbers[j]
+                    gap_size = p_b - p_a - 1
+                    if gap_size <= 0:
+                        continue
+
+                    penalty = model.new_bool_var(
+                        f"gap_{teacher_id}_{day}_{p_a}_{p_b}_{len(penalty_terms)}"
+                    )
+                    model.add(penalty <= used[p_a])
+                    model.add(penalty <= used[p_b])
+                    model.add(
+                        penalty >= used[p_a] + used[p_b] - 1
+                    )
+                    # Weight by gap length
+                    for _ in range(gap_size):
+                        penalty_terms.append(penalty)
+
+        return penalty_terms
+
+
+@dataclass(slots=True)
 class CompositeSolverObjective:
     """
     Combines multiple soft objectives into one CP-SAT objective.
@@ -884,3 +1020,219 @@ def apply_solver_objectives(
         problem=problem,
         variables=variables,
     )
+
+# --------------------------------------------------------------------------
+# Teacher max consecutive (Soft)
+# --------------------------------------------------------------------------
+@dataclass(slots=True)
+class TeacherMaxConsecutiveObjective:
+    """
+    Soft: no teacher should teach more than 2 consecutive periods on
+    the same day.
+
+    A "consecutive" run of teaching periods is determined by raw
+    period numbers: P4 -> P6 is not consecutive (P5 is a break), but
+    P1 -> P2 -> P3 -> P4 is.
+
+    For every (teacher, day, run) and every triple of adjacent
+    positions in that run, a Boolean penalty is set when the teacher
+    is assigned all three periods. The sum of penalties is minimized
+    under the composite objective.
+    """
+
+    weight: int = 30
+
+    def __post_init__(self) -> None:
+        if self.weight <= 0:
+            raise ValueError(
+                "Teacher max-consecutive weight must be greater than zero."
+            )
+
+    def build_expression(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> object:
+        teaching = sorted(
+            (
+                p
+                for p in problem.periods
+                if getattr(p, "is_active", False)
+                and getattr(p, "is_teaching_period", False)
+            ),
+            key=lambda p: int(getattr(p, "number", 0) or 0),
+        )
+
+        run_by_period: dict = {}
+        pos_by_period: dict = {}
+        prev_num = None
+        run_idx = -1
+        pos_in_run = 0
+        for p in teaching:
+            n = int(getattr(p, "number", 0) or 0)
+            if prev_num is None or n != prev_num + 1:
+                run_idx += 1
+                pos_in_run = 0
+            else:
+                pos_in_run += 1
+            run_by_period[p.id] = run_idx
+            pos_by_period[p.id] = pos_in_run
+            prev_num = n
+
+        buckets: dict = {}
+        for v in variables:
+            if v.teacher_id is None:
+                continue
+            run_id = run_by_period.get(v.period_id)
+            if run_id is None:
+                continue
+            pos = pos_by_period[v.period_id]
+            key = (v.teacher_id, v.day, run_id)
+            buckets.setdefault(key, {}).setdefault(pos, []).append(
+                v.variable
+            )
+
+        penalty_terms: list = []
+        idx = 0
+
+        for (teacher_id, day, run_id), by_pos in buckets.items():
+
+            # presence[p] = 1 iff the teacher has ANY assignment at
+            # that position on that day. This handles synchronized
+            # teacher events correctly: whether one or two LRs place
+            # the teacher at the position, presence is 1.
+            presence: dict = {}
+            for p, var_list in by_pos.items():
+                present = model.new_bool_var(
+                    f"maxcons_presence_{idx}"
+                )
+                # present >= each var  (present is 1 if any is 1)
+                for v in var_list:
+                    model.add(present >= v)
+                # present <= sum(var_list)  (present must be 0 if all 0)
+                model.add(present <= sum(var_list))
+                presence[p] = present
+                idx += 1
+
+            positions = sorted(presence.keys())
+            pos_set = set(positions)
+            for p in positions:
+                if p + 1 in pos_set and p + 2 in pos_set:
+                    triple = (
+                        presence[p]
+                        + presence[p + 1]
+                        + presence[p + 2]
+                    )
+                    violation = model.new_bool_var(
+                        f"maxcons_viol_{idx}"
+                    )
+                    # violation = 1 whenever all three positions are
+                    # occupied by the teacher. If any is 0, violation
+                    # is free; the solver will pick 0 to avoid penalty.
+                    model.add(violation >= triple - 2)
+                    penalty_terms.append(violation)
+                    idx += 1
+
+        if not penalty_terms:
+            return 0
+
+        return sum(penalty_terms) * self.weight
+
+# --------------------------------------------------------------------------
+# Teacher daily-load balance (Soft)
+# --------------------------------------------------------------------------
+@dataclass(slots=True)
+class TeacherDailyLoadObjective:
+    """
+    Soft: penalize heavy teaching days.
+
+    For every (teacher, day), compute the teacher's physical presence
+    at each teaching position (deduped so synchronized E/W events
+    count once). If the total exceeds ``threshold``, apply a
+    quadratic penalty (excess squared, linearized via auxiliary
+    booleans) scaled by ``weight``.
+
+    Because the penalty is soft, no model can go INFEASIBLE from this
+    objective alone. It only nudges the solver to spread heavy
+    teachers' periods more evenly across the week.
+    """
+
+    threshold: int = 6
+    weight: int = 8
+    max_excess: int = 4
+
+    def __post_init__(self) -> None:
+        if self.threshold < 1:
+            raise ValueError("threshold must be >= 1")
+        if self.weight <= 0:
+            raise ValueError("weight must be > 0")
+        if self.max_excess < 1:
+            raise ValueError("max_excess must be >= 1")
+
+    def build_expression(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> object:
+        # Group variables by (teacher, day) and (teacher, day, position).
+        by_teacher_day_pos: dict = {}
+        for v in variables:
+            if v.teacher_id is None:
+                continue
+            period = problem.period_by_id.get(v.period_id)
+            if period is None:
+                continue
+            if not getattr(period, "is_teaching_period", False):
+                continue
+            try:
+                pnum = int(getattr(period, "number", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            key = (v.teacher_id, v.day)
+            by_teacher_day_pos.setdefault(key, {}).setdefault(
+                pnum, []
+            ).append(v.variable)
+
+        penalty_terms: list = []
+        idx = 0
+        for (teacher_id, day), by_pos in by_teacher_day_pos.items():
+            # Presence per position: OR over all vars there.
+            presence: list = []
+            for pnum, var_list in by_pos.items():
+                present = model.new_bool_var(
+                    f"dayload_presence_{idx}"
+                )
+                for vv in var_list:
+                    model.add(present >= vv)
+                model.add(present <= sum(var_list))
+                presence.append(present)
+                idx += 1
+
+            total = sum(presence)
+            # Linearize (total - threshold)^2 up to max_excess.
+            # over_k = 1 iff total >= threshold + k
+            # penalty = sum_{k=1}^{K} (2k-1) * over_k  == max(0, excess)^2
+            for k in range(1, self.max_excess + 1):
+                over_k = model.new_bool_var(f"dayload_over_{idx}")
+                # over_k = 1 -> total >= threshold + k.
+                # over_k = 0 -> trivially satisfied (0 >= 0).
+                # Form: total >= (threshold + k) * over_k.
+                model.add(
+                    total >= (self.threshold + k) * over_k
+                )
+                # If total < threshold + k, then over_k = 0 (implied
+                # by the above since forcing over_k = 1 would violate).
+                # The solver will pick over_k = 0 when possible
+                # because over_k has positive weight below.
+                penalty_terms.append((2 * k - 1) * over_k)
+                idx += 1
+
+        if not penalty_terms:
+            return 0
+
+        return sum(penalty_terms) * self.weight
+

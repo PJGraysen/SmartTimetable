@@ -22,6 +22,23 @@ from apps.scheduling.models import (
     TimetableEntry,
 )
 
+import logging
+
+from django.utils import timezone
+
+from apps.audit.models import (
+    AuditAction,
+    AuditLog,
+    ErrorRecord,
+    ErrorSeverity,
+    ErrorStatus,
+)
+from apps.scheduling.engine.solver.outcomes import (
+    FailureReport,
+    describe_failure,
+)
+from apps.scheduling.models import SchedulingErrorLog
+
 from .pagination import SchedulingRunPagination
 
 from .serializers import (
@@ -154,15 +171,15 @@ class SchedulingRunExecuteView(APIView):
     Execute timetable generation for a scheduling run.
     """
 
+    logger = logging.getLogger(__name__)
+
     def post(self, request, pk):
         scheduling_run = get_object_or_404(
             SchedulingRun.objects.select_related("term"),
             pk=pk,
         )
 
-        serializer = SchedulingRunExecuteSerializer(
-            data=request.data,
-        )
+        serializer = SchedulingRunExecuteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         if scheduling_run.status not in (
@@ -182,49 +199,232 @@ class SchedulingRunExecuteView(APIView):
         try:
             result = SchedulingApplicationService().execute(
                 scheduling_run=scheduling_run,
-                version_name=serializer.validated_data[
-                    "version_name"
-                ],
-                version_number=serializer.validated_data[
-                    "version_number"
-                ],
+                version_name=serializer.validated_data["version_name"],
+                version_number=serializer.validated_data["version_number"],
             )
-
         except ValueError as exc:
-            return Response(
-                {"detail": str(exc)},
-                status=status.HTTP_409_CONFLICT,
+            return self._respond_to_failure(
+                request=request,
+                scheduling_run=scheduling_run,
+                failure=FailureReport(
+                    code="CONTRACT_VIOLATION",
+                    user_message=(
+                        "The scheduling contract is invalid and "
+                        "generation cannot proceed. Contact the "
+                        "timetabling administrator."
+                    ),
+                    technical_detail=str(exc),
+                    hints=(
+                        "Review the latest block / stream / quota changes.",
+                    ),
+                ),
+                http_status=status.HTTP_409_CONFLICT,
             )
-
         except Exception as exc:
-            from django.utils import timezone
-
-            scheduling_run.status = SchedulingRunStatus.FAILED
-            scheduling_run.completed_at = timezone.now()
-            scheduling_run.error_message = str(exc)
-
-            scheduling_run.save(
-                update_fields=[
-                    "status",
-                    "completed_at",
-                    "error_message",
-                    "updated_at",
-                ]
+            self.logger.exception(
+                "Timetable generation raised unexpectedly",
+                extra={
+                    "scheduling_run_id": str(scheduling_run.pk),
+                    "user_id": getattr(request.user, "pk", None),
+                },
+            )
+            if self._looks_like_persistence_failure(exc):
+                failure = FailureReport(
+                    code="PERSISTENCE_FAILURE",
+                    user_message=(
+                        "The timetable was generated successfully, but "
+                        "it could not be saved. The administrator has "
+                        "been notified and will resolve the storage "
+                        "issue."
+                    ),
+                    technical_detail=str(exc),
+                    hints=(
+                        "This is a storage or configuration issue, not "
+                        "a scheduling-rules conflict.",
+                        "The solver succeeded; retrying after the "
+                        "underlying issue is fixed should reproduce the "
+                        "same timetable.",
+                    ),
+                )
+            else:
+                failure = FailureReport(
+                    code="SOLVER_FAILURE",
+                    user_message=(
+                        "Timetable generation failed unexpectedly. "
+                        "The administrator has been notified."
+                    ),
+                    technical_detail=str(exc),
+                )
+            return self._respond_to_failure(
+                request=request,
+                scheduling_run=scheduling_run,
+                failure=failure,
+                http_status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-            return Response(
-                {
-                    "detail": "Scheduling execution failed.",
-                    "error": str(exc),
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        run = result.scheduling_run
+        if not self._run_succeeded(run):
+            solver_result = getattr(result, "solver_result", None)
+            if solver_result is not None:
+                failure = describe_failure(
+                    solver_result,
+                    unsat_core_names=getattr(
+                        solver_result, "unsat_core_names", ()
+                    ),
+                )
+            else:
+                failure = FailureReport(
+                    code="SOLVER_FAILURE",
+                    user_message=(
+                        "Timetable generation did not produce a "
+                        "usable schedule."
+                    ),
+                    technical_detail=(
+                        getattr(run, "error_message", "") or ""
+                    ),
+                )
+            return self._respond_to_failure(
+                request=request,
+                scheduling_run=run,
+                failure=failure,
+                http_status=status.HTTP_409_CONFLICT,
             )
 
         return Response(
-            SchedulingRunSerializer(
-                result.scheduling_run,
-            ).data,
+            SchedulingRunSerializer(run).data,
             status=status.HTTP_200_OK,
+        )
+
+    # ------------------------------------------------------------------
+    # Failure plumbing
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _run_succeeded(run) -> bool:
+        solver_status = getattr(run, "solver_status", None)
+        if solver_status is None:
+            return getattr(run, "status", None) != SchedulingRunStatus.FAILED
+        return str(solver_status).upper() in {"FEASIBLE", "OPTIMAL"}
+
+    @staticmethod
+    def _client_ip(request):
+        xff = request.META.get("HTTP_X_FORWARDED_FOR")
+        if xff:
+            return xff.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR") or None
+
+    @staticmethod
+    def _looks_like_persistence_failure(exc: BaseException) -> bool:
+        """
+        Distinguish a storage-layer failure (solver succeeded, save
+        failed) from a solver failure.
+
+        Walks the exception traceback: if any frame originates from a
+        module whose path contains ``persistence``, the failure is a
+        persistence-layer failure. Also checks the exception type's
+        module name as a fallback for wrapped or re-raised exceptions.
+        This keeps the user-facing message accurate without coupling
+        the view to specific exception types.
+        """
+        tb = getattr(exc, "__traceback__", None)
+        while tb is not None:
+            filename = (
+                tb.tb_frame.f_code.co_filename
+                .replace("\\", "/")
+                .lower()
+            )
+            if "persistence" in filename:
+                return True
+            tb = tb.tb_next
+
+        module_name = type(exc).__module__.lower()
+        if "persistence" in module_name:
+            return True
+
+        return False
+
+    def _respond_to_failure(
+        self,
+        *,
+        request,
+        scheduling_run,
+        failure: FailureReport,
+        http_status: int,
+    ):
+        user = request.user if request.user.is_authenticated else None
+
+        self.logger.error(
+            "Timetable generation failed: code=%s run=%s user=%s",
+            failure.code,
+            scheduling_run.pk,
+            getattr(user, "pk", None),
+            extra={
+                "failure_code": failure.code,
+                "scheduling_run_id": str(scheduling_run.pk),
+                "technical_detail": failure.technical_detail,
+            },
+        )
+
+        scheduling_run.status = SchedulingRunStatus.FAILED
+        scheduling_run.completed_at = timezone.now()
+        scheduling_run.error_message = (
+            failure.technical_detail or failure.user_message
+        )
+        scheduling_run.save(
+            update_fields=[
+                "status",
+                "completed_at",
+                "error_message",
+                "updated_at",
+            ]
+        )
+
+        SchedulingErrorLog.objects.create(
+            source="scheduling",
+            severity="ERROR",
+            code=failure.code,
+            message=failure.user_message,
+            context={
+                "technical_detail": failure.technical_detail,
+                "hints": list(failure.hints),
+            },
+            user=user,
+            url=request.path,
+            user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:300],
+            scheduling_run=scheduling_run,
+        )
+
+        ErrorRecord.objects.create(
+            severity=ErrorSeverity.ERROR,
+            status=ErrorStatus.OPEN,
+            subsystem="scheduling",
+            operation="timetable_generation",
+            error_code=failure.code,
+            message=failure.user_message,
+            technical_exception=failure.technical_detail,
+            entity_type="SchedulingRun",
+            entity_id=str(scheduling_run.pk),
+            solver_run_id=str(scheduling_run.pk),
+            details={"hints": list(failure.hints)},
+            user=user,
+        )
+
+        if user is not None:
+            AuditLog.objects.create(
+                user=user,
+                action=AuditAction.GENERATE,
+                entity_type="SchedulingRun",
+                entity_id=str(scheduling_run.pk),
+                description=(
+                    f"Timetable generation failed ({failure.code}). "
+                    f"{failure.user_message}"
+                ),
+                ip_address=self._client_ip(request),
+            )
+
+        return Response(
+            {"error": failure.to_payload()},
+            status=http_status,
         )
 
 
@@ -339,8 +539,25 @@ class SchedulingDashboardView(_APIView):
         ]
         active_term = next((t for t in terms_payload if t["is_active"]), None)
 
-        # Active timetable version
-        active_version = _TV.objects.filter(is_active=True).order_by("-created_at").first()
+        # Header version: newest for the currently active term.
+        # Falls back to the newest is_active version when no active
+        # term is set. This keeps the header aligned with the LIVE
+        # banner and the fingerprint (both read the newest version)
+        # instead of stalling on the last approved one.
+        if active_term:
+            active_version = (
+                _TV.objects
+                .filter(term_id=active_term["id"])
+                .order_by("-created_at")
+                .first()
+            )
+        else:
+            active_version = (
+                _TV.objects
+                .filter(is_active=True)
+                .order_by("-created_at")
+                .first()
+            )
         active_payload = None
         days_count = 0
         classes_count = 0

@@ -1,5 +1,9 @@
 from django.urls import path
 
+from .lr_extra_views import (
+    LessonRequirementCopyView,
+    LessonRequirementValidateView,
+)
 from .views import (
     GradeDetailView,
     GradeListCreateView,
@@ -75,6 +79,16 @@ urlpatterns = [
         "lesson-requirements/<uuid:pk>/",
         LessonRequirementDetailView.as_view(),
         name="lesson-requirement-detail",
+    ),
+    path(
+        "lesson-requirements/copy/",
+        LessonRequirementCopyView.as_view(),
+        name="lesson-requirement-copy",
+    ),
+    path(
+        "lesson-requirements/validate/",
+        LessonRequirementValidateView.as_view(),
+        name="lesson-requirement-validate",
     ),
 ]
 

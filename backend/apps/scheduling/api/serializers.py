@@ -155,6 +155,7 @@ class TimetableEntryResultSerializer(serializers.ModelSerializer):
     )
 
     instructional_group_name = serializers.SerializerMethodField()
+    instructional_group_code = serializers.SerializerMethodField()
 
     lesson_requirement_name = serializers.CharField(
         source="lesson_requirement.__str__",
@@ -194,6 +195,14 @@ class TimetableEntryResultSerializer(serializers.ModelSerializer):
             if entry.instructional_group is not None
             else None
         )
+
+    @staticmethod
+    def get_instructional_group_code(entry):
+        ig = getattr(entry, "instructional_group", None)
+        if ig is None:
+            return None
+        code = getattr(ig, "code", None)
+        return str(code).strip().upper() if code else None
 
     @staticmethod
     def get_room_name(entry):
@@ -369,6 +378,7 @@ class TimetableEntryResultSerializer(serializers.ModelSerializer):
             "period_end_time",
             "instructional_group",
             "instructional_group_name",
+            "instructional_group_code",
             "teacher",
             "teacher_name",
             "teacher_code",

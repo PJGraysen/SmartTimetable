@@ -84,9 +84,9 @@ def insert_form4_practicals(scheduling_run) -> None:
                     instructional_group=ig,
                     subject=subjects[code],
                     term=term,
+                    requirement_type="PRACTICAL",
                     defaults={
                         "lessons_per_week": 2,
-                        "requirement_type": "STANDALONE",
                         "is_active": True,
                         "teacher": lab_tech,
                     },

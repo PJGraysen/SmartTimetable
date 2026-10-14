@@ -18,6 +18,7 @@ import Placeholder from "./pages/Placeholder";
 import SettingsPage from "./pages/SettingsPage";
 import AIAssistant from "./pages/AIAssistant";
 import Scheduling from "./Scheduling";
+import LessonRequirementsPage from "./pages/LessonRequirementsPage";
 import AcademicsManagement from "./pages/AcademicsManagement";
 import AcademicsEntry from "./pages/AcademicsEntry";
 import SchoolAnalyticsPage from "./pages/SchoolAnalyticsPage";
@@ -105,6 +106,7 @@ export const PROTECTED_ROUTES: AppRoute[] = [
 
   { path: "/academics", element: <AcademicsEntry /> },
   { path: "/academics/manage", element: <AcademicsManagement initialTab="groups" /> },
+  { path: "/academics/lesson-requirements", element: <LessonRequirementsPage /> },
   { path: "/academics/school", element: <SchoolAnalyticsPage /> },
   { path: "/academics/students", element: <StudentsPage /> },
   { path: "/academics/students/:id/analysis", element: <StudentAnalysisPage /> },

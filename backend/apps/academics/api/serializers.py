@@ -172,6 +172,12 @@ class LessonRequirementSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+    teacher_name = serializers.CharField(
+        source="teacher.__str__",
+        read_only=True,
+        allow_null=True,
+    )
+
     class Meta:
         model = LessonRequirement
         fields = (
@@ -182,6 +188,9 @@ class LessonRequirementSerializer(serializers.ModelSerializer):
             "instructional_group_name",
             "subject",
             "subject_name",
+            "requirement_type",
+            "teacher",
+            "teacher_name",
             "lessons_per_week",
             "is_active",
             "created_at",

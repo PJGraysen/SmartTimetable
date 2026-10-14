@@ -5,10 +5,13 @@ from dataclasses import dataclass
 from apps.scheduling.engine.domain.problem import SchedulingProblem
 from apps.scheduling.engine.solver.model import SolverModelBuilder
 from apps.scheduling.engine.solver.objective import (
+    TeacherGapMinimizationObjective,
     BalancedTeacherWorkloadObjective,
     ComplexSubjectAdjacencyObjective,
     CompositeSolverObjective,
     MathsMorningPreferenceObjective,
+    TeacherMaxConsecutiveObjective,
+    TeacherDailyLoadObjective,
     SolverObjective,
     TeacherConsecutivePeriodObjective,
 )
@@ -144,12 +147,17 @@ def create_default_scheduler(
         else CompositeSolverObjective(
             objectives=(
                 BalancedTeacherWorkloadObjective(),
-                TeacherConsecutivePeriodObjective(),
+                # Consecutive lessons: bump to 5 ? 4-in-a-row is heavily penalized
+                TeacherConsecutivePeriodObjective(weight=5),
+                # Teacher idle-gap penalty: keep moderate
+                TeacherGapMinimizationObjective(weight=1),
                 # --- New pedagogical soft rules ---
                 # Science/science and science/maths adjacency is penalized,
                 # practicals excluded. Maths is preferred in morning periods.
                 ComplexSubjectAdjacencyObjective(),
-                MathsMorningPreferenceObjective(),
+                # MathsMorningPreferenceObjective(),  # disabled per business decision
+                TeacherMaxConsecutiveObjective(weight=60),
+                TeacherDailyLoadObjective(threshold=6, weight=8),
             ),
         )
     )

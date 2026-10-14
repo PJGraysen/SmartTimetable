@@ -129,6 +129,8 @@ class CPSATSolver:
 
             error_message: str | None = None
 
+            unsat_core_names: tuple[str, ...] = ()
+
             if status == cp_model.INFEASIBLE:
                 diagnostic_report = analyze_infeasibility(
                     problem,
@@ -136,11 +138,40 @@ class CPSATSolver:
 
                 error_message = diagnostic_report.format_message()
 
+                try:
+                    indices = (
+                        solver.sufficient_assumptions_for_infeasibility()
+                    )
+                except Exception:
+                    indices = []
+
+                names = solver_model.assumption_names
+                unsat_core_names = tuple(
+                    names[i]
+                    for i in indices
+                    if 0 <= i < len(names)
+                )
+
+                if unsat_core_names:
+                    error_message += (
+                        "\n\nUnsat core (specific conflicts):\n"
+                    )
+                    for _n in unsat_core_names:
+                        error_message += f"  - {_n}\n"
+
+                if unsat_core_names:
+                    error_message += (
+                        "\n\nUnsat core (specific conflicts):\n"
+                    )
+                    for _n in unsat_core_names:
+                        error_message += f"  - {_n}\n"
+
             return SolverResult(
                 status=solver_status,
                 assignments=assignments,
                 statistics=statistics,
                 error_message=error_message,
+                unsat_core_names=unsat_core_names,
             )
 
         except Exception as exc:

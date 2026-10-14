@@ -128,7 +128,19 @@ class SubjectDetailView(generics.RetrieveUpdateDestroyAPIView):
 class LessonRequirementListCreateView(generics.ListCreateAPIView):
     """
     List and create lesson requirements.
+
+    Supports optional filtering: ?term=<id or name>, ?active=1.
     """
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        term_param = self.request.query_params.get("term")
+        if term_param:
+            qs = qs.filter(term_id=term_param) if len(term_param) == 36 \
+                else qs.filter(term__name__iexact=term_param)
+        if self.request.query_params.get("active") == "1":
+            qs = qs.filter(is_active=True)
+        return qs
 
     queryset = LessonRequirement.objects.select_related(
         "term",

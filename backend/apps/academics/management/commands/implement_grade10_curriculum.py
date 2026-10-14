@@ -1,4 +1,4 @@
-﻿from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.academics.models import (
@@ -50,7 +50,8 @@ class Command(BaseCommand):
     SUBJECTS = {
         "ENG": "English",
         "KIS": "Kiswahili",
-        "EMCM": "Essential Mathematics / Core Mathematics",
+        "ESS": "Essential Mathematics",
+        "CORE": "Core Mathematics",
         "CRE": "Christian Religious Education",
         "PE": "Physical Education",
         "CSL": "Community Service Learning",
@@ -77,7 +78,8 @@ class Command(BaseCommand):
     WEEKLY_LESSONS = {
         "ENG": 5,
         "KIS": 5,
-        "EMCM": 5,
+        "ESS": 5,
+        "CORE": 5,
         "CRE": 4,
         "PE": 3,
         "CSL": 3,
@@ -160,7 +162,8 @@ class Command(BaseCommand):
     MULTI_TEACHER_ASSIGNMENTS = {
         "ENG": ("T011", "T015"),
         "KIS": ("T001", "T020"),
-        "EMCM": ("T004", "T013"),
+        "ESS": ("T004",),
+        "CORE": ("T013",),
         "CRE": ("T002", "T006"),
     }
 
@@ -191,6 +194,17 @@ class Command(BaseCommand):
     # GST and FRE intentionally have no teacher assignment here.
 
     @transaction.atomic
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--term",
+            dest="term_name",
+            default=None,
+            help=(
+                "Name of the term to implement for (e.g. 'Term 3'). "
+                "Defaults to the currently active term."
+            ),
+        )
+
     def handle(self, *args, **options):
         self.stdout.write("")
         self.stdout.write("=" * 80)
@@ -201,15 +215,34 @@ class Command(BaseCommand):
         self.stdout.write("")
 
         # ============================================================
-        # ACTIVE TERM
+        # TERM RESOLUTION
         # ============================================================
 
-        term = (
-            Term.objects
-            .filter(is_active=True)
-            .order_by("-start_date", "-created_at")
-            .first()
-        )
+        term_name = options.get("term_name")
+        if term_name:
+            term = (
+                Term.objects
+                .filter(name__iexact=term_name.strip())
+                .order_by("-start_date", "-created_at")
+                .first()
+            )
+            if term is None:
+                available = list(
+                    Term.objects
+                    .values_list("name", flat=True)
+                    .order_by("name")
+                )
+                raise CommandError(
+                    f"Term {term_name!r} not found. "
+                    f"Available terms: {available}"
+                )
+        else:
+            term = (
+                Term.objects
+                .filter(is_active=True)
+                .order_by("-start_date", "-created_at")
+                .first()
+            )
 
         if term is None:
             raise CommandError("No active academic term exists.")
@@ -594,7 +627,7 @@ class Command(BaseCommand):
         #
         # ENG 5
         # KIS 5
-        # EMCM 5
+        # ESS 5 / CORE 5
         # CRE 4
         # PE 3
         # CSL 3
@@ -621,7 +654,8 @@ class Command(BaseCommand):
             for code in (
                 "ENG",
                 "KIS",
-                "EMCM",
+                "ESS",
+            "CORE",
                 "CRE",
                 "PE",
                 "CSL",
@@ -832,7 +866,8 @@ class Command(BaseCommand):
             "KIS authoritative teachers: T001, T020."
         )
         self.stdout.write(
-            "EMCM authoritative teachers: T004, T013."
+            "ESS authoritative teacher: T004."
+        "CORE authoritative teacher: T013."
         )
         self.stdout.write(
             "French remains inactive until an active teacher exists."

@@ -168,6 +168,21 @@ SENIOR_SCHOOL_BLOCK_BY_CODE = {
 
 SENIOR_SCHOOL_SYNCHRONIZED_STREAM_PAIRS = (("4E", "4W"),)
 
+# ---------------------------------------------------------------------
+# Grade 10 standalone cross-stream synchronization
+# ---------------------------------------------------------------------
+#
+# Some STANDALONE subjects must be scheduled in the same physical
+# (day, period) across the two streams of the same grade — even
+# though the subject is not part of an elective block. The prime
+# example is Grade 10 English: 10E and 10W take it together, taught
+# by one teacher, in one physical slot.
+#
+# Registered as (grade_prefix, subject_code) pairs.
+GRADE10_STANDALONE_SYNCHRONIZED: frozenset = frozenset({
+    ("10", "ENG"),
+})
+
 SENIOR_SCHOOL_SYNCHRONIZED_BLOCK_CODES = tuple(
     block.code
     for block in SENIOR_SCHOOL_ELECTIVE_BLOCKS
@@ -1057,3 +1072,56 @@ __all__ = [
     "validate_senior_school_contract",
     "validate_senior_school_stream_synchronization",
 ]
+
+# --- SESSION-CORRECTED SENIOR_SCHOOL BLOCK DEFINITIONS ---
+# Approved contract, verified against Term 1 LR data. Do not
+# change these values without updating FORM4_PARALLEL_BLOCKS
+# and every term's LessonRequirements in lockstep.
+
+SENIOR_SCHOOL_GEO_HIS_BLOCK = SeniorSchoolBlock(
+    code="GEO_HIS",
+    subject_codes=("GEO", "HIS"),
+    weekly_shared_slots=5,
+    instructional_group_codes=("4E", "4W"),
+)
+
+SENIOR_SCHOOL_HUMANITIES_BLOCK = SENIOR_SCHOOL_GEO_HIS_BLOCK
+
+SENIOR_SCHOOL_RELIGIOUS_EDUCATION_BLOCK = SeniorSchoolBlock(
+    code="RELIGIOUS_EDUCATION",
+    subject_codes=("CRE",),
+    weekly_shared_slots=4,
+    instructional_group_codes=("4E", "4W"),
+)
+
+SENIOR_SCHOOL_SCIENCE_BLOCK = SeniorSchoolBlock(
+    code="SCIENCE",
+    subject_codes=("CHEM", "BIO", "PHY"),
+    weekly_shared_slots=5,
+    instructional_group_codes=("4E", "4W"),
+)
+
+SENIOR_SCHOOL_TECHNICALS_APPLIED_BLOCK = (
+    SENIOR_SCHOOL_AGR_BST_BLOCK
+)
+
+SENIOR_SCHOOL_BLOCK_BY_CODE = {
+    "GEO_HIS": SENIOR_SCHOOL_GEO_HIS_BLOCK,
+    "AGR_BST": SENIOR_SCHOOL_AGR_BST_BLOCK,
+    "SCIENCE": SENIOR_SCHOOL_SCIENCE_BLOCK,
+    "RELIGIOUS_EDUCATION": SENIOR_SCHOOL_RELIGIOUS_EDUCATION_BLOCK,
+}
+
+SENIOR_SCHOOL_BLOCKS = {
+    "GEO_HIS": frozenset({"GEO", "HIS"}),
+    "AGR_BST": frozenset({"AGR", "BUS"}),
+    "SCIENCE": frozenset({"CHEM", "BIO", "PHY"}),
+    "RELIGIOUS_EDUCATION": frozenset({"CRE"}),
+}
+
+# Only GEO_HIS and AGR_BST enforce cross-stream synchronization.
+# Sciences and RE remain non-synchronized block-typed subjects.
+SENIOR_SCHOOL_SYNCHRONIZED_BLOCK_CODES = (
+    "GEO_HIS",
+    "AGR_BST",
+)

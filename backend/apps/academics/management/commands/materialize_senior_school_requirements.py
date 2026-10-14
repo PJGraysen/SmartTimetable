@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections import defaultdict
 
@@ -23,19 +23,18 @@ from apps.audit.services import capture_exception
 from apps.core.models import Term
 
 
-GRADE10_BLOCK_SUBJECTS = {
-    "BIO",
-    "MUS",
-    "FRE",
-    "CHEM",
-    "PHY",
-    "LIT",
-    "GEO",
-    "HIS",
-    "CS",
-    "BUS",
-    "AGR",
-}
+# Derived directly from the runtime parallel-block definitions.
+# The runtime module is the single source of truth for the solver;
+# any block subject it names is by construction a BLOCK requirement.
+from apps.scheduling.engine.application.grade10_parallel_blocks import (
+    GRADE10_PARALLEL_BLOCKS as _RUNTIME_GRADE10_BLOCKS,
+)
+
+GRADE10_BLOCK_SUBJECTS = frozenset(
+    _code
+    for _block in _RUNTIME_GRADE10_BLOCKS
+    for _code in _block.subject_codes
+)
 
 
 FORM_PRACTICALS = {
@@ -49,7 +48,7 @@ FORM_PRACTICALS = {
         "CS": 2,
     },
     "4E": {
-        "CHEM": 3,
+        "CHEM": 2,
         "BIO": 2,
         "PHY": 2,
     },
@@ -76,6 +75,35 @@ def get_active_term():
         .order_by("-start_date", "-created_at")
         .first()
     )
+
+
+def resolve_term(term_name: str | None):
+    """
+    Return the Term to operate on.
+
+    When ``term_name`` is supplied via ``--term``, match it exactly
+    (case-insensitive) against Term.name. Otherwise fall back to the
+    currently active term. This lets an operator materialize the
+    curriculum for any term (e.g. "Term 3") without flipping the
+    system-wide active-term flag.
+    """
+    if term_name:
+        term = (
+            Term.objects
+            .select_related("academic_year")
+            .filter(name__iexact=term_name.strip())
+            .order_by("-start_date", "-created_at")
+            .first()
+        )
+        if term is None:
+            available = list(
+                Term.objects.values_list("name", flat=True).order_by("name")
+            )
+            raise ValueError(
+                f"Term {term_name!r} not found. Available terms: {available}"
+            )
+        return term
+    return get_active_term()
 
 
 def get_instructional_group(code: str):
@@ -146,10 +174,32 @@ def get_block_weekly(block):
     return int(value)
 
 
-def build_grade10_rows(subjects):
+def build_grade10_rows(group_code, subjects):
+    """
+    Build Grade 10 lesson-requirement rows.
+
+    The runtime parallel-block contract
+    (apps.scheduling.engine.application.grade10_parallel_blocks)
+    is AUTHORITATIVE for which subject codes belong to a block.
+    This function may not consult a second, independent block
+    definition — the solver only knows about the runtime contract,
+    so materialize must match it exactly.
+    """
+    from apps.scheduling.engine.application.grade10_parallel_blocks import (
+        GRADE10_PARALLEL_BLOCKS as _RUNTIME_BLOCKS,
+    )
+
+    _block_codes: set = set()
+    _block_weekly: dict = {}
+    for _block in _RUNTIME_BLOCKS:
+        for _code in _block.subject_codes:
+            _block_codes.add(_code)
+            _block_weekly.setdefault(_code, _block.weekly_shared_slots)
+
     contract = build_contract("GRADE10")
 
     rows = []
+    _seen_block_codes: set = set()
 
     for subject_contract in contract.subjects:
         code = get_subject_contract_code(subject_contract)
@@ -163,7 +213,7 @@ def build_grade10_rows(subjects):
 
         requirement_type = (
             LessonRequirementType.BLOCK
-            if code in GRADE10_BLOCK_SUBJECTS
+            if code in _block_codes
             else LessonRequirementType.STANDALONE
         )
 
@@ -174,6 +224,32 @@ def build_grade10_rows(subjects):
                 requirement_type,
             )
         )
+
+        if requirement_type == LessonRequirementType.BLOCK:
+            _seen_block_codes.add(code)
+
+    # Ensure every runtime block subject has a BLOCK requirement,
+    # even if the higher-level subject contract does not name it.
+    for _code in _block_codes:
+        if _code in _seen_block_codes:
+            continue
+        rows.append(
+            (
+                require_subject(subjects, _code),
+                int(_block_weekly[_code]),
+                LessonRequirementType.BLOCK,
+            )
+        )
+
+    # Per-stream maths split: E-streams take ESS, W-streams take CORE.
+    # The curriculum contract lists both; the group code decides which
+    # applies. Any group whose code does not end in E or W keeps both
+    # (safe fallback; only 10E/10W are produced by this command).
+    _gc = str(group_code).strip().upper()
+    if _gc.endswith("E"):
+        rows = [r for r in rows if r[0].code != "CORE"]
+    elif _gc.endswith("W"):
+        rows = [r for r in rows if r[0].code != "ESS"]
 
     return rows
 
@@ -271,6 +347,17 @@ class Command(BaseCommand):
         "LessonRequirement records."
     )
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--term",
+            dest="term_name",
+            default=None,
+            help=(
+                "Name of the term to materialize for (e.g. 'Term 3'). "
+                "Defaults to the currently active term."
+            ),
+        )
+
     def handle(self, *args, **options):
 
         operation = (
@@ -279,7 +366,7 @@ class Command(BaseCommand):
 
         try:
 
-            term = get_active_term()
+            term = resolve_term(options.get("term_name"))
 
             if term is None:
                 raise ValueError(
@@ -300,18 +387,28 @@ class Command(BaseCommand):
                 else:
                     groups[code] = group
 
+            # Groups that are intentionally deactivated (e.g. Form 3
+            # while the school does not run that class) are skipped
+            # rather than treated as an error. The curriculum contract
+            # still defines them; we simply do not materialize against
+            # a group that has no active learners.
             if missing_groups:
-                raise ValueError(
-                    "Missing active Senior School instructional "
-                    "groups: "
+                self.stdout.write(self.style.WARNING(
+                    "Skipping inactive/missing Senior School groups: "
                     + ", ".join(missing_groups)
+                ))
+
+            if not groups:
+                raise ValueError(
+                    "No active Senior School instructional groups "
+                    "were found to materialize against."
                 )
 
             definitions = {}
 
             for group_code in GRADE10_GROUP_CODES:
                 definitions[group_code] = (
-                    build_grade10_rows(subjects)
+                    build_grade10_rows(group_code, subjects)
                 )
 
             for group_code in (
@@ -340,7 +437,11 @@ class Command(BaseCommand):
 
                 for group_code, rows in definitions.items():
 
-                    group = groups[group_code]
+                    group = groups.get(group_code)
+
+                    if group is None:
+                        # Group is inactive for this term; skipped above.
+                        continue
 
                     for (
                         subject,
@@ -398,7 +499,9 @@ class Command(BaseCommand):
 
                 for group_code in GRADE10_GROUP_CODES:
 
-                    group = groups[group_code]
+                    group = groups.get(group_code)
+                    if group is None:
+                        continue
 
                     legacy_requirements = (
                         LessonRequirement.objects
@@ -486,7 +589,9 @@ class Command(BaseCommand):
                 "4W",
             ):
 
-                group = groups[group_code]
+                group = groups.get(group_code)
+                if group is None:
+                    continue
 
                 requirements = list(
                     LessonRequirement.objects

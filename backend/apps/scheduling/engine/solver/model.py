@@ -13,6 +13,7 @@ import math
 # ============================================================================
 
 from apps.scheduling.engine.application.grade10_parallel_blocks import (
+    GRADE10_STANDALONE_SYNCHRONIZED,
     FORM3E_PRACTICAL_SUPPORT,
     FORM3E_STANDALONE_CORE,
     FORM3W_PRACTICAL_SUPPORT,
@@ -95,7 +96,11 @@ from ortools.sat.python import cp_model
 
 from apps.scheduling.engine.domain.enums import PartOfDay
 from apps.scheduling.engine.domain.problem import SchedulingProblem
-from apps.scheduling.engine.solver.objective import apply_solver_objectives
+from apps.scheduling.engine.solver.objective import (
+    COMPLEX_CODES,
+    PRACTICAL_CODES,
+    apply_solver_objectives,
+)
 from apps.scheduling.engine.solver.variables import AssignmentVariable
 
 
@@ -581,6 +586,8 @@ class SolverModel:
         tuple[UUID, ...],
     ] = field(default_factory=dict)
 
+    assumption_names: tuple[str, ...] = ()
+
     def variables_for_lesson(
         self,
         lesson_requirement_id: UUID,
@@ -625,6 +632,8 @@ class SolverModelBuilder:
 
     def __init__(self, objective=None):
         self.objective = objective
+        self._assumption_vars: list[cp_model.IntVar] = []
+        self._assumption_names: list[str] = []
         self._available_room_ids_by_slot: dict[
             tuple[str, UUID],
             tuple[UUID, ...],
@@ -679,7 +688,19 @@ class SolverModelBuilder:
             variables=variables,
         )
 
+        self._add_grade10_standalone_sync_constraints(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
         self._add_simultaneous_subject_constraints(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        self._add_complex_adjacency_constraints(
             model=model,
             problem=problem,
             variables=variables,
@@ -703,7 +724,17 @@ class SolverModelBuilder:
             variables=variables,
         )
 
+        # ESS and CORE are STANDALONE subjects with independent
+        # times. No synchronization constraint applies — the block
+        # registry does NOT include them as a synchronized elective.
+
         self._add_practical_double_lesson_constraints(
+            model=model,
+            problem=problem,
+            variables=variables,
+        )
+
+        self._add_practical_cross_stream_constraints(
             model=model,
             problem=problem,
             variables=variables,
@@ -745,6 +776,7 @@ class SolverModelBuilder:
             available_room_ids_by_slot=dict(
                 self._available_room_ids_by_slot
             ),
+            assumption_names=tuple(self._assumption_names),
         )
 
     # ------------------------------------------------------------------
@@ -1079,6 +1111,22 @@ class SolverModelBuilder:
                 == requirement.periods_per_week
             )
 
+    def add_named_assumption(
+        self,
+        *,
+        model: cp_model.CpModel,
+        name: str,
+    ) -> cp_model.IntVar:
+        literal = model.new_bool_var(name)
+        model.add_assumption(literal)
+        self._assumption_vars.append(literal)
+        self._assumption_names.append(name)
+        return literal
+
+    @property
+    def assumption_names(self) -> tuple[str, ...]:
+        return tuple(self._assumption_names)
+
     def _is_grade10_group(self, group: object | None) -> bool:
         return is_grade10_instructional_group(group)
 
@@ -1359,10 +1407,19 @@ class SolverModelBuilder:
                         )
                     )
 
+                    _assumption = self.add_named_assumption(
+                        model=model,
+                        name=(
+                            f"block:{block_code}:"
+                            f"{instructional_group_id}:"
+                            f"{day}:{period_id}:"
+                            f"{requirement_id}"
+                        ),
+                    )
                     model.add(
                         representative_expression
                         == other_expression
-                    )
+                    ).only_enforce_if(_assumption)
 
             representative_variables = (
                 variables_by_requirement[
@@ -1618,7 +1675,7 @@ class SolverModelBuilder:
 
         variables_by_requirement_day: dict[
             tuple[UUID, str],
-            list[cp_model.IntVar],
+            list[tuple],
         ] = defaultdict(list)
 
         for variable in variables:
@@ -1628,7 +1685,7 @@ class SolverModelBuilder:
                     variable.day,
                 )
             ].append(
-                variable.variable
+                (variable.period_id, variable.variable)
             )
 
         active_requirements = {
@@ -1637,10 +1694,12 @@ class SolverModelBuilder:
             if requirement.is_active
         }
 
+        period_by_id = problem.period_by_id
+
         for (
             requirement_id,
             _day,
-        ), day_variables in variables_by_requirement_day.items():
+        ), entries in variables_by_requirement_day.items():
 
             requirement = active_requirements.get(requirement_id)
             if requirement is None:
@@ -1651,17 +1710,41 @@ class SolverModelBuilder:
             # of teaching days. The per-day cap is therefore derived
             # from the weekly quota, not fixed at 1.
             weekly = max(1, int(requirement.periods_per_week))
-            _subj_code = str(
-                getattr(requirement, "subject_code", "") or ""
+            _req_type = str(
+                getattr(requirement, "requirement_type", "") or ""
             ).strip().upper()
-            if _subj_code.endswith("PRAC"):
+            if _req_type == "PRACTICAL":
                 # Practicals are delivered as adjacent double lessons.
                 # Allow up to the weekly quota on the same day; the
                 # dedicated practical constraint enforces the pairing.
                 per_day_cap = weekly
             else:
                 per_day_cap = max(1, math.ceil(weekly / 5))
+
+            day_variables = [var for _pid, var in entries]
             model.add(sum(day_variables) <= per_day_cap)
+
+            # Rule 5: when the per-day cap is exactly 2 (subject has
+            # lpw > 5 and needs one double per week), the two
+            # occurrences MUST be adjacent teaching periods.
+            # Forbid every non-adjacent pair on the same day.
+            if per_day_cap == 2 and _req_type != "PRACTICAL":
+                by_period: dict = {}
+                for pid, var in entries:
+                    p = period_by_id.get(pid)
+                    if p is None:
+                        continue
+                    n = int(getattr(p, "number", 0) or 0)
+                    by_period[n] = var
+                nums = sorted(by_period.keys())
+                for i in range(len(nums)):
+                    for j in range(i + 1, len(nums)):
+                        if nums[j] != nums[i] + 1:
+                            model.add(
+                                by_period[nums[i]]
+                                + by_period[nums[j]]
+                                <= 1
+                            )
 
     # ------------------------------------------------------------------
     # Legacy simultaneous subject combinations
@@ -1807,6 +1890,116 @@ class SolverModelBuilder:
     # ------------------------------------------------------------------
     # Grade 10 parallel option blocks
     # ------------------------------------------------------------------
+
+    def _add_complex_adjacency_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+        """
+        Hard: no two DISTINCT complex subjects (BIO/CHEM/PHY/MAT)
+        or practicals (BIOPRAC/CHEMPRAC/PHYPRAC) may occupy adjacent
+        teaching periods on the same day for the same instructional
+        group.
+
+        Adjacency semantics:
+          - raw Period.number adjacency (n2 == n1 + 1)
+          - same-code adjacency allowed (double BIO, double CHEMPRAC)
+          - a practical adjacent to a standalone science of any
+            code (including its own parent) is forbidden
+
+        Every (group, day, n1, n2, c1, c2) forbidden combination is
+        tagged with a named assumption so an INFEASIBLE result can be
+        attributed to the specific constraint via the unsat core.
+        """
+        period_by_id = problem.period_by_id
+
+        reqs_by_id = {
+            requirement.id: requirement
+            for requirement in problem.lesson_requirements
+            if getattr(requirement, "is_active", False)
+        }
+
+        subject_by_lr: dict = {}
+        for lr in reqs_by_id.values():
+            code = (
+                getattr(lr, "subject_code", None)
+                or getattr(getattr(lr, "subject", None), "code", None)
+                or ""
+            )
+            subject_by_lr[lr.id] = str(code).upper()
+
+        indexed: dict = {}
+        for variable in variables:
+            period = period_by_id.get(variable.period_id)
+            if (
+                period is None
+                or not getattr(period, "is_active", False)
+                or not getattr(period, "is_teaching_period", False)
+            ):
+                continue
+
+            lr_id = getattr(variable, "lesson_requirement_id", None)
+            if lr_id is None or lr_id not in reqs_by_id:
+                continue
+
+            code = subject_by_lr.get(lr_id, "")
+            if not code:
+                continue
+            # Include both complex subjects and practicals in the
+            # adjacency set. Same-code adjacency remains allowed
+            # (that is the legitimate practical double).
+            if (
+                code not in COMPLEX_CODES
+                and code not in PRACTICAL_CODES
+            ):
+                continue
+
+            group_id = getattr(variable, "instructional_group_id", None)
+            if group_id is None:
+                continue
+
+            day_value = (
+                variable.day.value
+                if hasattr(variable.day, "value")
+                else variable.day
+            )
+            day = str(day_value).strip().upper()
+
+            try:
+                period_number = int(getattr(period, "number"))
+            except (TypeError, ValueError):
+                continue
+
+            indexed.setdefault(
+                (str(group_id), day), {}
+            ).setdefault(
+                period_number, []
+            ).append((code, variable.variable))
+
+        for (group_id, day), periods in indexed.items():
+            period_numbers = sorted(periods)
+            for i in range(len(period_numbers) - 1):
+                n1 = period_numbers[i]
+                n2 = period_numbers[i + 1]
+                if n2 != n1 + 1:
+                    continue
+                for c1, v1 in periods[n1]:
+                    for c2, v2 in periods[n2]:
+                        if c1 == c2:
+                            continue
+                        assumption = self.add_named_assumption(
+                            model=model,
+                            name=(
+                                f"complex_adjacent:{group_id}:{day}:"
+                                f"{n1}:{n2}:{c1}-{c2}"
+                            ),
+                        )
+                        model.add(
+                            v1 + v2 <= 1
+                        ).only_enforce_if(assumption)
 
     def _add_grade10_option_block_constraints(
         self,
@@ -2029,10 +2222,19 @@ class SolverModelBuilder:
                         )
                     )
 
+                    _assumption = self.add_named_assumption(
+                        model=model,
+                        name=(
+                            f"block:{block_code}:"
+                            f"{instructional_group_id}:"
+                            f"{day}:{period_id}:"
+                            f"{other_requirement_id}"
+                        ),
+                    )
                     model.add(
                         first_expression
                         == other_expression
-                    )
+                    ).only_enforce_if(_assumption)
 
             first_requirement_variables = (
                 variables_by_requirement[
@@ -2393,9 +2595,6 @@ class SolverModelBuilder:
             if requirement is None:
                 continue
 
-            if not _is_block_requirement(requirement):
-                continue
-
             stream_code = _group_code(variable.instructional_group_id)
 
             if stream_code is None:
@@ -2406,13 +2605,29 @@ class SolverModelBuilder:
             if grade is None:
                 continue
 
-            block = option_block_for_subject(requirement.subject_code)
+            subject_code = str(requirement.subject_code).strip().upper()
 
-            if block is None:
+            is_block_req = _is_block_requirement(requirement)
+            is_standalone_sync = (
+                grade,
+                subject_code,
+            ) in GRADE10_STANDALONE_SYNCHRONIZED
+
+            if not is_block_req and not is_standalone_sync:
                 continue
 
-            block_code = SolverModelBuilder._grade10_block_code(block)
-            subject_code = str(requirement.subject_code).strip().upper()
+            if is_block_req:
+                block = option_block_for_subject(
+                    requirement.subject_code
+                )
+                if block is None:
+                    continue
+                block_code = SolverModelBuilder._grade10_block_code(block)
+            else:
+                # Standalone cross-stream sync: synthesize a unique
+                # block code so the group key stays distinct from
+                # any real elective block.
+                block_code = f"STANDALONE_SYNC_{subject_code}"
 
             group_key = (
                 grade,
@@ -2909,6 +3124,211 @@ class SolverModelBuilder:
     # Room availability
     # ------------------------------------------------------------------
 
+    def _add_maths_elective_sync_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+        """
+        ESS (E streams) and CORE (W streams) must run at the same
+        (day, period) slots. The two subjects are the E/W halves of
+        the maths elective block; different students take them, so
+        they must be co-scheduled.
+
+        Applies to each E/W pair for Grade 10 and Grade 11.
+        """
+        from collections import defaultdict
+
+        pairs = [
+            ("10E", "10W"),
+            ("11E", "11W"),
+        ]
+
+        groups_by_id = {
+            g.id: g for g in problem.instructional_groups
+        }
+        reqs_by_id = {
+            r.id: r
+            for r in problem.lesson_requirements
+            if getattr(r, "is_active", False)
+        }
+
+        lr_by_gs: dict = {}
+        for r in reqs_by_id.values():
+            gid = getattr(r, "instructional_group_id", None)
+            if gid is None:
+                continue
+            g = groups_by_id.get(gid)
+            if g is None:
+                continue
+            sc = str(
+                getattr(r, "subject_code", "") or ""
+            ).strip().upper()
+            if sc not in {"ESS", "CORE"}:
+                continue
+            lr_by_gs[(str(g.code).strip().upper(), sc)] = r
+
+        vars_by_lr_slot: dict = defaultdict(dict)
+        for v in variables:
+            lrid = getattr(v, "lesson_requirement_id", None)
+            if lrid is None:
+                continue
+            vars_by_lr_slot[lrid][
+                (v.day, v.period_id)
+            ] = v.variable
+
+        for e_code, w_code in pairs:
+            e_lr = lr_by_gs.get((e_code, "ESS"))
+            w_lr = lr_by_gs.get((w_code, "CORE"))
+            if e_lr is None or w_lr is None:
+                continue
+            e_slots = vars_by_lr_slot.get(e_lr.id, {})
+            w_slots = vars_by_lr_slot.get(w_lr.id, {})
+            for slot in set(e_slots) | set(w_slots):
+                e_var = e_slots.get(slot)
+                w_var = w_slots.get(slot)
+                if e_var is None or w_var is None:
+                    continue
+                _assumption = self.add_named_assumption(
+                    model=model,
+                    name=(
+                        f"ess_core_sync:{e_code}_{w_code}:"
+                        f"{slot[0]}:{slot[1]}"
+                    ),
+                )
+                model.add(
+                    e_var == w_var
+                ).only_enforce_if(_assumption)
+
+    def _add_grade10_standalone_sync_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+        """
+        Force registered STANDALONE cross-stream subjects (currently
+        only Grade 10 ENG for 10E/10W) to occupy the same physical
+        (day, period) across both streams of the same grade.
+        """
+        requirements_by_id = {
+            requirement.id: requirement
+            for requirement in problem.lesson_requirements
+            if getattr(requirement, "is_active", False)
+        }
+        groups_by_id = {
+            group.id: group
+            for group in problem.instructional_groups
+            if getattr(group, "is_active", False)
+        }
+
+        def _group_code(gid):
+            g = groups_by_id.get(gid)
+            if g is None:
+                return None
+            code = getattr(g, "code", None)
+            return str(code).strip().upper() if code else None
+
+        # Bucket variables by (grade, subject_code, slot).
+        buckets: dict = {}
+        for v in variables:
+            req = requirements_by_id.get(v.lesson_requirement_id)
+            if req is None:
+                continue
+            if _is_block_requirement(req):
+                continue
+            sc = str(getattr(req, "subject_code", "") or "").strip().upper()
+            gc = _group_code(v.instructional_group_id)
+            if gc is None or len(gc) < 2 or gc[-1] not in ("E", "W"):
+                continue
+            grade = gc[:-1]
+            if (grade, sc) not in GRADE10_STANDALONE_SYNCHRONIZED:
+                continue
+            key = (grade, sc, v.day, v.period_id)
+            buckets.setdefault(key, []).append((gc, v.variable))
+
+        for (grade, sc, day, period_id), members in buckets.items():
+            by_stream: dict = {}
+            for stream_code, var in members:
+                by_stream.setdefault(stream_code, []).append(var)
+            e_vars = by_stream.get(grade + "E", [])
+            w_vars = by_stream.get(grade + "W", [])
+            if not e_vars or not w_vars:
+                # Only one side has a variable at this slot; nothing
+                # to synchronize.
+                continue
+            # All vars on each side should be identical (at most one
+            # LR per group per slot in practice). Force equality.
+            e_repr = e_vars[0]
+            w_repr = w_vars[0]
+            model.add(e_repr == w_repr)
+
+    def _add_practical_cross_stream_constraints(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: list[AssignmentVariable],
+    ) -> None:
+        """
+        Universal: within the same grade level, at most one practical
+        may occupy a given (day, period) across BOTH E and W streams.
+
+        Rationale: 4E and 4W (and future 10E/10W practical schemes)
+        share lab facilities and cannot run practicals simultaneously.
+        The rule is a no-op when no practical LRs exist for a grade
+        level — it only constrains slots where practical variables
+        actually exist.
+
+        Applies to any E/W stream pair of the same grade prefix
+        (4, 10, 11, 12, ...). Does not distinguish by subject — the
+        constraint is on the physical slot, not the practical subject.
+        """
+        requirements_by_id = {
+            requirement.id: requirement
+            for requirement in problem.lesson_requirements
+            if getattr(requirement, "is_active", False)
+        }
+        groups_by_id = {
+            group.id: group
+            for group in problem.instructional_groups
+            if getattr(group, "is_active", False)
+        }
+
+        def _group_code(gid):
+            g = groups_by_id.get(gid)
+            if g is None:
+                return None
+            code = getattr(g, "code", None)
+            return str(code).strip().upper() if code else None
+
+        buckets: dict = {}
+        for v in variables:
+            req = requirements_by_id.get(v.lesson_requirement_id)
+            if req is None:
+                continue
+            rt = str(
+                getattr(req, "requirement_type", "") or ""
+            ).strip().upper()
+            if rt != "PRACTICAL":
+                continue
+            gc = _group_code(v.instructional_group_id)
+            if gc is None or len(gc) < 2 or gc[-1] not in ("E", "W"):
+                continue
+            grade = gc[:-1]
+            key = (grade, v.day, v.period_id)
+            buckets.setdefault(key, []).append(v.variable)
+
+        for (grade, day, period_id), var_list in buckets.items():
+            if len(var_list) <= 1:
+                # Only one stream has a practical here — no cross-
+                # stream constraint needed.
+                continue
+            model.add(sum(var_list) <= 1)
+
     def _add_practical_double_lesson_constraints(
         self,
         *,
@@ -2916,10 +3336,14 @@ class SolverModelBuilder:
         problem: SchedulingProblem,
         variables: list[AssignmentVariable],
     ) -> None:
-        """Practicals (subject_code endswith 'PRAC', lpw=2):
+        """Practicals (requirement_type == 'PRACTICAL', lpw=2):
           - exactly one adjacent pair per week
           - same day, consecutive periods
           - window P5..P12 (start P5..P11); P1..P4 forbidden
+
+        Discriminated by requirement_type, not by subject_code
+        suffix. A practical LR's subject is the parent subject
+        (CHEM, BIO, PHY, CS), not a PRAC-suffixed code.
         """
         PAIRS = [(5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12)]
         DAYS = ("MON", "TUE", "WED", "THU", "FRI")
@@ -2953,9 +3377,13 @@ class SolverModelBuilder:
         for req_id, req_vars in vars_by_req.items():
             req = reqs_by_id[req_id]
             subj = str(getattr(req, "subject_code", "") or "").strip().upper()
-            if not subj.endswith("PRAC"):
+            if str(getattr(req, "requirement_type", "") or "").strip().upper() != "PRACTICAL":
                 continue
-            lpw = int(getattr(req, "periods_per_week", 0) or 0)
+            lpw = int(
+                getattr(req, "periods_per_week", None)
+                or getattr(req, "lessons_per_week", 0)
+                or 0
+            )
             if lpw != 2:
                 continue
 

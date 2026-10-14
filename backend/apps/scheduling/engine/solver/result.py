@@ -26,6 +26,7 @@ class SolverResult:
     assignments: tuple[SchedulingAssignment, ...] = ()
     statistics: SolverStatistics = SolverStatistics()
     error_message: Optional[str] = None
+    unsat_core_names: tuple[str, ...] = ()
 
     @property
     def is_successful(self) -> bool:
