@@ -10,9 +10,14 @@ export default function NotificationsBanner() {
   const [events, setEvents] = useState<Event[]>([]);
   const lastRef = useRef<string | null>(null);
 
+  const seenRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     let stopped = false;
     const tick = async () => {
+      // Skip when the tab is hidden — background polls would only
+      // accumulate stale notifications the user never asked to see.
+      if (document.hidden) return;
       try {
         const url = "/api/scheduling/notifications/" +
           (lastRef.current ? `?since=${encodeURIComponent(lastRef.current)}` : "");
@@ -21,14 +26,33 @@ export default function NotificationsBanner() {
         const data = await r.json();
         if (stopped) return;
         if (data.events?.length) {
-          setEvents(prev => [...data.events, ...prev].slice(0, 5));
+          // Dedupe by id: the same event never renders twice, even if the
+          // backend returns it again on a follow-up poll.
+          const fresh = (data.events as Event[]).filter(
+            (e) => !seenRef.current.has(e.id),
+          );
+          if (fresh.length) {
+            fresh.forEach((e) => seenRef.current.add(e.id));
+            setEvents(prev => [...fresh, ...prev].slice(0, 3));
+            // Auto-dismiss each new batch after 5 seconds.
+            const ids = fresh.map((e) => e.id);
+            window.setTimeout(() => {
+              setEvents(prev => prev.filter((x) => !ids.includes(x.id)));
+            }, 5000);
+          }
           lastRef.current = data.events[0].at;
         }
       } catch { /* network hiccup - retry next tick */ }
     };
     tick();
     const h = setInterval(tick, 5000);
-    return () => { stopped = true; clearInterval(h); };
+    const onVis = () => { if (!document.hidden) tick(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      stopped = true;
+      clearInterval(h);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
 
   if (!events.length) return null;
@@ -36,7 +60,7 @@ export default function NotificationsBanner() {
   return (
     <div style={{ position: "fixed", top: 12, right: 12, zIndex: 1000 }}>
       {events.map(e => (
-        <div key={e.id + e.at} style={{
+        <div key={e.id} style={{
           background: e.level === "error" ? "#fee" :
                       e.level === "success" ? "#efe" : "#eef",
           border: "1px solid #ccc", borderRadius: 6,
