@@ -1,10 +1,16 @@
+from apps.scheduling.api.scope_view import SchedulingScopeListView
+from apps.scheduling.api.notifications_view import SchedulingNotificationsView
+from apps.scheduling.api.drift_view import SchedulingDriftView
 from django.urls import path
 
 from .views import (
+    SchedulingProposalApplyView,
+    PreflightCheckView,
     SchedulingRunDetailView,
     SchedulingRunExecuteView,
     SchedulingRunListCreateView,
     SchedulingRunResultView,
+    SchedulingRuleConfigView,
     SchedulingDashboardView,
     SchedulingRunApproveView,
     SchedulingRunUnapproveView,
@@ -36,6 +42,9 @@ path(
     ),
     path("errors/report/", SchedulingErrorReportView.as_view(), name="scheduling-error-report"),
     path("errors/", SchedulingErrorListView.as_view(), name="scheduling-error-list"),
+    path("scopes/", SchedulingScopeListView.as_view(), name="scheduling-scope-list"),
+    path("drift/", SchedulingDriftView.as_view(), name="scheduling-drift"),
+    path("notifications/", SchedulingNotificationsView.as_view(), name="scheduling-notifications"),
 ]
 
 
@@ -54,4 +63,26 @@ urlpatterns += [
     path("duty-roster/<uuid:pk>/", duty_unassign, name="duty-unassign"),
     path("duty-roster/preference/<uuid:teacher_id>/", teacher_duty_preference, name="teacher-duty-preference"),
     path("duty-roster/auto-rotate/", duty_auto_rotate, name="duty-auto-rotate"),
+]
+
+urlpatterns += [
+    path(
+        "rule-config/",
+        SchedulingRuleConfigView.as_view(),
+        name="scheduling-rule-config",
+    ),
+]
+urlpatterns += [
+    path(
+        "preflight/",
+        PreflightCheckView.as_view(),
+        name="scheduling-preflight",
+    ),
+]
+urlpatterns += [
+    path(
+        "proposals/apply/",
+        SchedulingProposalApplyView.as_view(),
+        name="scheduling-proposal-apply",
+    ),
 ]

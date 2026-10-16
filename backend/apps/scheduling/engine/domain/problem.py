@@ -1,5 +1,5 @@
-﻿from dataclasses import dataclass, field
-from typing import Iterable, Mapping
+from dataclasses import dataclass, field
+from typing import Mapping, Iterable, Mapping
 from uuid import UUID
 
 from .entities import (
@@ -37,6 +37,14 @@ class SchedulingProblem:
     teacher_free_afternoons: tuple[TeacherFreeAfternoonEntity, ...]
     room_availability: tuple[RoomAvailabilityEntity, ...]
     slots: tuple[TimetableSlot, ...]
+    rule_flags: Mapping[str, bool] = field(default_factory=dict)
+    # Solution hints for filtered regeneration. Each tuple is
+    # (lesson_requirement_id, day, period_id) and seeds the CP-SAT
+    # search with the current live version's layout. Hints are SOFT
+    # (bias, not enforce) so the model stays feasible even when a
+    # shared teacher makes a strict freeze impossible. Master scope
+    # sends an empty tuple and behaves exactly like an unscoped run.
+    hint_assignments: tuple[tuple[UUID, str, UUID], ...] = ()
 
     def __post_init__(self) -> None:
         """Validate the structural integrity of the scheduling problem."""

@@ -19,6 +19,19 @@ function toast(t: ToastPayload) {
   else if (t.type === "error") console.error("[http]", t.title, t.message);
 }
 
+// Suppress identical error toasts fired in quick succession. A single
+// page load can hit 4-5 endpoints in parallel; without this, each failed
+// request pushes its own toast and the user sees a wall of duplicates.
+const RATE_LIMIT_WINDOW = 3000;
+const recentToasts = new Map<string, number>();
+function toastRateLimited(t: ToastPayload, key: string) {
+  const now = Date.now();
+  const last = recentToasts.get(key) ?? 0;
+  if (now - last < RATE_LIMIT_WINDOW) return;
+  recentToasts.set(key, now);
+  toast(t);
+}
+
 // Same-origin requests go through the Vite dev proxy to Django.
 const baseURL = "/api";
 
@@ -63,6 +76,13 @@ http.interceptors.response.use(
     // Login endpoints handle their own errors inline
     const requestUrl = error?.config?.url || "";
     if (SILENT_LOGIN_URLS.some((u) => requestUrl.includes(u))) {
+      return Promise.reject(error);
+    }
+
+    // Caller opted out — they handle errors themselves (e.g. polling
+    // loops that retry on transient failure). Do not toast.
+    const skipGlobal = (error?.config as any)?.skipGlobalError === true;
+    if (skipGlobal) {
       return Promise.reject(error);
     }
 
@@ -140,12 +160,15 @@ http.interceptors.response.use(
     else msgParts.push("Request failed");
     if (auditId) msgParts.push(`Reference: ${auditId}`);
 
-    toast({
-      type,
-      title,
-      message: msgParts.join(" ? "),
-      mitigation: mitigation || undefined,
-    });
+    toastRateLimited(
+      {
+        type,
+        title,
+        message: msgParts.join(" ? "),
+        mitigation: mitigation || undefined,
+      },
+      `${type}|${status ?? "net"}|${title}`,
+    );
 
     return Promise.reject(error);
   },

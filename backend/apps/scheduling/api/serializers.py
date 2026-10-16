@@ -88,10 +88,25 @@ class SchedulingRunExecuteSerializer(serializers.Serializer):
         default="Generated Timetable",
     )
 
+    scope_kind = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+    scope_id = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
     version_number = serializers.IntegerField(
         min_value=1,
         required=False,
         default=1,
+    )
+    baseline_version_id = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
     )
 
 
@@ -493,3 +508,29 @@ class SchedulingRunResultSerializer(serializers.ModelSerializer):
         )
 
         read_only_fields = fields
+
+class SchedulingRuleConfigSerializer(serializers.ModelSerializer):
+    """Rule toggles for one term."""
+
+    term_name = serializers.CharField(source="term.__str__", read_only=True)
+
+    class Meta:
+        from apps.scheduling.models import SchedulingRuleConfig as _C
+        model = _C
+        fields = (
+            "id",
+            "term",
+            "term_name",
+            "cross_stream_practicals_enabled",
+            "block_sync_enabled",
+            "teacher_max_consecutive_enabled",
+            "complex_adjacency_enabled",
+            "eng_grade10_sync_enabled",
+            "single_lesson_per_day_enabled",
+            "teacher_free_afternoon_enabled",
+            "practical_double_lesson_enabled",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "term", "term_name", "created_at", "updated_at")
+

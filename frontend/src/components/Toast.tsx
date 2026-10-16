@@ -70,8 +70,36 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const push = useCallback((t: Omit<ToastItem, "id">) => {
     const id = Math.random().toString(36).slice(2);
-    setItems((prev) => [...prev, { ...t, id }]);
-    const ttl = t.ttlMs ?? (t.type === "error" ? 12000 : 6000);
+    const now = Date.now();
+
+    setItems((prev) => {
+      // Dedupe: identical (type+title+message) within 2s is a repeat,
+      // not a new notification. Prevents stacked duplicates from retry
+      // loops and parallel axios failures.
+      const dup = prev.some(
+        (x) =>
+          x.type === t.type &&
+          x.title === t.title &&
+          (x.message ?? "") === (t.message ?? "") &&
+          (x as any).__seen &&
+          now - (x as any).__seen < 2000,
+      );
+      if (dup) return prev;
+
+      // Cap visible toasts at 4. Oldest drops on overflow.
+      const next = [
+        ...prev,
+        { ...t, id, __seen: now } as ToastItem,
+      ];
+      return next.length > 4 ? next.slice(next.length - 4) : next;
+    });
+
+    const ttl = t.ttlMs ?? (
+      t.type === "error"   ? 12000 :
+      t.type === "warning" ? 6000  :
+      t.type === "success" ? 3000  :
+                             4000
+    );
     window.setTimeout(() => {
       setItems((prev) => prev.filter((x) => x.id !== id));
     }, ttl);

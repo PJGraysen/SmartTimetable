@@ -16,6 +16,8 @@ import {
   discardSchedulingRun} from "./services/scheduling";
 import "./styles/analysis.css";
 import { GeneratingOverlay } from "./components/GeneratingOverlay";
+import ScopePicker from "./components/ScopePicker";
+import type { ScopePick } from "./services/scheduling";
 
 const BROWN = "#2b1a0f", BROWN2 = "#5a3a1e", SKY = "#22b4f0", CREAM = "#f5eee2";
 const GREEN = "#10b981", RED = "#ef4444", AMBER = "#f59e0b";
@@ -579,6 +581,7 @@ export default function Scheduling() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [timetableRefreshKey, setTimetableRefreshKey] = useState(0);
   const [selectedTermId, setSelectedTermId] = useState("");
+  const [scope, setScope] = useState<ScopePick | null>(null);
   const [zoom, setZoom] = useState(1.0);
   const [showAllRuns, setShowAllRuns] = useState(false);
   const [showAllFailed, setShowAllFailed] = useState(false);
@@ -690,7 +693,10 @@ export default function Scheduling() {
 
       // Fire-and-forget execute - the backend runs the solver in a worker
       // thread; we do NOT await its HTTP response.
-      executeSchedulingRun(run.id).catch(() => {
+      executeSchedulingRun(run.id, {
+        scope_kind: scope?.kind ?? null,
+        scope_id: scope?.id ?? null,
+      }).catch(() => {
         /* ignored - we poll for real status below */
       });
 
@@ -714,7 +720,8 @@ export default function Scheduling() {
         toast.push({
           type: "success",
           title: "Generation complete",
-          message: "Loading the new timetable...",
+          message: "New timetable is ready.",
+          ttlMs: 3000,
         });
         setReportRunId(run.id);
       } else {
@@ -724,6 +731,12 @@ export default function Scheduling() {
           message: (final as any).error_message || "See run details for cause.",
         });
       }
+
+      // Hide the overlay the moment the run reaches a terminal state.
+      // loadDashboard() below hits several endpoints and can be slow;
+      // the user should see the result immediately, not wait on it.
+      setGenerating(false);
+      setGenStatus("");
 
       await loadDashboard();
       setTimetableRefreshKey((k) => k + 1);
@@ -858,6 +871,14 @@ export default function Scheduling() {
                 <RefreshCw size={13} /> Refresh
               </button>
             </div>
+            <details style={{ marginTop: "0.6rem" }}>
+              <summary style={{ cursor: "pointer", fontSize: "0.78rem", fontWeight: 700, color: BROWN2 }}>
+                Regeneration scope: {scope ? scope.label : "Master (full re-solve)"}
+              </summary>
+              <div style={{ marginTop: "0.5rem" }}>
+                <ScopePicker value={scope} onChange={setScope} showSubjects={false} />
+              </div>
+            </details>
           </div>
         </div>
 

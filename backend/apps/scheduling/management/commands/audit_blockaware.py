@@ -23,11 +23,18 @@ class Command(BaseCommand):
             return
         print(f"Latest: v{latest.version_number} {latest.name}\n")
 
+        # Scope the audit to the latest version's own term. Without this,
+        # LRs from every term are summed, inflating "required" by the
+        # number of terms in the database and producing false MISMATCH.
+        _term = latest.term
+
         placed = defaultdict(Counter)
         for e in TE.objects.filter(timetable_version=latest).select_related(
             "instructional_group", "lesson_requirement__subject"
         ):
-            ig = e.instructional_group.name if e.instructional_group else "?"
+            if e.instructional_group is None or not e.instructional_group.is_active:
+                continue
+            ig = e.instructional_group.name
             subj = (
                 e.lesson_requirement.subject.code
                 if e.lesson_requirement and e.lesson_requirement.subject
@@ -36,7 +43,11 @@ class Command(BaseCommand):
             placed[ig][subj] += 1
 
         required = defaultdict(Counter)
-        for r in LR.objects.filter(is_active=True).select_related(
+        for r in LR.objects.filter(
+            is_active=True,
+            term=_term,
+            instructional_group__is_active=True,
+        ).select_related(
             "instructional_group", "subject"
         ):
             ig = r.instructional_group.name if r.instructional_group else "?"
@@ -47,8 +58,12 @@ class Command(BaseCommand):
         for ig in sorted(required.keys()):
             req_total = sum(required[ig].values())
             plc_total = sum(placed[ig].values())
-            mismatch = (req_total != plc_total) or any(
-                required[ig].get(s, 0) != placed[ig].get(s, 0)
+            # A timetable is "healthy" if every required lesson is present.
+            # Extras are filler (GST / Group Study) and are added by the
+            # post-solve pipeline — flagging them as violations produced a
+            # permanent false-negative on every version, master included.
+            mismatch = (plc_total < req_total) or any(
+                placed[ig].get(s, 0) < required[ig].get(s, 0)
                 for s in set(required[ig]) | set(placed[ig])
             )
             tag = "MISMATCH" if mismatch else "OK"

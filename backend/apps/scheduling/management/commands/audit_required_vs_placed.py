@@ -19,13 +19,18 @@ class Command(BaseCommand):
         print(f"Latest version: v{latest.version_number} {latest.name}")
         print()
 
+        # Scope to the version's own term (see audit_blockaware for rationale).
+        _term = latest.term
+
         # placed per class per subject
         placed = defaultdict(Counter)
         total_placed = defaultdict(int)
         for e in TE.objects.filter(timetable_version=latest).select_related(
             "instructional_group", "lesson_requirement__subject"
         ):
-            ig = e.instructional_group.name if e.instructional_group else "?"
+            if e.instructional_group is None or not e.instructional_group.is_active:
+                continue
+            ig = e.instructional_group.name
             subj = (
                 e.lesson_requirement.subject.code
                 if e.lesson_requirement and e.lesson_requirement.subject
@@ -36,7 +41,11 @@ class Command(BaseCommand):
 
         # required per class per subject
         required = defaultdict(Counter)
-        for r in LR.objects.filter(is_active=True).select_related(
+        for r in LR.objects.filter(
+            is_active=True,
+            term=_term,
+            instructional_group__is_active=True,
+        ).select_related(
             "instructional_group", "subject"
         ):
             ig = r.instructional_group.name if r.instructional_group else "?"

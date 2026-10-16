@@ -997,6 +997,81 @@ class CompositeSolverObjective:
         model.minimize(expression)
 
 
+# --------------------------------------------------------------------------
+# Scoped stay-put penalty (Soft)
+# --------------------------------------------------------------------------
+@dataclass(slots=True)
+class ScopedStayPutObjective:
+    """
+    Soft: penalize moving out-of-scope entries away from their current
+    (day, period) slot during a scoped regeneration.
+
+    ``problem.hint_assignments`` carries exactly the out-of-scope
+    entries (see compute_hints_for_scope). Each hinted entry that
+    deviates from its hint contributes ``1 - variable`` to the
+    objective. In-scope entries are not present in the hint set and
+    therefore unpenalized: the solver is free to re-arrange them.
+
+    Master scope carries ``()`` -> this objective is a no-op and the
+    model behaves identically to an unscoped run.
+    """
+
+    weight: int = 1000
+
+    def __post_init__(self) -> None:
+        if self.weight <= 0:
+            raise ValueError(
+                "Scoped stay-put weight must be greater than zero."
+            )
+
+    def build_expression(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> object:
+        hints = getattr(problem, "hint_assignments", ()) or ()
+        if not hints:
+            return 0
+
+        hint_keys: set[tuple[str, str, str]] = set()
+        for lr_id, day, period_id in hints:
+            hint_keys.add((
+                str(lr_id),
+                str(day).strip().upper(),
+                str(period_id),
+            ))
+
+        penalty_terms: list = []
+        for a in variables:
+            key = (
+                str(a.lesson_requirement_id),
+                str(a.day).strip().upper(),
+                str(a.period_id),
+            )
+            if key in hint_keys:
+                penalty_terms.append(1 - a.variable)
+
+        if not penalty_terms:
+            return 0
+        return self.weight * sum(penalty_terms)
+
+    def apply(
+        self,
+        *,
+        model: cp_model.CpModel,
+        problem: SchedulingProblem,
+        variables: tuple[AssignmentVariable, ...],
+    ) -> None:
+        expression = self.build_expression(
+            model=model, problem=problem, variables=variables,
+        )
+        if _is_empty_objective_expression(expression):
+            return
+        model.minimize(expression)
+
+
 def apply_solver_objectives(
     *,
     model: cp_model.CpModel,

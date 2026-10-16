@@ -157,3 +157,93 @@ export async function validateTerm(termId: string): Promise<ValidationReport> {
   );
   return data;
 }
+
+// -------------------------------------------------------------------
+// Rule configuration (per term)
+// -------------------------------------------------------------------
+export type RuleConfig = {
+  id: string;
+  term: string;
+  term_name?: string;
+  cross_stream_practicals_enabled: boolean;
+  block_sync_enabled: boolean;
+  teacher_max_consecutive_enabled: boolean;
+  complex_adjacency_enabled: boolean;
+  eng_grade10_sync_enabled: boolean;
+  single_lesson_per_day_enabled: boolean;
+  teacher_free_afternoon_enabled: boolean;
+  practical_double_lesson_enabled: boolean;
+};
+
+export async function fetchRuleConfig(termId: string): Promise<RuleConfig> {
+  const { data } = await http.get<RuleConfig>(
+    "/scheduling/rule-config/",
+    { params: { term: termId, _t: Date.now() } },
+  );
+  return data;
+}
+
+export async function patchRuleConfig(
+  termId: string,
+  patch: Partial<RuleConfig>,
+): Promise<RuleConfig> {
+  const { data } = await http.patch<RuleConfig>(
+    "/scheduling/rule-config/",
+    patch,
+    { params: { term: termId } },
+  );
+  return data;
+}
+
+// -------------------------------------------------------------------
+// Pre-flight
+// -------------------------------------------------------------------
+export type ProposalSeverity = "critical" | "warning" | "info";
+
+export type Proposal = {
+  id: string;
+  action: string;
+  description: string;
+  rationale: string;
+  target_kind: string;
+  target_id: string;
+  current_value: Record<string, unknown>;
+  proposed_value: Record<string, unknown>;
+  severity?: ProposalSeverity;
+};
+
+export type PreflightDiagnostic = {
+  code: string;
+  rule: string;
+  message: string;
+  required_input: string;
+  details?: Record<string, unknown>;
+  proposals?: Proposal[];
+};
+
+export type PreflightResult = {
+  clean: boolean;
+  error?: string;
+  diagnostics: PreflightDiagnostic[];
+  proposals?: Proposal[];
+};
+
+export async function runPreflight(termId: string): Promise<PreflightResult> {
+  const { data } = await http.get<PreflightResult>(
+    "/scheduling/preflight/",
+    { params: { term: termId, _t: Date.now() } },
+  );
+  return data;
+}
+
+export async function applyProposal(
+  termId: string,
+  proposalId: string,
+): Promise<PreflightResult & { applied?: Record<string, unknown> }> {
+  const { data } = await http.post(
+    "/scheduling/proposals/apply/",
+    { term: termId, proposal_id: proposalId },
+  );
+  return data;
+}
+

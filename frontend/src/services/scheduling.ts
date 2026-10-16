@@ -1,5 +1,35 @@
 import http from "./http";
 
+
+// ---------------------------------------------------------------------
+// Scoped regeneration support (1b)
+// ---------------------------------------------------------------------
+export type MasterScope  = { kind: "master";  id: null;   label: string };
+export type GradeScope   = { kind: "grade";   id: string; label: string; groups: string[] };
+export type SubjectScope = { kind: "subject"; id: string; label: string; code: string };
+export type ScopePick = MasterScope | GradeScope | SubjectScope;
+
+export type ScopeList = {
+  term: { id: string; name: string };
+  master: MasterScope;
+  grades: GradeScope[];
+  subjects: SubjectScope[];
+};
+
+export async function getSchedulingScopes(termId?: string): Promise<ScopeList> {
+  const { data } = await http.get<ScopeList>("/scheduling/scopes/", {
+    params: termId ? { term: termId } : undefined,
+  });
+  return data;
+}
+
+export type ExecuteRunOpts = {
+  version_name?: string;
+  version_number?: number;
+  scope_kind?: string | null;
+  scope_id?: string | null;
+};
+
 export type SchedulingRunStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
 
 export type SchedulingRun = {
@@ -67,9 +97,15 @@ export async function fetchSchedulingRuns(): Promise<SchedulingRun[]> {
   return Array.isArray(data) ? data : ((data as { results?: SchedulingRun[] }).results ?? []);
 }
 
-export async function fetchSchedulingRun(id: string): Promise<SchedulingRun> {
+export async function fetchSchedulingRun(
+  id: string,
+  opts: { silent?: boolean } = {},
+): Promise<SchedulingRun> {
   const { data } = await http.get<SchedulingRun>(`/scheduling/runs/${id}/`, {
     params: { _t: Date.now() },
+    // Polling retries on transient failure; the loop itself decides when
+    // a failure is fatal. Do not spam the user with toasts each tick.
+    ...(opts.silent ? ({ skipGlobalError: true } as any) : {}),
   });
   return data;
 }
@@ -79,8 +115,20 @@ export async function createSchedulingRun(termId: string): Promise<SchedulingRun
   return data;
 }
 
-export async function executeSchedulingRun(id: string): Promise<SchedulingRun> {
-  const { data } = await http.post<SchedulingRun>(`/scheduling/runs/${id}/execute/`, {});
+export async function executeSchedulingRun(
+  id: string,
+  opts: ExecuteRunOpts = {},
+): Promise<SchedulingRun> {
+  const body: Record<string, unknown> = {
+    version_name: opts.version_name ?? "Generated Timetable",
+    version_number: opts.version_number ?? 1,
+  };
+  if (opts.scope_kind) body.scope_kind = opts.scope_kind;
+  if (opts.scope_id) body.scope_id = opts.scope_id;
+  const { data } = await http.post<SchedulingRun>(
+    `/scheduling/runs/${id}/execute/`,
+    body,
+  );
   return data;
 }
 
@@ -138,7 +186,18 @@ export async function pollRunUntilDone(
   const started = Date.now();
 
   for (;;) {
-    const run = await fetchSchedulingRun(id);
+    let run: SchedulingRun;
+    try {
+      run = await fetchSchedulingRun(id, { silent: true });
+    } catch (err) {
+      // Transient poll failure — wait and retry. The loop's timeout is
+      // the real kill switch; do not surface this to the user.
+      await new Promise((r) => setTimeout(r, interval));
+      if (Date.now() - started > timeout) {
+        throw new Error("Run did not complete within " + Math.round(timeout / 60000) + " minutes.");
+      }
+      continue;
+    }
     opts.onTick?.(run, Date.now() - started);
 
     if (

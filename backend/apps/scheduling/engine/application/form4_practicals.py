@@ -13,6 +13,13 @@ Env kill switch: ST_DISABLE_PRACTICALS=1
 """
 from __future__ import annotations
 
+# Set to True to keep per-class practicals diagnostics in the
+# generation log. Default is False: the solver already places
+# practicals via its own hard constraint, so the post-solve
+# insertion step usually has nothing to do and would only log
+# a misleading 'no valid windows available' warning.
+PRACTICALS_DEBUG = False
+
 import os
 import sys
 import traceback
@@ -123,11 +130,12 @@ def insert_form4_practicals(scheduling_run) -> None:
                     if (day, str(p.pk)) not in filled
                 )
 
-            print(
-                f"[PRACTICALS] {ig.name} blanks by day: "
-                + ", ".join(f"{d}=[{','.join(str(n) for n in day_blanks[d])}]" for d in PRACTICAL_DAYS),
-                file=sys.stderr,
-            )
+            if PRACTICALS_DEBUG:
+                print(
+                    f"[PRACTICALS] {ig.name} blanks by day: "
+                    + ", ".join(f"{d}=[{','.join(str(n) for n in day_blanks[d])}]" for d in PRACTICAL_DAYS),
+                    file=sys.stderr,
+                )
 
             # Candidate adjacent pairs in window, no lab-tech clash
             candidates = []
@@ -171,10 +179,12 @@ def insert_form4_practicals(scheduling_run) -> None:
 
             active_lrs = [lr for lr in lr_by_class[str(ig.pk)] if lr.is_active]
             if not active_lrs:
-                print(f"[PRACTICALS] {ig.name}: all practical LRs inactive - skipped", file=sys.stderr)
+                if PRACTICALS_DEBUG:
+                    print(f"[PRACTICALS] {ig.name}: all practical LRs inactive - skipped", file=sys.stderr)
                 continue
             if not picked:
-                print(f"[PRACTICALS] {ig.name}: no valid windows available", file=sys.stderr)
+                if PRACTICALS_DEBUG:
+                    print(f"[PRACTICALS] {ig.name}: no valid windows available", file=sys.stderr)
                 continue
 
             for idx, c in enumerate(picked):
@@ -196,7 +206,8 @@ def insert_form4_practicals(scheduling_run) -> None:
                     total_inserted += 1
                     lab_tech_booked.add((day, str(pid)))
 
-        print(f"[PRACTICALS] inserted {total_inserted} entries across Form 4 classes", file=sys.stderr)
+        if PRACTICALS_DEBUG:
+            print(f"[PRACTICALS] inserted {total_inserted} entries across Form 4 classes", file=sys.stderr)
     except Exception as e:
         print(f"[PRACTICALS] FAILED: {e}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)

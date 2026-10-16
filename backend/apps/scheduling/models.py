@@ -779,3 +779,41 @@ class DutyAssignment(TimeStampedModel):
 
     def __str__(self):
         return f"{self.date} {self.shift} ? {self.teacher}"
+
+# ---------------------------------------------------------------------
+# Scheduling rule toggles (per term)
+# ---------------------------------------------------------------------
+class SchedulingRuleConfig(TimeStampedModel):
+    """
+    Per-term toggles for hard scheduling rules.
+
+    Each boolean controls whether the corresponding hard constraint is
+    enforced by the solver. When a rule is disabled the solver may
+    produce a timetable that violates it — this is intentional so an
+    operator can trade strictness for feasibility on a per-term basis
+    without a code change.
+
+    Defaults: every rule enabled.
+    """
+
+    term = models.OneToOneField(
+        "core.Term",
+        on_delete=models.CASCADE,
+        related_name="rule_config",
+    )
+
+    cross_stream_practicals_enabled = models.BooleanField(default=True)
+    block_sync_enabled = models.BooleanField(default=True)
+    teacher_max_consecutive_enabled = models.BooleanField(default=False)
+    complex_adjacency_enabled = models.BooleanField(default=True)
+    eng_grade10_sync_enabled = models.BooleanField(default=True)
+    single_lesson_per_day_enabled = models.BooleanField(default=True)
+    teacher_free_afternoon_enabled = models.BooleanField(default=True)
+    practical_double_lesson_enabled = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "scheduling_rule_config"
+
+    def __str__(self):
+        return f"RuleConfig<{self.term_id}>"
+

@@ -652,6 +652,29 @@ class SolverModelBuilder:
             problem=problem,
         )
 
+        # Solution hints: seed the CP-SAT search with the current
+        # live version's layout. Soft bias only — hints do not
+        # constrain. When problem.hint_assignments is empty (the
+        # default, and always for Master scope), this block is a
+        # no-op and the model behaves identically to a plain run.
+        _hints = getattr(problem, "hint_assignments", ()) or ()
+        if _hints:
+            _hint_keys: set = set()
+            for _lr_id, _day, _period_id in _hints:
+                _hint_keys.add((
+                    str(_lr_id),
+                    str(_day).strip().upper(),
+                    str(_period_id),
+                ))
+            for _v in variables:
+                _key = (
+                    str(_v.lesson_requirement_id),
+                    str(_v.day).strip().upper(),
+                    str(_v.period_id),
+                )
+                if _key in _hint_keys:
+                    model.add_hint(_v.variable, 1)
+
         self._add_institutional_reserved_period_constraints(
             model=model,
             problem=problem,
@@ -664,35 +687,37 @@ class SolverModelBuilder:
             variables=variables,
         )
 
-        self._add_grade10_option_block_constraints(
-            model=model,
-            problem=problem,
-            variables=variables,
-        )
+        if self._rule_flag(problem, "block_sync", True):
+            self._add_grade10_option_block_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            )
 
-        self._add_grade10_cross_class_synchronization_constraints(
-            model=model,
-            problem=problem,
-            variables=variables,
-        )
+            self._add_grade10_cross_class_synchronization_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            )
 
-        self._add_senior_school_elective_block_constraints(
-            model=model,
-            problem=problem,
-            variables=variables,
-        )
+            self._add_senior_school_elective_block_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            )
 
-        self._add_senior_school_cross_class_synchronization_constraints(
-            model=model,
-            problem=problem,
-            variables=variables,
-        )
+            self._add_senior_school_cross_class_synchronization_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            )
 
-        self._add_grade10_standalone_sync_constraints(
-            model=model,
-            problem=problem,
-            variables=variables,
-        )
+        if self._rule_flag(problem, "eng_grade10_sync", True):
+            self._add_grade10_standalone_sync_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            )
 
         self._add_simultaneous_subject_constraints(
             model=model,
@@ -700,11 +725,12 @@ class SolverModelBuilder:
             variables=variables,
         )
 
-        self._add_complex_adjacency_constraints(
-            model=model,
-            problem=problem,
-            variables=variables,
-        )
+        if self._rule_flag(problem, "complex_adjacency", True):
+            self._add_complex_adjacency_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            )
 
         self._add_teacher_clash_constraints(
             model=model,
@@ -718,27 +744,30 @@ class SolverModelBuilder:
             variables=variables,
         )
 
-        self._add_single_lesson_per_day_constraints(
-            model=model,
-            problem=problem,
-            variables=variables,
-        )
+        if self._rule_flag(problem, "single_lesson_per_day", True):
+            self._add_single_lesson_per_day_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            )
 
         # ESS and CORE are STANDALONE subjects with independent
         # times. No synchronization constraint applies — the block
         # registry does NOT include them as a synchronized elective.
 
-        self._add_practical_double_lesson_constraints(
-            model=model,
-            problem=problem,
-            variables=variables,
-        )
+        if self._rule_flag(problem, "practical_double_lesson", True):
+            self._add_practical_double_lesson_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            )
 
-        self._add_practical_cross_stream_constraints(
-            model=model,
-            problem=problem,
-            variables=variables,
-        )
+        if self._rule_flag(problem, "cross_stream_practicals", True):
+            self._add_practical_cross_stream_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            )
 
         self._add_room_clash_constraints(
             model=model,
@@ -751,11 +780,12 @@ class SolverModelBuilder:
             variables=variables,
         )
 
-        self._add_teacher_free_afternoon_constraints(
-            model=model,
-            problem=problem,
-            variables=variables,
-        )
+        if self._rule_flag(problem, "teacher_free_afternoon", True):
+            self._add_teacher_free_afternoon_constraints(
+                model=model,
+                problem=problem,
+                variables=variables,
+            )
 
         self._add_room_availability_constraints(
             model=model,
@@ -1110,6 +1140,12 @@ class SolverModelBuilder:
                 )
                 == requirement.periods_per_week
             )
+
+    @staticmethod
+    def _rule_flag(problem, key, default=True):
+        """Read a per-term rule toggle. Defaults to True when absent."""
+        flags = getattr(problem, "rule_flags", None) or {}
+        return bool(flags.get(key, default))
 
     def add_named_assumption(
         self,

@@ -201,6 +201,9 @@ class SchedulingRunExecuteView(APIView):
                 scheduling_run=scheduling_run,
                 version_name=serializer.validated_data["version_name"],
                 version_number=serializer.validated_data["version_number"],
+                scope_kind=serializer.validated_data.get("scope_kind") or None,
+                scope_id=serializer.validated_data.get("scope_id") or None,
+                baseline_version_id=serializer.validated_data.get("baseline_version_id") or None,
             )
         except ValueError as exc:
             return self._respond_to_failure(
@@ -693,6 +696,13 @@ class SchedulingRunApproveView(_APIView):
         run.approval_note = note
         run.save(update_fields=["approved_at", "approved_by", "approval_note", "updated_at"])
 
+        # One approved run per term: clear approved_at on every other run
+        # of the same term. This makes "approved" a unique state and gives
+        # the baseline picker a well-defined list.
+        _SR.objects.filter(term=run.term).exclude(id=run.id).update(
+            approved_at=None, approved_by=None, approval_note=""
+        )
+
         # Publish the linked timetable version, deactivate others for the same term
         if run.timetable_version:
             _TV.objects.filter(term=run.term).exclude(id=run.timetable_version_id).update(
@@ -731,6 +741,13 @@ class SchedulingRunUnapproveView(_APIView):
         run.approved_by = None
         run.approval_note = ""
         run.save(update_fields=["approved_at", "approved_by", "approval_note", "updated_at"])
+
+        # Withdraw the version's "live" flag too, so a subsequent scoped
+        # run cannot accidentally use it as baseline.
+        if run.timetable_version_id:
+            _TV.objects.filter(id=run.timetable_version_id).update(
+                is_active=False, is_published=False
+            )
         return _Response({"ok": True})
 
 
@@ -977,3 +994,310 @@ class SchedulingResolveValidationView(_APIView2):
         except Exception:
             pass
         return _Resp2({"ok": True, "id": str(v.id), "is_resolved": v.is_resolved})
+
+# ---------------------------------------------------------------------
+# Rule configuration (per term)
+# ---------------------------------------------------------------------
+class SchedulingRuleConfigView(APIView):
+    """GET/PATCH rule toggles for a term.
+
+    Query param ``term`` (id or name). GET creates the config on
+    first access with all defaults enabled; PATCH updates whichever
+    fields are supplied.
+    """
+
+    permission_classes = [_AnyAuthenticated]
+
+    def _resolve_term(self, param):
+        from apps.core.models import Term
+        if not param:
+            return None
+        t = None
+        if isinstance(param, str) and len(param) == 36:
+            t = Term.objects.filter(id=param).first()
+        if t is None:
+            t = Term.objects.filter(name__iexact=str(param)).first()
+        return t
+
+    def _serialize(self, cfg):
+        from apps.scheduling.api.serializers import (
+            SchedulingRuleConfigSerializer as _S,
+        )
+        return _S(cfg).data
+
+    def get(self, request):
+        from apps.scheduling.models import SchedulingRuleConfig
+        term = self._resolve_term(request.query_params.get("term"))
+        if term is None:
+            return Response(
+                {"detail": "term query parameter required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        cfg, _ = SchedulingRuleConfig.objects.get_or_create(term=term)
+        return Response(self._serialize(cfg))
+
+    def patch(self, request):
+        from apps.scheduling.models import SchedulingRuleConfig
+        import logging
+        log = logging.getLogger("scheduling.rule_config")
+
+        term = self._resolve_term(
+            request.query_params.get("term") or request.data.get("term")
+        )
+        log.warning(
+            "[rule-config PATCH] term=%r data=%r content_type=%r",
+            term.name if term else None,
+            dict(request.data) if hasattr(request.data, "items") else request.data,
+            request.content_type,
+        )
+        if term is None:
+            return Response(
+                {"detail": "term required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        cfg, _ = SchedulingRuleConfig.objects.get_or_create(term=term)
+        allowed = {
+            "cross_stream_practicals_enabled",
+            "block_sync_enabled",
+            "teacher_max_consecutive_enabled",
+            "complex_adjacency_enabled",
+            "eng_grade10_sync_enabled",
+            "single_lesson_per_day_enabled",
+            "teacher_free_afternoon_enabled",
+            "practical_double_lesson_enabled",
+        }
+
+        def _coerce(raw):
+            if isinstance(raw, str):
+                return raw.strip().lower() in ("true", "1", "yes", "on")
+            return bool(raw)
+
+        changed = []
+        for k, v in (request.data or {}).items():
+            if k in allowed:
+                coerced = _coerce(v)
+                setattr(cfg, k, coerced)
+                changed.append((k, v, coerced))
+        cfg.save()
+        log.warning(
+            "[rule-config PATCH] changed=%r after=%r",
+            changed,
+            {
+                "cross_stream_practicals_enabled": cfg.cross_stream_practicals_enabled,
+                "block_sync_enabled": cfg.block_sync_enabled,
+                "complex_adjacency_enabled": cfg.complex_adjacency_enabled,
+                "eng_grade10_sync_enabled": cfg.eng_grade10_sync_enabled,
+                "teacher_max_consecutive_enabled": cfg.teacher_max_consecutive_enabled,
+            },
+        )
+        return Response(self._serialize(cfg))
+
+# ---------------------------------------------------------------------
+# Pre-flight check
+# ---------------------------------------------------------------------
+class PreflightCheckView(APIView):
+    """GET ?term=X -> deterministic feasibility diagnostics.
+
+    Runs the same diagnostics the application service runs before the
+    solver. Returns clean=true when no provable conflict exists, or
+    the list of diagnostics when the input cannot be scheduled.
+    """
+
+    permission_classes = [_AnyAuthenticated]
+
+    def _resolve_term(self, param):
+        from apps.core.models import Term
+        if not param:
+            return None
+        t = None
+        if isinstance(param, str) and len(param) == 36:
+            t = Term.objects.filter(id=param).first()
+        if t is None:
+            t = Term.objects.filter(name__iexact=str(param)).first()
+        return t
+
+    def get(self, request):
+        from apps.scheduling.engine.application.scheduling_application import (
+            load_scheduling_problem,
+        )
+        from apps.scheduling.engine.solver.infeasibility_diagnostics import (
+            analyze_infeasibility,
+        )
+        term = self._resolve_term(request.query_params.get("term"))
+        if term is None:
+            return Response(
+                {"detail": "term query parameter required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            problem = load_scheduling_problem(term=term)
+            report = analyze_infeasibility(problem)
+        except Exception as exc:
+            return Response(
+                {
+                    "clean": False,
+                    "error": str(exc),
+                    "diagnostics": [],
+                },
+                status=status.HTTP_200_OK,
+            )
+        from dataclasses import asdict as _asdict
+        from apps.scheduling.engine.application.proposals import (
+            generate_proposals_for_diagnostic as _gen,
+        )
+        diagnostics = []
+        all_proposals = []
+        for d in report.diagnostics:
+            props = _gen(d)
+            diagnostics.append({
+                "code": d.code,
+                "rule": d.rule,
+                "message": d.message,
+                "required_input": d.required_input,
+                "details": d.details,
+                "proposals": [_asdict(p) for p in props],
+            })
+            all_proposals.extend(_asdict(p) for p in props)
+        # Merge contract-mismatch proposals (severity='warning').
+        try:
+            from apps.scheduling.engine.application.proposals import (
+                generate_contract_proposals as _contract_props,
+            )
+            contract_props = _contract_props(term)
+            for p in contract_props:
+                all_proposals.append(_asdict(p))
+        except Exception as exc:
+            import logging as _log
+            _log.getLogger(__name__).warning(
+                "contract proposals generation failed: %s", exc
+            )
+
+        return Response({
+            "clean": report.is_empty,
+            "diagnostics": diagnostics,
+            "proposals": all_proposals,
+        })
+
+# ---------------------------------------------------------------------
+# Apply a single proposal
+# ---------------------------------------------------------------------
+class SchedulingProposalApplyView(APIView):
+    """POST {term, proposal_id} -> applies one proposal.
+
+    The proposal id encodes the action and the expected prior state,
+    e.g. ``reduce_lr:<uuid>:5->3``. The view parses that, verifies the
+    current value matches, applies, and returns the updated pre-flight
+    state so the caller can refresh in one round-trip.
+    """
+
+    permission_classes = [_AnyAuthenticated]
+
+    def _resolve_term(self, param):
+        from apps.core.models import Term
+        if not param:
+            return None
+        t = None
+        if isinstance(param, str) and len(param) == 36:
+            t = Term.objects.filter(id=param).first()
+        if t is None:
+            t = Term.objects.filter(name__iexact=str(param)).first()
+        return t
+
+    def post(self, request):
+        from apps.academics.models import LessonRequirement
+        from apps.scheduling.engine.application.scheduling_application import (
+            load_scheduling_problem,
+        )
+        from apps.scheduling.engine.solver.infeasibility_diagnostics import (
+            analyze_infeasibility,
+        )
+        from dataclasses import asdict as _asdict
+        from apps.scheduling.engine.application.proposals import (
+            generate_proposals_for_diagnostic as _gen,
+        )
+
+        term = self._resolve_term(
+            request.data.get("term") if hasattr(request, "data") else None
+        )
+        if term is None:
+            return Response(
+                {"detail": "term required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        pid = str(request.data.get("proposal_id") or "").strip()
+        if not pid:
+            return Response(
+                {"detail": "proposal_id required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Parse reduce_lr:<uuid>:<cur>-><new>
+        try:
+            parts = pid.split(":")
+            if len(parts) != 3 or parts[0] != "reduce_lr":
+                raise ValueError("unsupported proposal_id form")
+            lr_id = parts[1]
+            cur_s, new_s = parts[2].split("->")
+            cur, new = int(cur_s), int(new_s)
+        except (ValueError, IndexError):
+            return Response(
+                {"detail": f"malformed proposal_id: {pid!r}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        lr = LessonRequirement.objects.filter(id=lr_id).first()
+        if lr is None:
+            return Response(
+                {"detail": "target LR not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if int(lr.lessons_per_week) != cur:
+            return Response(
+                {
+                    "detail": (
+                        f"stale proposal: LR is at {lr.lessons_per_week}, "
+                        f"expected {cur}. Refresh and re-apply."
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        lr.lessons_per_week = new
+        lr.save(update_fields=["lessons_per_week", "updated_at"])
+
+        # Re-run pre-flight on the updated state
+        try:
+            problem = load_scheduling_problem(term=term)
+            report = analyze_infeasibility(problem)
+        except Exception as exc:
+            return Response(
+                {"detail": f"applied, but re-check failed: {exc}"},
+                status=status.HTTP_200_OK,
+            )
+
+        diagnostics = []
+        all_proposals = []
+        for d in report.diagnostics:
+            props = _gen(d)
+            diagnostics.append({
+                "code": d.code,
+                "rule": d.rule,
+                "message": d.message,
+                "required_input": d.required_input,
+                "details": d.details,
+                "proposals": [_asdict(p) for p in props],
+            })
+            all_proposals.extend(_asdict(p) for p in props)
+
+        return Response({
+            "clean": report.is_empty,
+            "diagnostics": diagnostics,
+            "proposals": all_proposals,
+            "applied": {
+                "proposal_id": pid,
+                "lr_id": lr_id,
+                "from": cur,
+                "to": new,
+            },
+        })
+

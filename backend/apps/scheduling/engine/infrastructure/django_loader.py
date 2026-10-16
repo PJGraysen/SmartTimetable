@@ -186,8 +186,49 @@ class DjangoSchedulingLoader:
             loaded_periods,
         )
 
+        # Read per-term rule toggles (defaults = all enabled).
+        from apps.scheduling.models import SchedulingRuleConfig
+        _cfg = SchedulingRuleConfig.objects.filter(term=term).first()
+        if _cfg is None:
+            _flags = {
+                "cross_stream_practicals": True,
+                "block_sync": True,
+                "teacher_max_consecutive": False,
+                "complex_adjacency": True,
+                "eng_grade10_sync": True,
+                "single_lesson_per_day": True,
+                "teacher_free_afternoon": True,
+                "practical_double_lesson": True,
+            }
+        else:
+            _flags = {
+                "cross_stream_practicals": bool(
+                    _cfg.cross_stream_practicals_enabled
+                ),
+                "block_sync": bool(_cfg.block_sync_enabled),
+                "teacher_max_consecutive": bool(
+                    _cfg.teacher_max_consecutive_enabled
+                ),
+                "complex_adjacency": bool(
+                    _cfg.complex_adjacency_enabled
+                ),
+                "eng_grade10_sync": bool(
+                    _cfg.eng_grade10_sync_enabled
+                ),
+                "single_lesson_per_day": bool(
+                    _cfg.single_lesson_per_day_enabled
+                ),
+                "teacher_free_afternoon": bool(
+                    _cfg.teacher_free_afternoon_enabled
+                ),
+                "practical_double_lesson": bool(
+                    _cfg.practical_double_lesson_enabled
+                ),
+            }
+
         return SchedulingProblem(
             periods=loaded_periods,
+            rule_flags=_flags,
             teachers=tuple(
                 load_teachers(teachers)
             ),

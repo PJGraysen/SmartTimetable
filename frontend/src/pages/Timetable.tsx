@@ -338,6 +338,18 @@ function teacherCode(entry: TimetableEntryResult): string {
 }
 
 function displayTeacherCode(entry: TimetableEntryResult): string {
+  // Prefer the entry's own teacher. The block DTO carries ALL
+  // members of the block; using it here would (a) combine every
+  // block teacher into one string and (b) prevent per-teacher
+  // filtering since a single teacher code never matches the
+  // combined string. Only fall back to the block when the entry
+  // itself has no primary teacher.
+  const raw = entry as unknown as Record<string, unknown>;
+  const own =
+    teacherCode(entry) ||
+    text(raw.teacher_number) ||
+    text(raw.teacherNumber);
+  if (own) return own;
   const block = entry.block ?? null;
   if (block) {
     if (!block.has_any_teacher) return "";
@@ -345,12 +357,7 @@ function displayTeacherCode(entry: TimetableEntryResult): string {
       .map((m) => m.teacher_code ?? "-")
       .join(" / ");
   }
-  const raw = entry as unknown as Record<string, unknown>;
-  return (
-    teacherCode(entry) ||
-    text(raw.teacher_number) ||
-    text(raw.teacherNumber)
-  );
+  return "";
 }
 
 const ROOM_ALIASES = {
@@ -792,9 +799,27 @@ function Timetable() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [filterMode, setFilterMode] = useState<"master" | "class" | "teacher" | "grade">("master");
+  const _urlScope = (() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("scope"); // e.g. "grade-4" | "grade-9" | "master"
+    } catch { return null; }
+  })();
+  const _initialFilter = (() => {
+    if (!_urlScope || _urlScope === "master") return null;
+    const m = _urlScope.match(/^grade-(\d+)$/);
+    if (!m) return null;
+    const num = m[1];
+    const label = num === "4" ? "Form 4" : `Grade ${num}`;
+    return { mode: "grade" as const, label };
+  })();
+
+  const [filterMode, setFilterMode] = useState<
+    "master" | "class" | "teacher" | "grade" | "subject"
+  >("master");
   const [filterValue, setFilterValue] = useState<string>("");
-  const [selectedGrade, setSelectedGrade] = useState<string>("Grade 11");
+  const [subjectValue, setSubjectValue] = useState<string>("");
+  const [selectedGrade, setSelectedGrade] = useState<string>(_initialFilter?.label ?? "Grade 11");
 
   const loadTimetable = useCallback(async () => {
     setRefreshing(true);
@@ -1290,12 +1315,59 @@ function Timetable() {
     if (filterMode === "teacher" && filterValue) {
       return entries.filter((e) => displayTeacherCode(e) === filterValue);
     }
+    if (filterMode === "subject" && subjectValue) {
+      const sv = subjectValue.trim().toUpperCase();
+      return entries.filter(
+        (e) => normalisedSubjectCode(e).toUpperCase() === sv,
+      );
+    }
     return entries;
-  }, [entries, filterMode, filterValue]);
+  }, [entries, filterMode, filterValue, subjectValue]);
 
   const visibleClasses = useMemo(() => {
     if (filterMode === "class" && filterValue) {
       return CLASSES.filter((c) => c.label === filterValue);
+    }
+    if (filterMode === "grade" && selectedGrade) {
+      // Grade mode: show BOTH E and W streams of the selected
+      // grade side-by-side. Match across label styles:
+      //   "Grade 10E" / "Grade 10W"  (Grade 9, 10)
+      //   "G11E" / "G11W"            (Grade 11)
+      //   "Form 4E" / "Form 4W"      (Form 4)
+      const norm = (s: string) =>
+        s.trim().toLowerCase().replace(/\s+/g, "");
+      const sel = norm(selectedGrade);
+      // Extract the numeric part: "grade10"->"10", "form4"->"4"
+      const numMatch = sel.match(/(\d+)/);
+      const num = numMatch ? numMatch[1] : null;
+
+      return CLASSES.filter((c) => {
+        const lbl = norm(c.label);
+        // Direct match: "grade 10e"/"grade 10w"
+        if (lbl === sel + "e" || lbl === sel + "w") return true;
+        // Number-only match: "g11e"/"g11w"/"f4e"/"f4w"
+        if (num) {
+          if (lbl === "g" + num + "e" || lbl === "g" + num + "w") return true;
+          if (lbl === "f" + num + "e" || lbl === "f" + num + "w") return true;
+          if (lbl === "grade" + num + "e" || lbl === "grade" + num + "w") return true;
+          if (lbl === "form" + num + "e" || lbl === "form" + num + "w") return true;
+        }
+        return false;
+      });
+    }
+    if (filterMode === "subject" && subjectValue) {
+      // Subject mode: show every class that has at least one
+      // entry for the selected subject code.
+      const sv = subjectValue.trim().toUpperCase();
+      const taught = new Set<string>();
+      for (const e of entries) {
+        const sc = normalisedSubjectCode(e).toUpperCase();
+        if (sc !== sv) continue;
+        for (const c of CLASSES) {
+          if (classMatches(e, c)) taught.add(c.label);
+        }
+      }
+      return CLASSES.filter((c) => taught.has(c.label));
     }
     if (filterMode === "teacher" && filterValue) {
       const taught = new Set<string>();
@@ -1309,9 +1381,38 @@ function Timetable() {
       return CLASSES.filter((c) => taught.has(c.label));
     }
     return CLASSES;
-  }, [filterMode, filterValue, visibleEntries, selectedGrade]);
+  }, [filterMode, filterValue, subjectValue, visibleEntries,
+      selectedGrade, entries]);
 
   const scheduledEntries = visibleEntries.length;
+
+  // Dynamic header based on the active view.
+  const viewTitle = useMemo(() => {
+    if (filterMode === "grade" && selectedGrade) {
+      return `${selectedGrade} Streams`;
+    }
+    if (filterMode === "class" && filterValue) {
+      return `${filterValue} Timetable`;
+    }
+    if (filterMode === "teacher" && filterValue) {
+      return `Teacher ${filterValue} Timetable`;
+    }
+    if (filterMode === "subject" && subjectValue) {
+      return `Subject ${subjectValue} Timetable`;
+    }
+    return "Master Timetable";
+  }, [filterMode, filterValue, subjectValue, selectedGrade]);
+
+  // Unique subject codes present in the loaded timetable — used by
+  // the subject-mode dropdown.
+  const allSubjects = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of entries) {
+      const sc = normalisedSubjectCode(e).toUpperCase();
+      if (sc && sc !== "GST") s.add(sc);
+    }
+    return Array.from(s).sort();
+  }, [entries]);
 
 
   const entriesBySlot = useMemo(() => {
@@ -2117,12 +2218,16 @@ function Timetable() {
         }} className="no-print">
           <span style={{ fontSize: "12px", fontWeight: 800, color: "#244b72", letterSpacing: "0.06em" }}>VIEW:</span>
           <select value={filterMode} onChange={(e) => {
-            const m = e.target.value as "master" | "class" | "teacher";
+            const m = e.target.value as
+              | "master" | "class" | "teacher" | "grade" | "subject";
             setFilterMode(m);
             if (m === "master") setFilterValue("");
             else if (m === "grade") setFilterValue("");
             else if (m === "class") setFilterValue(CLASSES[0]?.label ?? "");
             else if (m === "teacher") setFilterValue(allTeachers[0] ?? "");
+            else if (m === "subject") {
+              setSubjectValue((prev) => prev || allSubjects[0] || "");
+            }
           }} style={{
             padding: "6px 10px", border: "1px solid #2878dc", borderRadius: "6px",
             fontWeight: 700, color: "#1262bd", background: "#fff", minWidth: "140px",
@@ -2131,6 +2236,7 @@ function Timetable() {
             <option value="grade">Grade (E + W streams)</option>
             <option value="class">Single class</option>
             <option value="teacher">Single teacher</option>
+            <option value="subject">Single subject</option>
           </select>
           {filterMode === "class" && (
             <select value={filterValue} onChange={(e) => setFilterValue(e.target.value)}
@@ -2155,13 +2261,21 @@ function Timetable() {
                 : allTeachers.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           )}
+          {filterMode === "subject" && (
+            <select value={subjectValue} onChange={(e) => setSubjectValue(e.target.value)}
+              style={{ padding: "6px 10px", border: "1px solid #2878dc", borderRadius: "6px", fontWeight: 700, color: "#1262bd", background: "#fff", minWidth: "160px" }}>
+              {allSubjects.length === 0
+                ? <option value="">(no subjects in timetable)</option>
+                : allSubjects.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
           <span style={{ marginLeft: "auto", fontSize: "12px", color: "#64748b" }}>
             Showing {visibleClasses.length} of {CLASSES.length} classes · {scheduledEntries} of {entries.length} lessons
           </span>
         </div>
                 <div className="tt-masthead">
           <div className="tt-mast-school">{schoolName}</div>
-          <h1 className="tt-title">MASTER TIMETABLE<span className="tt-live">LIVE</span></h1>
+          <h1 className="tt-title">{viewTitle.toUpperCase()}<span className="tt-live">LIVE</span></h1>
           <div className="tt-mast-line">
             {termDisplay || "Current Term"}{runCompletedAt ? ` • Generated: ${new Date(runCompletedAt).toLocaleString()}` : ""}
           </div>
@@ -2263,11 +2377,21 @@ function Timetable() {
 
                       const period = column.period || 0;
 
-                      const slotEntries = getSlotEntries(
+                      const rawSlotEntries = getSlotEntries(
                         day.code,
                         classDefinition,
                         period,
                       );
+                      // In teacher mode, strip the block DTO so
+                      // formatLesson() renders the entry's own
+                      // subject instead of the whole-block label.
+                      const slotEntries =
+                        filterMode === "teacher"
+                          ? rawSlotEntries.map((e) => ({
+                              ...(e as any),
+                              block: null,
+                            }))
+                          : rawSlotEntries;
 
                       const isMondayAssembly =
                         day.code === "MON" && period === 1;
@@ -2289,7 +2413,15 @@ function Timetable() {
                               // entry belonging to a synchronized Grade 10 option block or a
                               // Senior School elective block. When present it is the sole
                               // display for that physical timetable cell.
-                              const blockEntry = slotEntries.find((e) => e.block) ?? null;
+                              // In teacher mode, skip the block DTO so
+                              // each of the teacher's own subjects renders
+                              // individually rather than being folded into
+                              // the block label (which lists ALL block
+                              // members, not just this teacher's).
+                              const blockEntry =
+                                filterMode === "teacher"
+                                  ? null
+                                  : slotEntries.find((e) => e.block) ?? null;
                             
                                 if (blockEntry && blockEntry.block) {
                                   const blk: any = blockEntry.block;

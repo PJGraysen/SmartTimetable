@@ -19,6 +19,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { HUB_NAV, STUDENT_HUB, STUDENT_LIBRARY_NAV, STUDENT_TIMETABLE_NAV, STUDENT_ACADEMICS_NAV, MODULE_NAV, MODULE_LABELS, moduleForPath, roleCanSee } from "./navigation";
 import { PUBLIC_ROUTES, PROTECTED_ROUTES } from "./routes";
 import NotificationBell from "./components/NotificationBell";
+import NotificationsBanner from "./components/NotificationsBanner";
 import { ThemeProvider, useTheme } from "./theme/ThemeContext";
 
 function Sidebar({ isOpen }: { isOpen: boolean }) {
@@ -309,6 +310,7 @@ function AppShell() {
       <Sidebar isOpen={sidebarOpen} />
       <div className="main-area" data-sidebar-open={sidebarOpen}>
         <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+        <NotificationsBanner />
         <main className="content">
           <PageBar />
           <div key={location.pathname} className="ssp-page-transition">
