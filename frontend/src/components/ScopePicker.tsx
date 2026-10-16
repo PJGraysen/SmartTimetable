@@ -7,10 +7,14 @@ export default function ScopePicker({
   value,
   onChange,
   showSubjects = false,
+  baselineId = null,
+  onBaselineChange,
 }: {
   value: Pick | null;
   onChange: (p: Pick) => void;
   showSubjects?: boolean;
+  baselineId?: string | null;
+  onBaselineChange?: (id: string) => void;
 }) {
   const [data, setData] = useState<ScopeList | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +30,23 @@ export default function ScopePicker({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {value && value.kind !== "master" && data.baselines.length > 1 && onBaselineChange && (
+        <div>
+          <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>Baseline</div>
+          <select
+            value={baselineId ?? data.active_baseline_id ?? data.baselines[0].id}
+            onChange={(e) => onBaselineChange(e.target.value)}
+            style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", fontSize: 12 }}
+          >
+            {data.baselines.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}{b.approved_at ? ` — ${new Date(b.approved_at).toLocaleDateString()}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <label style={{ fontSize: 12, fontWeight: 600 }}>Regeneration scope</label>
       <button
         type="button"

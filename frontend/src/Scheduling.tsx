@@ -582,6 +582,7 @@ export default function Scheduling() {
   const [timetableRefreshKey, setTimetableRefreshKey] = useState(0);
   const [selectedTermId, setSelectedTermId] = useState("");
   const [scope, setScope] = useState<ScopePick | null>(null);
+  const [baselineId, setBaselineId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1.0);
   const [showAllRuns, setShowAllRuns] = useState(false);
   const [showAllFailed, setShowAllFailed] = useState(false);
@@ -696,6 +697,7 @@ export default function Scheduling() {
       executeSchedulingRun(run.id, {
         scope_kind: scope?.kind ?? null,
         scope_id: scope?.id ?? null,
+        baseline_version_id: baselineId,
       }).catch(() => {
         /* ignored - we poll for real status below */
       });
@@ -724,6 +726,18 @@ export default function Scheduling() {
           ttlMs: 3000,
         });
         setReportRunId(run.id);
+
+        // auto-navigate after scoped generate — Master stays on this page.
+        const _s = scope;
+        if (_s && _s.kind !== "master") {
+          const slug =
+            _s.kind === "grade" ? `grade-${_s.id}`
+            : _s.kind === "subject" ? `subject-${_s.id}`
+            : "master";
+          window.setTimeout(() => {
+            window.location.href = `/timetables?scope=${encodeURIComponent(slug)}`;
+          }, 1200);
+        }
       } else {
         toast.push({
           type: "error",
@@ -876,7 +890,13 @@ export default function Scheduling() {
                 Regeneration scope: {scope ? scope.label : "Master (full re-solve)"}
               </summary>
               <div style={{ marginTop: "0.5rem" }}>
-                <ScopePicker value={scope} onChange={setScope} showSubjects={false} />
+                <ScopePicker
+                  value={scope}
+                  onChange={setScope}
+                  showSubjects={false}
+                  baselineId={baselineId}
+                  onBaselineChange={setBaselineId}
+                />
               </div>
             </details>
           </div>

@@ -816,7 +816,7 @@ function Timetable() {
 
   const [filterMode, setFilterMode] = useState<
     "master" | "class" | "teacher" | "grade" | "subject"
-  >("master");
+  >(_initialFilter?.mode ?? "master");
   const [filterValue, setFilterValue] = useState<string>("");
   const [subjectValue, setSubjectValue] = useState<string>("");
   const [selectedGrade, setSelectedGrade] = useState<string>(_initialFilter?.label ?? "Grade 11");

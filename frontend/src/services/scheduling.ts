@@ -9,11 +9,20 @@ export type GradeScope   = { kind: "grade";   id: string; label: string; groups:
 export type SubjectScope = { kind: "subject"; id: string; label: string; code: string };
 export type ScopePick = MasterScope | GradeScope | SubjectScope;
 
+export type BaselineOption = {
+  id: string;
+  name: string;
+  version_number: number;
+  approved_at: string | null;
+};
+
 export type ScopeList = {
   term: { id: string; name: string };
   master: MasterScope;
   grades: GradeScope[];
   subjects: SubjectScope[];
+  baselines: BaselineOption[];
+  active_baseline_id: string | null;
 };
 
 export async function getSchedulingScopes(termId?: string): Promise<ScopeList> {
@@ -28,6 +37,7 @@ export type ExecuteRunOpts = {
   version_number?: number;
   scope_kind?: string | null;
   scope_id?: string | null;
+  baseline_version_id?: string | null;
 };
 
 export type SchedulingRunStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
@@ -125,6 +135,7 @@ export async function executeSchedulingRun(
   };
   if (opts.scope_kind) body.scope_kind = opts.scope_kind;
   if (opts.scope_id) body.scope_id = opts.scope_id;
+  if (opts.baseline_version_id) body.baseline_version_id = opts.baseline_version_id;
   const { data } = await http.post<SchedulingRun>(
     `/scheduling/runs/${id}/execute/`,
     body,
