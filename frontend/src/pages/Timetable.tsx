@@ -5,6 +5,9 @@ import { Printer, RefreshCw } from "lucide-react";
 import {
   getSchedulingRunResults,
   getSchedulingRuns,
+  createSchedulingRun,
+  executeSchedulingRun,
+  pollRunUntilDone,
   type SchedulingRun,
   type TimetableEntryResult,
 } from "../services/scheduling";
@@ -816,6 +819,7 @@ function Timetable() {
     return { mode: "grade" as const, label };
   })();
 
+  const [regenerating, setRegenerating] = useState(false);
   const [filterMode, setFilterMode] = useState<
     "master" | "class" | "teacher" | "grade" | "subject"
   >(_initialFilter?.mode ?? "master");
@@ -830,6 +834,9 @@ function Timetable() {
     try {
       const runsData = await getSchedulingRuns();
       const runs = Array.isArray(runsData) ? runsData : [];
+        if (runs.length > 0 && runs[0].term) {
+          setActiveTermId(runs[0].term);
+        }
       const completed = completedRuns(runs)
         .slice()
         .sort((a: any, b: any) => {
@@ -1312,6 +1319,26 @@ function Timetable() {
     for (const [code, name] of orphanCodes) merged.push({ code, name });
     return merged.sort((a, b) => (a.code || "").localeCompare(b.code || ""));
   }, [entries, teacherLookup]);
+
+  async function handleRegenScope() {
+    if (!activeTermId) return alert("No active term found.");
+    setRegenerating(true);
+    try {
+      const match = selectedGrade.match(/(\d+)/);
+      if (!match) throw new Error("Could not parse grade number");
+      const scopeId = match[1];
+
+      const run = await createSchedulingRun(activeTermId);
+      await executeSchedulingRun(run.id, { scope_kind: "grade", scope_id: scopeId });
+      await pollRunUntilDone(run.id, { intervalMs: 2000 });
+      
+      window.location.reload();
+    } catch (e: any) {
+      alert("Regeneration failed: " + (e.message || String(e)));
+    } finally {
+      setRegenerating(false);
+    }
+  }
 
   const visibleEntries = useMemo(() => {
     if (filterMode === "teacher" && filterValue) {
@@ -2270,6 +2297,25 @@ function Timetable() {
                 ? <option value="">(no subjects in timetable)</option>
                 : allSubjects.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
+          )}
+          {filterMode === "grade" && (
+            <button
+              type="button"
+              onClick={handleRegenScope}
+              disabled={regenerating}
+              style={{
+                padding: "6px 10px",
+                border: "1px solid #059669",
+                borderRadius: "6px",
+                fontWeight: 700,
+                color: "#fff",
+                background: regenerating ? "#94a3b8" : "#10b981",
+                cursor: regenerating ? "not-allowed" : "pointer",
+                marginLeft: "8px",
+              }}
+            >
+              {regenerating ? "Regenerating..." : `Regenerate ${selectedGrade}`}
+            </button>
           )}
           <span style={{ marginLeft: "auto", fontSize: "12px", color: "#64748b" }}>
             Showing {visibleClasses.length} of {CLASSES.length} classes · {scheduledEntries} of {entries.length} lessons
