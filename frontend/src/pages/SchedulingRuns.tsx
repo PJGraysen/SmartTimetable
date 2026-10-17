@@ -11,6 +11,7 @@ import {
   createSchedulingRun,
   executeSchedulingRun,
   getSchedulingRuns,
+  type SchedulingRun,
 } from "../services/scheduling";
 import { getAcademicTerms } from "../services/core";
 
@@ -25,23 +26,7 @@ type AcademicTerm = {
   is_active: boolean;
 };
 
-type SchedulingRun = {
-  id: string;
-  term: string;
-  term_name: string;
-  timetable_version: string | null;
-  status: string;
-  status_display: string;
-  solver_status: string | null;
-  solver_status_display: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  objective_value: string | number | null;
-  error_message: string;
-  statistics: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-};
+
 
 function statusClass(status: string) {
   switch (status.toUpperCase()) {
@@ -117,9 +102,7 @@ export default function SchedulingRuns() {
     setError(null);
 
     try {
-      const response = await createSchedulingRun({
-        term: selectedTerm,
-      });
+      const response = await createSchedulingRun(selectedTerm);
 
       setRuns((current) => [response, ...current]);
       setMessage(

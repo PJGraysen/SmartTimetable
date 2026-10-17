@@ -23,7 +23,7 @@ import NotificationsBanner from "./components/NotificationsBanner";
 import { ThemeProvider, useTheme } from "./theme/ThemeContext";
 
 function Sidebar({ isOpen }: { isOpen: boolean }) {
-  const { user, logout, modules, hasModule, role } = useAuth();
+  const { logout, modules, hasModule, role } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 

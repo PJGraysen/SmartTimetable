@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { useEffect, useState, ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 export const C = {
   BROWN: "#2b1a0f",

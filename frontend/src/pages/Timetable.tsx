@@ -19,6 +19,8 @@ type TimetableColumn = {
 };
 
 type ClassDefinition = {
+  code?: string;
+  name?: string;
   label: string;
   aliases: string[];
 };
@@ -253,26 +255,26 @@ const AS_DEFAULT_PERIODS = [
   { label: "P10", start: "15:20", end: "16:00" },
 ];
 
-function asToMin(s) {
+function asToMin(s: any) {
   if (!s && s !== 0) return null;
   const m = String(s).match(/(\d{1,2})[:.](\d{1,2})/);
   if (!m) return null;
   return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
 }
 
-function asPeriodRange(p) {
+function asPeriodRange(p: any) {
   if (!p || typeof p !== "object") return [null, null];
   const s = asToMin(p.start ?? p.start_time ?? p.from ?? p.time_start ?? p.begin);
   const e = asToMin(p.end ?? p.end_time ?? p.to ?? p.time_end ?? p.finish);
   return [s, e];
 }
 
-function asKeyMatchesDayPeriod(key, di, pi, dayNames, periodLabels) {
+function asKeyMatchesDayPeriod(key: any, di: any, pi: any, dayNames: any, periodLabels: any) {
   const k = String(key);
   const kl = k.toLowerCase();
   const nums = k.match(/\d+/g) || [];
   if (nums.length >= 2) {
-    const a = parseInt(nums[0], 10), b = parseInt(nums[1], 10);
+    const a = parseInt(nums[0] || '0', 10), b = parseInt(nums[1], 10);
     if ((a === di && b === pi) || (a === pi && b === di)) return true;
   }
   const dn = String(dayNames?.[di] ?? "").toLowerCase().slice(0, 3);
@@ -282,7 +284,7 @@ function asKeyMatchesDayPeriod(key, di, pi, dayNames, periodLabels) {
   return dn.length > 0 || pl.length > 0;
 }
 
-function asPullEntryFields(e) {
+function asPullEntryFields(e: any) {
   if (!e) return null;
   const cls =
     e.class_name || e.className || e.class_code || e.classCode ||
@@ -354,7 +356,7 @@ function displayTeacherCode(entry: TimetableEntryResult): string {
   if (block) {
     if (!block.has_any_teacher) return "";
     return block.members
-      .map((m) => m.teacher_code ?? "-")
+      .map((m: any) => m.teacher_code ?? "-")
       .join(" / ");
   }
   return "";
@@ -403,7 +405,7 @@ const ROOM_ALIASES = {
   "g8w": "RM 8W",
 };
 
-function pickRoomName(x) {
+function pickRoomName(x: any) {
   if (x === undefined || x === null) return "";
   if (typeof x === "string") return x;
   if (typeof x === "number") return x === 0 ? "" : String(x);
@@ -430,7 +432,7 @@ function pickRoomName(x) {
   return "";
 }
 
-function roomCode(x) {
+function roomCode(x: any) {
   const raw = pickRoomName(x).trim();
   if (!raw) return "\u2014";
   const lower = raw.toLowerCase();
@@ -439,7 +441,7 @@ function roomCode(x) {
     "unassigned","no room","nan","[object object]"
   ]);
   if (JUNK.has(lower)) return "\u2014";
-  if (typeof ROOM_ALIASES !== "undefined" && ROOM_ALIASES[lower]) return ROOM_ALIASES[lower];
+  if (typeof ROOM_ALIASES !== "undefined" && (ROOM_ALIASES as Record<string, string>)[lower]) return (ROOM_ALIASES as Record<string, string>)[lower];
   const rmm = raw.match(/^(?:room|rm|r)[\s.\-]*(\S+)$/i);
   if (rmm) return "RM " + rmm[1].toUpperCase();
   if (raw.length <= 7) return raw.toUpperCase();
@@ -628,7 +630,7 @@ function formatLesson(entry: TimetableEntryResult) {
   const block = entry.block ?? null;
   if (block) {
     const teacherDisplay = block.has_any_teacher
-      ? block.members.map((m) => m.teacher_code ?? "-").join(" / ")
+      ? block.members.map((m: any) => m.teacher_code ?? "-").join(" / ")
       : "";
     return {
       code: block.display,
@@ -705,7 +707,7 @@ function Timetable() {
   const [version, setVersion] = useState("Live timetable");
   const [activeTermId, setActiveTermId] = useState<string>("");
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
-  const [runCompletedAt, setRunCompletedAt] = useState<string | null>(null);
+  const [runCompletedAt] = useState<string | null>(null);
   const [availableRuns, setAvailableRuns] = useState<any[]>([]);
   const [entrySignature, setEntrySignature] = useState<string>("");
   const { role: _ttRole } = useAuth();
@@ -893,12 +895,12 @@ function Timetable() {
         ),
       );
       const result = await getSchedulingRunResults(latestRun.id);
-      const timetableVersion = result.timetable_version;
+      const timetableVersion = (result as any).timetable_version;
 
       // Fetch the previous completed run so the change counter compares
       // against a real previous generation, not the previous page load.
-      let previousRunId: string | null = null;
-      let previousVersionName: string = "";
+      let previousRunId: string | null = null; void previousRunId;
+      let previousVersionName: string = ""; void previousVersionName;
       let previousEntries: any[] = [];
       try {
         const latestIdx = completed.findIndex((r: any) => r.id === latestRun.id);
@@ -908,7 +910,7 @@ function Timetable() {
         if (prevRun) {
           previousRunId = prevRun.id;
           const prevResult = await getSchedulingRunResults(prevRun.id);
-          const prevTV = prevResult.timetable_version;
+          const prevTV = (prevResult as any).timetable_version;
           previousVersionName = String(prevTV?.name || prevRun.timetable_version || "");
           previousEntries = Array.isArray(prevTV?.entries) ? prevTV.entries : [];
         }

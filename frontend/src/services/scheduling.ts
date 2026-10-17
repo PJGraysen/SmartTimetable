@@ -40,12 +40,43 @@ export type ExecuteRunOpts = {
   baseline_version_id?: string | null;
 };
 
+export type TimetableEntryResult = {
+  id: string;
+  day: string;
+  day_display: string;
+  period: string;
+  period_number: number;
+  period_name: string;
+  period_start_time: string;
+  period_end_time: string;
+  instructional_group: string;
+  instructional_group_name: string;
+  instructional_group_code: string;
+  teacher: string | null;
+  teacher_name: string | null;
+  teacher_code: string | null;
+  teacher_number: number | null;
+  employee_code: string | null;
+  lesson_requirement: string;
+  lesson_requirement_name: string;
+  subject_name: string;
+  subject_code: string;
+  room: string | null;
+  room_name: string | null;
+  room_code: string | null;
+  learner_count: number | null;
+  block: any; // The complex synchronized-block DTO
+  created_at: string;
+  updated_at: string;
+};
+
 export type SchedulingRunStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
 
 export type SchedulingRun = {
   id: string;
   term: string;
   term_name?: string;
+  timetable_version?: string | null;
   status: SchedulingRunStatus;
   status_display?: string;
   solver_status?: string;

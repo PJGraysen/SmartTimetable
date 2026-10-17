@@ -1,8 +1,7 @@
-import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
-  Eye, EyeOff, FileText, Info, Loader2, Printer, RefreshCw, Rocket,
+  Eye, EyeOff, Info, Loader2, Printer, RefreshCw, Rocket,
   ThumbsUp, X, XCircle, ZoomIn, ZoomOut,
 } from "lucide-react";
 import Timetable from "./pages/Timetable";
@@ -218,7 +217,6 @@ function ReportModal({
   runId, onClose, onChanged,
 }: { runId: string; onClose: () => void; onChanged: () => void }) {
   const toast = useToast();
-  const navigate = useNavigate();
   const [report, setReport] = useState<Report | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -576,7 +574,6 @@ export default function Scheduling() {
   const [dashboard, setDashboard] = useState<SchedulingDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [trackedRunId, setTrackedRunId] = useState<string>("");
   const [genStatus, setGenStatus] = useState<string>("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [timetableRefreshKey, setTimetableRefreshKey] = useState(0);
@@ -639,7 +636,6 @@ export default function Scheduling() {
 
         // eslint-disable-next-line no-console
         console.log("[Scheduling] resuming poll for run", running.id);
-        setTrackedRunId(running.id);
         setGenerating(true);
         setGenStatus("Resuming run " + running.id.slice(0, 8) + "...");
 
@@ -671,7 +667,6 @@ export default function Scheduling() {
         if (!cancelled) {
           setGenerating(false);
           setGenStatus("");
-          setTrackedRunId("");
         }
       }
     })();
@@ -690,7 +685,6 @@ export default function Scheduling() {
     setGenStatus("Creating run...");
     try {
       const run = await createSchedulingRun(selectedTermId);
-      setTrackedRunId(run.id);
 
       // Fire-and-forget execute - the backend runs the solver in a worker
       // thread; we do NOT await its HTTP response.
