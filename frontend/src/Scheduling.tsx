@@ -1050,11 +1050,11 @@ export default function Scheduling() {
                     <AlertCircle size={15} color={RED} />
                     <span style={{ fontWeight: 700, color: "#991b1b" }}>{r.term_name}</span>
                     <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>{fmtDateTime(r.created_at)}</span>
-                    <button type="button" onClick={() => setReportRunId(r.id)} style={{
+                    <button type="button" onClick={() => setDiagMessage(r.error_message || "This run failed without recording a diagnostic message. Common causes: teacher over-capacity, missing lesson requirements, or a room clash that could not be resolved. Open the run's Report tab for full constraint details.")} style={{
                       marginLeft: "auto", background: "transparent", border: `1px solid ${RED}`,
                       color: RED, padding: "3px 9px", borderRadius: "6px",
                       cursor: "pointer", fontSize: "0.72rem", fontWeight: 600,
-                    }}>View diagnostic</button>
+                    }}>View diagnostics</button>
                   </div>
                   <div style={{ color: "#7f1d1d", fontSize: "0.78rem", lineHeight: 1.4, marginLeft: "23px" }}>
                     {r.error_message || "Scheduling run failed without a diagnostic."}
@@ -1073,6 +1073,9 @@ export default function Scheduling() {
 
       {reportRunId && (
         <ReportModal runId={reportRunId} onClose={() => setReportRunId(null)} onChanged={loadDashboard} />
+      )}
+      {diagMessage && (
+        <DiagnosticsModal message={diagMessage} onClose={() => setDiagMessage(null)} />
       )}
     </>
   );
