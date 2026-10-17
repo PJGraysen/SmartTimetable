@@ -184,6 +184,7 @@ class SchedulingApplicationService:
                 scope_id=scope_id,
                 baseline_version_id=baseline_version_id,
             )
+
             problem = load_scheduling_problem(
                 term=scheduling_run.term,
                 hint_assignments=hints,
@@ -246,6 +247,7 @@ class SchedulingApplicationService:
                 finally:
                     if _original_time_limit is not None:
                         _solver_obj.time_limit_seconds = _original_time_limit
+
 
             scheduling_run.solver_result = result
 

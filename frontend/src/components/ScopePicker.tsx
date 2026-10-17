@@ -107,6 +107,18 @@ export default function ScopePicker({
         </>
       )}
 
+      {showSubjects && value?.kind === "subject" && (
+        <div style={{
+          fontSize: 11, color: "#a16207", marginTop: 4,
+          padding: "6px 8px", background: "#fef9c3",
+          border: "1px solid #fde68a", borderRadius: 6,
+        }}>
+          Subject scopes may cause more movement outside the target than
+          grade scopes, because the subject is taught across multiple grades
+          with shared teachers.
+        </div>
+      )}
+
       {value && (
         <div style={{ fontSize: 11, color: "#333", marginTop: 6 }}>
           Selected: <strong>{value.label}</strong>{" "}
