@@ -232,11 +232,13 @@ class SchedulingApplicationService:
                         _solver_obj, "time_limit_seconds"
                     ):
                         _original_time_limit = _solver_obj.time_limit_seconds
-                        _solver_obj.time_limit_seconds = 180.0
+                        import os as _os_tl
+                        _scoped_tl = float(_os_tl.environ.get("ST_SCOPED_TIME_LIMIT", "180"))
+                        _solver_obj.time_limit_seconds = _scoped_tl
                         import sys as _s_tl
                         print(
                             "[TIME_LIMIT] scoped run: "
-                            f"{_original_time_limit}s -> 180s",
+                            f"{_original_time_limit}s -> {_scoped_tl}s",
                             file=_s_tl.stderr,
                         )
                 try:
