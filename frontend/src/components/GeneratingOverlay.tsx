@@ -49,6 +49,15 @@ export function GeneratingOverlay({ visible, statusText }: Props) {
           {statusText || "Please wait — grab a cup of coffee"}
         </div>
         <div className="gen-timer" aria-label="elapsed time">{mm}:{ss}</div>
+        <div style={{ width: "100%", height: "6px", background: "#e2e8f0", borderRadius: "3px", marginTop: "12px", overflow: "hidden" }}>
+          <div style={{ 
+            height: "100%", 
+            width: `${Math.min(95, (elapsed / 180) * 100)}%`, 
+            background: "linear-gradient(90deg, #22b4f0, #10b981)", 
+            transition: "width 1s linear",
+            borderRadius: "3px"
+          }} />
+        </div>
         <div className="gen-dots"><span></span><span></span><span></span></div>
       </div>
     </div>

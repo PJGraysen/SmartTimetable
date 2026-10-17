@@ -1,7 +1,8 @@
+import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
-  Eye, EyeOff, Info, Loader2, Printer, RefreshCw, Rocket,
+  Eye, EyeOff, FileText, Info, Loader2, Printer, RefreshCw, Rocket,
   ThumbsUp, X, XCircle, ZoomIn, ZoomOut,
 } from "lucide-react";
 import Timetable from "./pages/Timetable";
@@ -217,6 +218,7 @@ function ReportModal({
   runId, onClose, onChanged,
 }: { runId: string; onClose: () => void; onChanged: () => void }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const [report, setReport] = useState<Report | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -569,17 +571,58 @@ function PrintSuite({ entries, format }: { entries: Entry[]; format: PrintFormat
   );
 }
 
+function DiagnosticsModal({ message, onClose }: { message: string; onClose: () => void }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(10,18,29,0.55)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <div style={{ background: "#fff", borderRadius: "14px", maxWidth: "600px", width: "100%", padding: "1.5rem", boxShadow: "0 24px 60px rgba(10,18,29,0.4)" }}>
+        <h2 style={{ margin: "0 0 1rem 0", color: "#991b1b", display: "flex", alignItems: "center", gap: "8px" }}>
+          <AlertCircle size={24} /> Run Diagnostics
+        </h2>
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "1rem", whiteSpace: "pre-wrap", fontSize: "0.85rem", color: "#7f1d1d", fontFamily: "monospace", maxHeight: "400px", overflowY: "auto" }}>
+          {message}
+        </div>
+        <div style={{ marginTop: "1.5rem", textAlign: "right" }}>
+          <button type="button" onClick={onClose} style={{ padding: "0.5rem 1rem", background: "#1e293b", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600}}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Scheduling() {
   const toast = useToast();
   const [dashboard, setDashboard] = useState<SchedulingDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [trackedRunId, setTrackedRunId] = useState<string>("");
   const [genStatus, setGenStatus] = useState<string>("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [timetableRefreshKey, setTimetableRefreshKey] = useState(0);
   const [selectedTermId, setSelectedTermId] = useState("");
   const [scope, setScope] = useState<ScopePick | null>(null);
   const [baselineId, setBaselineId] = useState<string | null>(null);
+  const [diagMessage, setDiagMessage] = useState<string | null>(null);
+  const [autoStarted, setAutoStarted] = useState(false);
+  const _searchParams = new URLSearchParams(window.location.search);
+  const _autoStart = _searchParams.get("auto_start") === "true";
+  const _urlScopeKind = _searchParams.get("scope_kind");
+  const _urlScopeId = _searchParams.get("scope_id");
+
+  useEffect(() => {
+    if (!_autoStart || autoStarted || !selectedTermId) return;
+    let s: ScopePick | null = null;
+    if (_urlScopeKind === "grade" && _urlScopeId) {
+      const label = _urlScopeId === "4" ? "Form 4" : `Grade ${_urlScopeId}`;
+      s = { kind: "grade", id: _urlScopeId, label, groups: [] };
+    } else if (_urlScopeKind === "subject" && _urlScopeId) {
+      s = { kind: "subject", id: _urlScopeId, label: _urlScopeId, code: _urlScopeId };
+    }
+    if (s) {
+      setScope(s);
+      setAutoStarted(true);
+      setTimeout(() => { handleGenerate(s); }, 200);
+    }
+  }, [_autoStart, autoStarted, selectedTermId, _urlScopeKind, _urlScopeId]);
   const [zoom, setZoom] = useState(1.0);
   const [showAllRuns, setShowAllRuns] = useState(false);
   const [showAllFailed, setShowAllFailed] = useState(false);
@@ -636,6 +679,7 @@ export default function Scheduling() {
 
         // eslint-disable-next-line no-console
         console.log("[Scheduling] resuming poll for run", running.id);
+        setTrackedRunId(running.id);
         setGenerating(true);
         setGenStatus("Resuming run " + running.id.slice(0, 8) + "...");
 
@@ -667,6 +711,7 @@ export default function Scheduling() {
         if (!cancelled) {
           setGenerating(false);
           setGenStatus("");
+          setTrackedRunId("");
         }
       }
     })();
@@ -676,7 +721,8 @@ export default function Scheduling() {
     // eslint-disable-next-line
   }, []);
 
-  async function handleGenerate() {
+  async function handleGenerate(overrideScope?: ScopePick | null) {
+    const activeScope = overrideScope !== undefined ? overrideScope : scope;
     if (!selectedTermId) {
       toast.push({ type: "warning", title: "Pick a term first", message: "Select Term 1, 2, or 3 before generating." });
       return;
@@ -685,12 +731,13 @@ export default function Scheduling() {
     setGenStatus("Creating run...");
     try {
       const run = await createSchedulingRun(selectedTermId);
+      setTrackedRunId(run.id);
 
       // Fire-and-forget execute - the backend runs the solver in a worker
       // thread; we do NOT await its HTTP response.
       executeSchedulingRun(run.id, {
-        scope_kind: scope?.kind ?? null,
-        scope_id: scope?.id ?? null,
+        scope_kind: activeScope?.kind ?? null,
+        scope_id: activeScope?.id ?? null,
         baseline_version_id: baselineId,
       }).catch(() => {
         /* ignored - we poll for real status below */
@@ -722,7 +769,7 @@ export default function Scheduling() {
         setReportRunId(run.id);
 
         // auto-navigate after scoped generate — Master stays on this page.
-        const _s = scope;
+        const _s = activeScope;
         if (_s && _s.kind !== "master") {
           const slug =
             _s.kind === "grade" ? `grade-${_s.id}`
@@ -868,6 +915,7 @@ export default function Scheduling() {
               <GeneratingOverlay visible={generating} statusText={genStatus} />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1.5fr auto auto", gap: "0.4rem" }}>
+              <button type="button" onClick={() => window.location.href = '/lesson-requirements'} style={{ ...btnOutline(BROWN2, BROWN2), padding: "6px 8px", fontSize: "0.78rem", marginRight: "4px" }}>LR Editor</button>
               <select value={printFormat} onChange={(e) => setPrintFormat(e.target.value as PrintFormat)}
                 style={{ padding: "6px 8px", border: `1px solid ${BROWN2}`, borderRadius: "8px", fontSize: "0.78rem", color: BROWN2, fontWeight: 600, background: "#fff" }}>
                 {PRINT_FORMATS.map((f) => <option key={f.v} value={f.v}>{f.label}</option>)}

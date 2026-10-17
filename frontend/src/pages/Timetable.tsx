@@ -820,6 +820,8 @@ function Timetable() {
   })();
 
   const [regenerating, setRegenerating] = useState(false);
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const [hoveredCol, setHoveredCol] = useState<number | null>(null);
   const [filterMode, setFilterMode] = useState<
     "master" | "class" | "teacher" | "grade" | "subject"
   >(_initialFilter?.mode ?? "master");
@@ -901,8 +903,13 @@ function Timetable() {
           String(r.id).slice(0, 8) + "@" + (r.completed_at || "-")
         ),
       );
-      const result = await getSchedulingRunResults(latestRun.id);
-      const timetableVersion = (result as any).timetable_version;
+      let result: any = null;
+      try {
+        result = await getSchedulingRunResults(latestRun.id);
+      } catch (e) {
+        console.error("Failed to fetch run results:", e);
+      }
+      const timetableVersion = result?.timetable_version;
 
       // Fetch the previous completed run so the change counter compares
       // against a real previous generation, not the previous page load.
@@ -928,9 +935,9 @@ function Timetable() {
 
       if (!timetableVersion) {
         setEntries([]);
-        setVersion("Completed run has no timetable version");
+        setVersion("No timetable data");
         setError(
-          "The latest completed scheduling run did not return a timetable version.",
+          "This run is missing timetable entries. It may have been created before the system supported full viewing, or the data was deleted.",
         );
         return;
       }
@@ -1320,24 +1327,11 @@ function Timetable() {
     return merged.sort((a, b) => (a.code || "").localeCompare(b.code || ""));
   }, [entries, teacherLookup]);
 
-  async function handleRegenScope() {
-    if (!activeTermId) return alert("No active term found.");
-    setRegenerating(true);
-    try {
-      const match = selectedGrade.match(/(\d+)/);
-      if (!match) throw new Error("Could not parse grade number");
-      const scopeId = match[1];
-
-      const run = await createSchedulingRun(activeTermId);
-      await executeSchedulingRun(run.id, { scope_kind: "grade", scope_id: scopeId });
-      await pollRunUntilDone(run.id, { intervalMs: 2000 });
-      
-      window.location.reload();
-    } catch (e: any) {
-      alert("Regeneration failed: " + (e.message || String(e)));
-    } finally {
-      setRegenerating(false);
-    }
+  function handleRegenScope() {
+    const match = selectedGrade.match(/(\d+)/);
+    if (!match) return alert("Could not parse grade number");
+    const scopeId = match[1];
+    window.location.href = `/scheduling?scope_kind=grade&scope_id=${scopeId}&auto_start=true`;
   }
 
   const visibleEntries = useMemo(() => {
@@ -2364,6 +2358,9 @@ function Timetable() {
                 visibleClasses.map((classDefinition, classIndex) => (
                   <tr
                     key={`${day.code}-${shortClassLabel(classDefinition.label)}`}
+                    onMouseEnter={() => setHoveredRow(day.code)}
+                    onMouseLeave={() => setHoveredRow(null)}
+                    className={hoveredRow === day.code ? "tt-row-hover" : ""}
                   >
                     {classIndex === 0 ? (
                       <th
@@ -2383,7 +2380,9 @@ function Timetable() {
                         return (
                           <td
                             key={column.key}
-                            className={cellClass(column)} data-ttcell-key={(day?.code || "") + ":" + (classDefinition?.code || classDefinition?.name || "") + ":" + (column.period || 0)}
+                            onMouseEnter={() => setHoveredCol(column.period || null)}
+                            onMouseLeave={() => setHoveredCol(null)}
+                            className={cellClass(column) + (hoveredCol === column.period ? " tt-col-hover" : "")} data-ttcell-key={(day?.code || "") + ":" + (classDefinition?.code || classDefinition?.name || "") + ":" + (column.period || 0)}
                           >
                             TEA BREAK
                           </td>
@@ -2394,7 +2393,9 @@ function Timetable() {
                         return (
                           <td
                             key={column.key}
-                            className={cellClass(column)}
+                            onMouseEnter={() => setHoveredCol(column.period || null)}
+                            onMouseLeave={() => setHoveredCol(null)}
+                            className={cellClass(column) + (hoveredCol === column.period ? " tt-col-hover" : "")}
                           >
                             LUNCH
                           </td>
@@ -2405,7 +2406,9 @@ function Timetable() {
                         return (
                           <td
                             key={column.key}
-                            className={cellClass(column)}
+                            onMouseEnter={() => setHoveredCol(column.period || null)}
+                            onMouseLeave={() => setHoveredCol(null)}
+                            className={cellClass(column) + (hoveredCol === column.period ? " tt-col-hover" : "")}
                           >
                             PRAYERS
                           </td>
@@ -2416,7 +2419,9 @@ function Timetable() {
                         return (
                           <td
                             key={column.key}
-                            className={cellClass(column)}
+                            onMouseEnter={() => setHoveredCol(column.period || null)}
+                            onMouseLeave={() => setHoveredCol(null)}
+                            className={cellClass(column) + (hoveredCol === column.period ? " tt-col-hover" : "")}
                           >
                             ACTIVITIES
                           </td>

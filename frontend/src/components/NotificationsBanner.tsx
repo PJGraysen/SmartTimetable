@@ -58,7 +58,7 @@ export default function NotificationsBanner() {
   if (!events.length) return null;
 
   return (
-    <div style={{ position: "fixed", top: 12, right: 12, zIndex: 1000 }}>
+    <div style={{ position: "fixed", bottom: 12, right: 12, zIndex: 1000 }}>
       {events.map(e => (
         <div key={e.id} style={{
           background: e.level === "error" ? "#fee" :
