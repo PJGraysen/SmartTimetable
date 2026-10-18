@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -571,21 +572,50 @@ function PrintSuite({ entries, format }: { entries: Entry[]; format: PrintFormat
   );
 }
 
-function DiagnosticsModal({ message, onClose }: { message: string; onClose: () => void }) {
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(10,18,29,0.55)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-      <div style={{ background: "#fff", borderRadius: "14px", maxWidth: "600px", width: "100%", padding: "1.5rem", boxShadow: "0 24px 60px rgba(10,18,29,0.4)" }}>
-        <h2 style={{ margin: "0 0 1rem 0", color: "#991b1b", display: "flex", alignItems: "center", gap: "8px" }}>
-          <AlertCircle size={24} /> Run Diagnostics
-        </h2>
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "1rem", whiteSpace: "pre-wrap", fontSize: "0.85rem", color: "#7f1d1d", fontFamily: "monospace", maxHeight: "400px", overflowY: "auto" }}>
-          {message}
+function DiagnosticsModal({ data, onClose }: { data: {text: string, x: number, y: number}; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(data.text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSend = async () => {
+    try {
+      await reportError({ source: "scheduling", severity: "ERROR", code: "USER_REPORTED", message: data.text });
+      setSent(true);
+      setTimeout(() => onClose(), 1500);
+    } catch {
+      alert("Failed to send to admin. Please copy the error instead.");
+    }
+  };
+
+  const styleX = Math.min(data.x + 10, window.innerWidth - 420);
+  const styleY = Math.min(data.y + 10, window.innerHeight - 350);
+
+  return createPortal(
+    <div style={{ position: "fixed", top: styleY, left: styleX, zIndex: 99999, width: "400px", background: "#fff", border: "1px solid #fecaca", borderRadius: "12px", boxShadow: "0 20px 40px rgba(0,0,0,0.2)", overflow: "hidden" }}>
+      <div style={{ background: "#fef2f2", padding: "10px 12px", borderBottom: "1px solid #fecaca", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontWeight: 800, color: "#991b1b", display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem" }}>
+          <AlertCircle size={16} /> Run Error
         </div>
-        <div style={{ marginTop: "1.5rem", textAlign: "right" }}>
-          <button type="button" onClick={onClose} style={{ padding: "0.5rem 1rem", background: "#1e293b", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600}}>Close</button>
-        </div>
+        <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#991b1b" }}><X size={16} /></button>
       </div>
-    </div>
+      <div style={{ padding: "12px", maxHeight: "200px", overflowY: "auto", fontSize: "0.8rem", color: "#7f1d1d", fontFamily: "monospace", whiteSpace: "pre-wrap", background: "#fff" }}>
+        {data.text}
+      </div>
+      <div style={{ padding: "10px", background: "#f8fafc", borderTop: "1px solid #e2e8f0", display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+        <button onClick={handleCopy} style={{ padding: "6px 12px", background: copied ? "#10b981" : "#fff", border: "1px solid #cbd5e1", borderRadius: "6px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, color: copied ? "#fff" : "#475569", transition: "all 0.2s" }}>
+          {copied ? "Copied!" : "Copy Error"}
+        </button>
+        <button onClick={handleSend} disabled={sent} style={{ padding: "6px 12px", background: sent ? "#94a3b8" : "#ef4444", border: "none", borderRadius: "6px", cursor: sent ? "not-allowed" : "pointer", fontSize: "0.75rem", fontWeight: 600, color: "#fff", transition: "all 0.2s" }}>
+          {sent ? "Sent to Admin!" : "Send to Admin"}
+        </button>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1050,7 +1080,7 @@ export default function Scheduling() {
                     <AlertCircle size={15} color={RED} />
                     <span style={{ fontWeight: 700, color: "#991b1b" }}>{r.term_name}</span>
                     <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>{fmtDateTime(r.created_at)}</span>
-                    <button type="button" onClick={() => setDiagMessage(r.error_message || "This run failed without recording a diagnostic message. Common causes: teacher over-capacity, missing lesson requirements, or a room clash that could not be resolved. Open the run's Report tab for full constraint details.")} style={{
+                    <button type="button" onClick={(e) => setDiagMessage({ text: r.error_message || "No diagnostic available.", x: e.clientX, y: e.clientY })} style={{
                       marginLeft: "auto", background: "transparent", border: `1px solid ${RED}`,
                       color: RED, padding: "3px 9px", borderRadius: "6px",
                       cursor: "pointer", fontSize: "0.72rem", fontWeight: 600,
@@ -1075,7 +1105,7 @@ export default function Scheduling() {
         <ReportModal runId={reportRunId} onClose={() => setReportRunId(null)} onChanged={loadDashboard} />
       )}
       {diagMessage && (
-        <DiagnosticsModal message={diagMessage} onClose={() => setDiagMessage(null)} />
+        <DiagnosticsModal data={diagMessage} onClose={() => setDiagMessage(null)} />
       )}
     </>
   );
