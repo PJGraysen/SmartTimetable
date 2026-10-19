@@ -1012,7 +1012,7 @@ export default function Scheduling() {
               <button type="button" onClick={() => setZoom(1.0)} style={{ ...zoomBtn, width: "auto", padding: "4px 8px", fontSize: "0.72rem" }}>100%</button>
             </div>
           </div>
-          <div id="tt-printable" style={{ overflow: "auto", maxHeight: "70vh" }}>
+          <div id="tt-printable" style={{ width: "100%", background: "#fff", borderRadius: "8px", padding: "10px" }}>
             <div style={{ transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 180ms ease" }}>
               <Timetable key={timetableRefreshKey} />
             </div>

@@ -436,3 +436,56 @@
   position: relative;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
+
+
+/* ─── SAFE LIVE PANEL LAYOUT ─── */
+.live-panel-top-wrapper {
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+  background: #fff;
+  border: 2px solid #0284c7;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(2,132,199,0.15);
+  overflow: hidden;
+}
+.live-panel-header {
+  background: linear-gradient(90deg, #0284c7, #22b4f0);
+  color: #fff;
+  padding: 12px 16px;
+}
+.live-panel-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+.live-panel-header p {
+  margin: 4px 0 0 0;
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+/* ─── 75% ZOOM EFFECT ─── */
+.tt-table-wrap {
+  overflow: visible !important; /* Crucial for zoom */
+}
+.tt-table td {
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, background-color 0.15s ease-out !important;
+  transform-origin: center center !important;
+  will-change: transform !important; /* Stops shaking */
+}
+.tt-table td:hover:not(.tt-tea):not(.tt-lunch):not(.tt-prayers):not(.tt-activities) {
+  background-color: #e0f2fe !important;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.5) !important;
+  border: 2px solid #0284c7 !important;
+  transform: scale(1.75) !important; /* 75% Zoom */
+  z-index: 9999 !important;
+  position: relative !important;
+  color: #0c4a6e !important;
+  white-space: normal !important;
+  border-radius: 6px !important;
+  pointer-events: none !important; /* Stops flickering */
+}
+.tt-table td:hover:not(.tt-tea):not(.tt-lunch):not(.tt-prayers):not(.tt-activities) * {
+  color: #0c4a6e !important;
+  font-weight: 800 !important;
+}

@@ -2315,7 +2315,14 @@ function Timetable() {
             Showing {visibleClasses.length} of {CLASSES.length} classes · {scheduledEntries} of {entries.length} lessons
           </span>
         </div>
-                <div className="tt-masthead">
+                <div className="live-panel-top-wrapper">
+              <div className="live-panel-header">
+                <h2>LIVE SCHEDULE OVERVIEW</h2>
+                <p>Real-time active classes, teachers, and rooms.</p>
+              </div>
+              <ActiveSessionsPanel entriesBySlot={entriesBySlot} days={DAYS} />
+            </div>
+            <div className="tt-masthead">
           <div className="tt-mast-school">{schoolName}</div>
           <h1 className="tt-title">{viewTitle.toUpperCase()}<span className="tt-live">LIVE</span></h1>
           <div className="tt-mast-line">
@@ -2614,7 +2621,7 @@ function Timetable() {
             ) : null}
           </div>
           {/* Live Now - active sessions */}
-          <ActiveSessionsPanel entriesBySlot={entriesBySlot} days={DAYS} />
+          
           <span>Subject Code · Teacher Code · Room</span>
 
           <span>✓ {scheduledEntries} backend entries</span>
