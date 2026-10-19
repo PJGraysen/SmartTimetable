@@ -489,3 +489,93 @@
   color: #0c4a6e !important;
   font-weight: 800 !important;
 }
+
+
+/* ─── HOVER ZOOM ─── */
+.tt-table td {
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, background-color 0.15s ease-out !important;
+  transform-origin: center center !important;
+  will-change: transform !important; /* Prevents shaking */
+}
+
+.tt-table td:hover:not(.tt-tea):not(.tt-lunch):not(.tt-prayers):not(.tt-activities) {
+  background-color: #e0f2fe !important;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.5) !important;
+  border: 2px solid #0284c7 !important;
+  transform: scale(1.75) !important; /* 75% zoom */
+  z-index: 9999 !important;
+  position: relative !important;
+  color: #0c4a6e !important;
+  white-space: normal !important;
+  border-radius: 6px !important;
+  pointer-events: none !important; /* Prevents hover flickering */
+}
+
+.tt-table td:hover:not(.tt-tea):not(.tt-lunch):not(.tt-prayers):not(.tt-activities) * {
+  color: #0c4a6e !important;
+  font-weight: 800 !important;
+}
+
+
+/* ─── STYLISH TOOLBAR & MOTION ─── */
+.tt-header {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+  border: 2px solid #0284c7 !important;
+  border-radius: 12px !important;
+  padding: 1rem !important;
+  box-shadow: 0 8px 24px rgba(2,132,199,0.15) !important;
+  margin-bottom: 1.5rem !important;
+  transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+.tt-header:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 12px 32px rgba(2,132,199,0.25) !important;
+}
+
+/* Base style for all top buttons */
+.tt-header button, .tt-actions button {
+  background: #ffffff !important;
+  border: 2px solid #0284c7 !important;
+  color: #0284c7 !important;
+  font-weight: 700 !important;
+  border-radius: 8px !important;
+  padding: 6px 12px !important;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
+  cursor: pointer !important;
+}
+
+/* Heavy Motion on Hover */
+.tt-header button:hover, .tt-actions button:hover {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  transform: translateY(-4px) scale(1.05) !important;
+  box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
+}
+
+.tt-header button:active, .tt-actions button:active {
+  transform: translateY(1px) scale(0.98) !important;
+}
+
+/* Fingerprint & Badges */
+.tt-fingerprint, .tt-changes-banner, .tt-fresh-badge {
+  background: #ffffff !important;
+  border: 1px solid #bae6fd !important;
+  border-radius: 8px !important;
+  padding: 6px 10px !important;
+  color: #0c4a6e !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+}
+
+/* Live Panel Frame (Added for extra style) */
+.live-panel-top-wrapper {
+  border: 2px solid #22b4f0 !important;
+  box-shadow: 0 10px 30px rgba(34,180,240,0.15) !important;
+  transition: transform 0.3s ease !important;
+}
+.live-panel-top-wrapper:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 15px 40px rgba(34,180,240,0.25) !important;
+}
