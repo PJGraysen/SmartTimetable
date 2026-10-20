@@ -205,3 +205,26 @@
   transition: all 0.2s ease !important;
 }
 .tt-tr-item b { color: #0284c7 !important; font-weight: 800 !important; }
+
+
+/* ─── PERIOD HEADERS STACKING ─── */
+.tt-period-head {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 2px !important;
+  padding: 8px 4px !important;
+  background: #0f172a !important;
+}
+.tt-period-label {
+  font-size: 0.85rem !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  line-height: 1 !important;
+}
+.tt-period-time {
+  font-size: 0.6rem !important;
+  color: #94a3b8 !important;
+  line-height: 1 !important;
+}
