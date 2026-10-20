@@ -1,12 +1,14 @@
-/* ─── APPROVED A3 GRID & STYLING ─── */
+/* ═══════════════════════════════════════════════════════════ */
+/*               COMPLETE TIMETABLE MASTER STYLES              */
+/* ═══════════════════════════════════════════════════════════ */
 
-/* 1. TABLE WRAPPER & BORDERS */
+/* ─── 1. GRID & TABLE BASE ─── */
 .tt-table-wrap {
-  border: 3px solid #0f172a !important; /* Thick dark blue outer border */
-  border-radius: 8px !important;
+  border: 3px solid #0f172a !important;
+  border-radius: 12px !important;
   background: #fff !important;
   overflow-x: auto !important;
-  overflow-y: visible !important; /* For zoom */
+  overflow-y: visible !important;
   width: 100% !important;
   padding-bottom: 20px !important;
   margin-bottom: 1rem !important;
@@ -14,84 +16,95 @@
 }
 
 .tt-table {
-  min-width: 1400px !important; /* Wider to fit 3 lines of text */
+  min-width: 1300px !important;
   width: 100% !important;
   table-layout: fixed !important;
-  border-collapse: separate !important;
-  border-spacing: 0 !important;
+  border-collapse: collapse !important;
   font-size: 0.72rem !important;
 }
 
 .tt-table th, .tt-table td {
-  border: 1px solid #94a3b8 !important; /* Distinct grey borders */
+  border: 1px solid #94a3b8 !important;
   padding: 4px !important;
   text-align: center !important;
   vertical-align: middle !important;
   word-wrap: break-word !important;
 }
 
-/* 2. HEADERS & LEFT COLUMNS (Dark Blue) */
-.tt-table th {
+/* Dark Blue Headers */
+.tt-table th, .tt-day-head, .tt-class-head, .tt-day, .tt-class {
   background: #0f172a !important;
   color: #ffffff !important;
   font-weight: 800 !important;
 }
 
 .tt-day-head, .tt-day {
-  background: #0f172a !important;
-  color: #ffffff !important;
-  font-weight: 800 !important;
   writing-mode: vertical-rl !important;
   transform: rotate(180deg) !important;
   padding: 8px 2px !important;
   width: 40px !important;
 }
 
-.tt-class-head, .tt-class {
+.tt-class-head, .tt-class { width: 60px !important; }
+
+/* Period Headers (P1 on top, Time below) */
+.tt-period-head {
   background: #0f172a !important;
   color: #ffffff !important;
-  font-weight: 800 !important;
-  width: 60px !important;
+  padding: 4px 2px !important;
+  min-width: 65px !important;
 }
 
+.tt-period-head .tt-period-label {
+  display: block !important;
+  font-size: 0.85rem !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  line-height: 1.1 !important;
+  margin: 0 !important;
+}
 
+.tt-period-head .tt-period-time {
+  display: block !important;
+  font-size: 0.55rem !important;
+  color: #94a3b8 !important;
+  line-height: 1.1 !important;
+  margin: 0 !important;
+}
 
-
-
-
-/* 3. BREAK COLUMNS (Vertical Colored) */
+/* Break Colors */
 .tt-tea, td.tt-tea { background: #fef3c7 !important; color: #92400e !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
 .tt-lunch, td.tt-lunch { background: #dcfce7 !important; color: #166534 !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
 .tt-prayers, td.tt-prayers { background: #f3e8ff !important; color: #6b21a8 !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
 .tt-activities, td.tt-activities { background: #dbeafe !important; color: #1e40af !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
 
-/* 4. CELL STACKING (Exactly 3 lines) */
+/* ─── 2. CELL CONTENT (Subject/Teacher/Room Stacking) ─── */
 .tt-lesson {
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  height: 100% !important;
-  gap: 2px !important;
+  gap: 1px !important;
+  width: 100% !important;
 }
 
 .tt-subject, .tt-teacher, .tt-room {
   display: block !important;
   width: 100% !important;
   text-align: center !important;
-  white-space: nowrap !important; /* Forces exactly one line per item */
+  white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  line-height: 1.15 !important;
+  line-height: 1.1 !important;
 }
 
-.tt-subject { font-weight: 800 !important; font-size: 0.74rem !important; color: #0f172a !important; }
-.tt-teacher { font-weight: 600 !important; font-size: 0.65rem !important; color: #475569 !important; }
-.tt-room    { font-weight: 500 !important; font-size: 0.6rem !important; color: #94a3b8 !important; }
+.tt-subject { font-weight: 800 !important; font-size: 0.7rem !important; color: #0f172a !important; }
+.tt-teacher { font-weight: 600 !important; font-size: 0.62rem !important; color: #475569 !important; }
+.tt-room    { font-weight: 500 !important; font-size: 0.58rem !important; color: #64748b !important; }
 
-/* 5. 75% ZOOM HOVER */
+/* ─── 3. 75% ZOOM HOVER ─── */
 .tt-table td {
-  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, background-color 0.15s ease-out !important;
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out !important;
   transform-origin: center center !important;
   will-change: transform !important;
 }
@@ -102,72 +115,160 @@
   transform: scale(1.75) !important;
   z-index: 9999 !important;
   position: relative !important;
-  color: #0c4a6e !important;
-  white-space: normal !important;
-  border-radius: 6px !important;
   pointer-events: none !important;
 }
-.tt-table td:hover:not(.tt-tea):not(.tt-lunch):not(.tt-prayers):not(.tt-activities) * {
-  color: #0c4a6e !important;
-  font-weight: 800 !important;
-}
 
-/* 6. BUTTONS */
+/* ─── 4. ORANGE BUTTONS & MOTION ─── */
 .tt-header {
   background: #ffffff !important;
   border: 2px solid #0284c7 !important;
-  border-radius: 12px !important;
-  padding: 12px 16px !important;
-  margin-bottom: 1rem !important;
-  box-shadow: 0 4px 12px rgba(2,132,199,0.1) !important;
+  border-radius: 16px !important;
+  padding: 16px !important;
+  margin-bottom: 1.5rem !important;
+  box-shadow: 0 8px 24px rgba(2,132,199,0.15) !important;
   display: flex !important;
-  flex-wrap: wrap !important;
-  gap: 10px !important;
-  align-items: center !important;
+  flex-direction: column !important;
+  gap: 16px !important;
 }
-.tt-header button, .tt-actions button {
+
+/* The wrapper holding the 5 buttons */
+.tt-btn-group, .tt-header > div:first-child > div:first-child {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 8px !important;
+  background: #f0f9ff !important;
+  padding: 12px !important;
+  border-radius: 12px !important;
+  border: 2px solid #bae6fd !important;
+  max-width: 650px !important;
+}
+
+.tt-btn-group button, .tt-header > div:first-child > div:first-child button {
+  background: #f97316 !important; /* Orange */
+  border: 2px solid #ea580c !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  font-size: 0.75rem !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+  cursor: pointer !important;
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.tt-btn-group button:nth-child(4), .tt-header > div:first-child > div:first-child button:nth-child(4) { grid-column: 1 / 2 !important; }
+.tt-btn-group button:nth-child(5), .tt-header > div:first-child > div:first-child button:nth-child(5) { grid-column: 2 / 3 !important; }
+
+.tt-btn-group button:hover, .tt-header > div:first-child > div:first-child button:hover {
+  background: #0284c7 !important; /* Blue Hover */
+  border-color: #0284c7 !important;
+  transform: translateY(-5px) scale(1.05) !important;
+  box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
+}
+.tt-btn-group button:active, .tt-header > div:first-child > div:first-child button:active { transform: translateY(2px) scale(0.95) !important; }
+
+/* ─── 5. FINGERPRINT (LED) ─── */
+.tt-fingerprint {
+  background: #0f172a !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 6px !important;
+  padding: 8px 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  box-shadow: inset 0 0 10px rgba(34,197,94,0.15) !important;
+  margin-top: 10px !important;
+}
+.tt-fp-label, .tt-fp-ver, .tt-fp-time { color: #facc15 !important; font-weight: 800 !important; font-size: 0.65rem !important; }
+.tt-fp-hash { color: #22c55e !important; font-family: 'Courier New', monospace !important; font-weight: 800 !important; text-shadow: 0 0 8px rgba(34,197,94,0.8) !important; font-size: 0.8rem !important; }
+
+/* ─── 6. ACTIONS (Refresh & Print) ─── */
+.tt-actions {
+  display: flex !important;
+  gap: 8px !important;
+  align-items: center !important;
+  background: #f8fafc !important;
+  padding: 10px !important;
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  width: fit-content !important;
+}
+.tt-actions button {
   background: #0284c7 !important;
   color: #ffffff !important;
   border: none !important;
   border-radius: 6px !important;
   padding: 8px 14px !important;
   font-weight: 700 !important;
-  font-size: 0.75rem !important;
   cursor: pointer !important;
-  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
-  box-shadow: 0 2px 4px rgba(2,132,199,0.2) !important;
+  transition: all 0.2s ease !important;
 }
-.tt-header button:hover, .tt-actions button:hover {
+.tt-actions button:hover {
   transform: translateY(-3px) scale(1.05) !important;
-  box-shadow: 0 6px 12px rgba(2,132,199,0.4) !important;
+  box-shadow: 0 6px 12px rgba(2,132,199,0.3) !important;
   background: #0369a1 !important;
 }
 
-/* 7. FINGERPRINT (Bright Yellow) */
-.tt-fingerprint {
-  background: #0f172a !important;
-  border: 1px solid #1e293b !important;
-  border-radius: 6px !important;
-  padding: 6px 12px !important;
-  display: inline-flex !important;
+/* ─── 7. LIVE STATUS (GREEN BEAM) ─── */
+.tt-status {
+  color: #10b981 !important;
+  font-weight: 700 !important;
+  display: flex !important;
   align-items: center !important;
   gap: 8px !important;
-  box-shadow: inset 0 0 10px rgba(34,197,94,0.15) !important;
+  font-size: 0.85rem !important;
 }
-.tt-fp-label, .tt-fp-ver, .tt-fp-time {
-  color: #facc15 !important; /* Bright Yellow */
-  font-size: 0.65rem !important;
-  font-weight: 800 !important; /* Bold */
+.tt-status-dot {
+  display: inline-block !important;
+  width: 10px !important;
+  height: 10px !important;
+  background-color: #10b981 !important;
+  border-radius: 50% !important;
+  box-shadow: 0 0 8px #10b981 !important;
+  animation: pulseGreen 1.5s infinite !important;
 }
-.tt-fp-hash { 
-  color: #22c55e !important; /* Green */
-  font-family: 'Courier New', monospace !important; 
-  font-weight: 800 !important; 
-  text-shadow: 0 0 8px rgba(34,197,94,0.8) !important; 
-  font-size: 0.78rem !important; 
+@keyframes pulseGreen {
+  0% { opacity: 0.4; box-shadow: 0 0 2px #10b981; }
+  50% { opacity: 1; box-shadow: 0 0 12px #10b981; }
+  100% { opacity: 0.4; box-shadow: 0 0 2px #10b981; }
 }
 
-/* 8. TEACHER ROSTER (Larger Font) */
+/* ─── 8. POWERSHELL CHANGES BANNER ─── */
+.tt-changes-banner {
+  background: #012456 !important;
+  color: #eeedf0 !important;
+  font-family: 'Consolas', 'Courier New', monospace !important;
+  border: 2px solid #1e3a8a !important;
+  border-radius: 8px !important;
+  padding: 12px 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+  font-size: 0.8rem !important;
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.5) !important;
+}
+.tt-changes-banner details { width: 100% !important; margin-top: 8px !important; }
+.tt-changes-banner summary { cursor: pointer !important; color: #facc15 !important; font-weight: bold !important; user-select: none !important; }
+.tt-changes-banner ul {
+  margin: 8px 0 0 0 !important;
+  padding: 8px !important;
+  background: #000000 !important;
+  border: 1px solid #1e3a8a !important;
+  border-radius: 4px !important;
+  list-style-type: none !important;
+  max-height: 250px !important;
+  overflow-y: auto !important;
+}
+.tt-changes-banner li { margin-bottom: 4px !important; color: #22c55e !important; white-space: pre-wrap !important; }
+.tt-cb-label { color: #94a3b8 !important; font-weight: bold !important; text-transform: uppercase !important; }
+.tt-cb-count { background: #1e3a8a !important; padding: 2px 6px !important; border-radius: 4px !important; color: #facc15 !important; font-weight: bold !important; }
+.tt-cb-breakdown { display: flex !important; gap: 8px !important; flex-wrap: wrap !important; }
+.tt-cb-day { color: #a78bfa !important; }
+
+/* ─── 9. TEACHER ROSTER ─── */
 .tt-teacher-roster {
   background: #ffffff !important;
   border: 2px solid #0284c7 !important;
@@ -196,64 +297,8 @@
   border: 1px solid #e2e8f0 !important;
   border-radius: 6px !important;
   padding: 8px 12px !important;
-  font-size: 0.85rem !important; /* Larger font */
+  font-size: 0.85rem !important;
   color: #334155 !important;
   transition: all 0.2s ease !important;
 }
 .tt-tr-item b { color: #0284c7 !important; font-weight: 800 !important; }
-
-
-
-
-
-
-
-
-
-
-.tt-table th
-
-
-/* ─── NUCLEAR: PERIOD HEADERS 2-LINE ─── */
-.tt-table thead tr th.tt-period-head {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 4px 2px !important;
-  writing-mode: horizontal-tb !important;
-  text-orientation: mixed !important;
-  transform: none !important;
-  min-width: 65px !important;
-  max-width: 100px !important;
-  background: #0f172a !important;
-  color: #ffffff !important;
-  vertical-align: middle !important;
-}
-
-.tt-table thead tr th.tt-period-head > span.tt-period-label {
-  display: block !important;
-  width: 100% !important;
-  text-align: center !important;
-  font-size: 0.85rem !important;
-  font-weight: 800 !important;
-  color: #ffffff !important;
-  line-height: 1.1 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  writing-mode: horizontal-tb !important;
-  white-space: nowrap !important;
-}
-
-.tt-table thead tr th.tt-period-head > span.tt-period-time {
-  display: block !important;
-  width: 100% !important;
-  text-align: center !important;
-  font-size: 0.55rem !important;
-  color: #94a3b8 !important;
-  line-height: 1.1 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  writing-mode: horizontal-tb !important;
-  white-space: nowrap !important;
-}
