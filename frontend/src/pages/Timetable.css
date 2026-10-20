@@ -1,581 +1,207 @@
-﻿.timetable-page {
-  width: 100%;
-  min-width: 0;
-}
+/* ─── APPROVED A3 GRID & STYLING ─── */
 
-.timetable-toolbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.timetable-toolbar h1 {
-  margin: 0.15rem 0 0.25rem;
-}
-
-.timetable-toolbar p {
-  margin: 0;
-}
-
-.timetable-refresh {
-  flex-shrink: 0;
-}
-
-.timetable-error {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  margin-bottom: 1rem;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid #fecaca;
-  border-radius: 10px;
-  background: #fef2f2;
-  color: #991b1b;
-  font-size: 0.88rem;
-}
-
-.timetable-state {
-  min-height: 220px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.55rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  background: #ffffff;
-  color: #64748b;
-  text-align: center;
-}
-
-.timetable-heading-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.75rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid #dbe2ea;
-  border-radius: 12px;
-  background: #ffffff;
-}
-
-.timetable-heading-card > div:first-child {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.timetable-heading-card strong {
-  font-size: 1rem;
-  letter-spacing: 0.04em;
-}
-
-.timetable-heading-card span {
-  color: #475569;
-  font-size: 0.76rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-}
-
-.timetable-meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.4rem 0.75rem;
-  color: #64748b;
-  font-size: 0.72rem;
-}
-
-.timetable-meta span {
-  white-space: nowrap;
-  letter-spacing: normal;
-}
-
-.timetable-card {
-  width: 100%;
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
-  background: #ffffff;
-  overflow: hidden;
-}
-
-.timetable-scroll {
-  width: 100%;
-  overflow-x: auto;
-}
-
-.whole-school-timetable {
-  width: 100%;
-  min-width: 1120px;
-  table-layout: fixed;
-  border-collapse: collapse;
-  font-size: 0.68rem;
-}
-
-.whole-school-timetable .day-column {
-  width: 54px;
-}
-
-.whole-school-timetable .period-column {
-  width: 78px;
-}
-
-.whole-school-timetable .special-column {
-  width: 82px;
-}
-
-.whole-school-timetable th,
-.whole-school-timetable td {
-  border: 1px solid #cbd5e1;
-}
-
-.days-header {
-  width: 54px;
-  padding: 0.45rem 0.2rem;
-  background: #0f172a;
-  color: #ffffff;
-  font-size: 0.62rem;
-  letter-spacing: 0.08em;
-  text-align: center;
-}
-
-.timetable-header {
-  height: 52px;
-  padding: 0.25rem 0.15rem;
-  background: #e2e8f0;
-  color: #0f172a;
-  text-align: center;
-  vertical-align: middle;
-}
-
-.timetable-header span {
-  display: block;
-  font-size: 0.68rem;
-  font-weight: 800;
-  line-height: 1.05;
-}
-
-.timetable-header small {
-  display: block;
-  margin-top: 0.2rem;
-  color: #475569;
-  font-size: 0.55rem;
-  font-weight: 600;
-  line-height: 1;
-}
-
-.timetable-header.break,
-.timetable-header.activity {
-  background: #f1f5f9;
-}
-
-.day-label {
-  width: 54px;
-  padding: 0.25rem;
-  background: #f8fafc;
-  color: #0f172a;
-  font-size: 0.7rem;
-  font-weight: 800;
-  text-align: center;
-  vertical-align: middle;
-}
-
-.lesson-cell {
-  height: 70px;
-  padding: 0.18rem;
-  background: #ffffff;
-  text-align: center;
-  vertical-align: middle;
-}
-
-.lesson-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.14rem;
-}
-
-.lesson-entry {
-  min-width: 0;
-  padding: 0.18rem 0.12rem;
-  border-radius: 4px;
-  background: #f8fafc;
-  line-height: 1.05;
-}
-
-.lesson-entry strong {
-  display: block;
-  color: #0f172a;
-  font-size: 0.65rem;
-  font-weight: 800;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lesson-entry small {
-  display: block;
-  margin-top: 0.12rem;
-  color: #64748b;
-  font-size: 0.5rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.empty-slot {
-  color: #cbd5e1;
-  font-size: 0.72rem;
-}
-
-.special-cell {
-  padding: 0.25rem 0.12rem;
-  text-align: center;
-  vertical-align: middle;
-}
-
-.special-cell.break {
-  background: #fffbeb;
-}
-
-.special-cell.activity {
-  background: #f1f5f9;
-}
-
-.special-cell strong {
-  display: block;
-  color: #334155;
-  font-size: 0.59rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-
-.special-cell small {
-  display: block;
-  margin-top: 0.22rem;
-  color: #64748b;
-  font-size: 0.5rem;
-  font-weight: 600;
-}
-
-.timetable-legend {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.55rem 0.75rem;
-  border-top: 1px solid #cbd5e1;
-  color: #64748b;
-  font-size: 0.68rem;
-}
-
-.timetable-legend strong {
-  color: #334155;
-}
-
-@media (max-width: 900px) {
-  .timetable-toolbar,
-  .timetable-heading-card {
-    flex-direction: column;
-  }
-
-  .timetable-meta {
-    justify-content: flex-start;
-  }
-
-  .timetable-legend {
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-}
-
-@media print {
-  .timetable-toolbar,
-  .timetable-error,
-  .timetable-legend {
-    display: none !important;
-  }
-
-  .timetable-heading-card {
-    margin-bottom: 0.35rem;
-    padding: 0.3rem 0.5rem;
-    border: 0;
-  }
-
-  .timetable-card {
-    border: 0;
-    border-radius: 0;
-  }
-
-  .timetable-scroll {
-    overflow: visible;
-  }
-
-  .whole-school-timetable {
-    min-width: 0;
-    width: 100%;
-    font-size: 0.56rem;
-  }
-
-  .whole-school-timetable .period-column {
-    width: auto;
-  }
-
-  .whole-school-timetable .special-column {
-    width: auto;
-  }
-
-  .lesson-cell {
-    height: 54px;
-  }
-
-  @page {
-    size: landscape;
-    margin: 8mm;
-  }
-}
-
-@keyframes slideInRight { from { transform: translate(100%, -50%); opacity: 0; } to { transform: translate(0, -50%); opacity: 1; } }
-
-/* ---------- Student mode: timetable view-only ---------- */
-.tt-page[data-student] .tt-hard-reload,
-.tt-page[data-student] .tt-dl-png,
-.tt-page[data-student] .tt-dl-pdf,
-.tt-page[data-student] .tt-highlight-toggle,
-.tt-page[data-student] .tt-nuke-cache,
-.tt-page[data-student] .tt-fingerprint,
-.tt-page[data-student] .tt-changes-banner,
-.tt-page[data-student] .tt-run-picker,
-.tt-page[data-student] .tt-force-btn,
-.tt-page[data-student] .tt-fresh-badge,
-.tt-page[data-student] .tt-actions,
-.tt-page[data-student] .tt-subtitle,
-.tt-page[data-student] .tt-footer,
-.tt-page[data-student] .no-print,
-.tt-page[data-student] [class*="tt-filter"],
-.tt-page[data-student] [class*="tt-highlight"] {
-  display: none !important;
-}
-.tt-page[data-student] .tt-header {
-  justify-content: center;
-  text-align: center;
-}
-.tt-page[data-student] .tt-masthead {
-  text-align: center;
-}
-
-
-/* ─── Fit to Screen & Classy UI Overrides ─── */
+/* 1. TABLE WRAPPER & BORDERS */
 .tt-table-wrap {
-  overflow-x: hidden !important;
+  border: 3px solid #0f172a !important; /* Thick dark blue outer border */
+  border-radius: 8px !important;
+  background: #fff !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important; /* For zoom */
   width: 100% !important;
+  padding-bottom: 20px !important;
+  margin-bottom: 1rem !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08) !important;
 }
 
 .tt-table {
+  min-width: 1400px !important; /* Wider to fit 3 lines of text */
   width: 100% !important;
   table-layout: fixed !important;
   border-collapse: separate !important;
-  border-spacing: 2px !important;
+  border-spacing: 0 !important;
+  font-size: 0.72rem !important;
 }
 
 .tt-table th, .tt-table td {
-  padding: 6px 2px !important;
-  font-size: 0.72rem !important;
-  word-wrap: break-word !important;
+  border: 1px solid #94a3b8 !important; /* Distinct grey borders */
+  padding: 4px !important;
   text-align: center !important;
+  vertical-align: middle !important;
+  word-wrap: break-word !important;
 }
 
-.tt-day-head { width: 45px !important; }
-.tt-class-head { width: 60px !important; }
-.tt-period-head { width: auto !important; }
-
-/* Glassmorphism for Cards */
-.glass-card {
-  background: rgba(255, 255, 255, 0.7) !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.4) !important;
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07) !important;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.glass-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 32px 0 rgba(31, 38, 135, 0.12) !important;
+/* 2. HEADERS & LEFT COLUMNS (Dark Blue) */
+.tt-table th {
+  background: #0f172a !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
 }
 
-/* Animated Live Strip */
-.live-strip {
-  background: linear-gradient(90deg, #f0f9ff, #ffffff, #f0f9ff) !important;
-  background-size: 200% 100% !important;
-  animation: liveGradient 3s ease infinite !important;
-}
-@keyframes liveGradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+.tt-day-head, .tt-day {
+  background: #0f172a !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  writing-mode: vertical-rl !important;
+  transform: rotate(180deg) !important;
+  padding: 8px 2px !important;
+  width: 40px !important;
 }
 
-
-/* Interactive Hover Effects */
-.tt-row-hover th, .tt-row-hover td {
-  background-color: rgba(34, 180, 240, 0.08) !important;
-  box-shadow: inset 0 0 10px rgba(34, 180, 240, 0.1);
-  transition: background-color 0.2s ease, box-shadow 0.2s ease;
-}
-.tt-col-hover {
-  background-color: rgba(34, 180, 240, 0.12) !important;
-  border-color: rgba(34, 180, 240, 0.4) !important;
-}
-.tt-table td {
-  transition: transform 0.1s ease;
-}
-.tt-table td:hover {
-  transform: scale(1.05);
-  z-index: 10;
-  position: relative;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+.tt-class-head, .tt-class {
+  background: #0f172a !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  width: 60px !important;
 }
 
+.tt-period-head {
+  background: #0f172a !important;
+  color: #ffffff !important;
+  padding: 6px 2px !important;
+}
+.tt-period-head span { display: block; }
+.tt-period-label { font-size: 0.75rem; font-weight: 800; color: #ffffff; }
+.tt-period-time { font-size: 0.6rem; color: #cbd5e1; }
 
-/* ─── SAFE LIVE PANEL LAYOUT ─── */
-.live-panel-top-wrapper {
-  margin-top: 1rem;
-  margin-bottom: 1.5rem;
-  background: #fff;
-  border: 2px solid #0284c7;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(2,132,199,0.15);
-  overflow: hidden;
-}
-.live-panel-header {
-  background: linear-gradient(90deg, #0284c7, #22b4f0);
-  color: #fff;
-  padding: 12px 16px;
-}
-.live-panel-header h2 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 800;
-}
-.live-panel-header p {
-  margin: 4px 0 0 0;
-  font-size: 0.8rem;
-  opacity: 0.9;
+/* 3. BREAK COLUMNS (Vertical Colored) */
+.tt-tea, td.tt-tea { background: #fef3c7 !important; color: #92400e !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
+.tt-lunch, td.tt-lunch { background: #dcfce7 !important; color: #166534 !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
+.tt-prayers, td.tt-prayers { background: #f3e8ff !important; color: #6b21a8 !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
+.tt-activities, td.tt-activities { background: #dbeafe !important; color: #1e40af !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
+
+/* 4. CELL STACKING (Exactly 3 lines) */
+.tt-lesson {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100% !important;
+  gap: 2px !important;
 }
 
-/* ─── 75% ZOOM EFFECT ─── */
-.tt-table-wrap {
-  overflow: visible !important; /* Crucial for zoom */
+.tt-subject, .tt-teacher, .tt-room {
+  display: block !important;
+  width: 100% !important;
+  text-align: center !important;
+  white-space: nowrap !important; /* Forces exactly one line per item */
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.15 !important;
 }
+
+.tt-subject { font-weight: 800 !important; font-size: 0.74rem !important; color: #0f172a !important; }
+.tt-teacher { font-weight: 600 !important; font-size: 0.65rem !important; color: #475569 !important; }
+.tt-room    { font-weight: 500 !important; font-size: 0.6rem !important; color: #94a3b8 !important; }
+
+/* 5. 75% ZOOM HOVER */
 .tt-table td {
   transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, background-color 0.15s ease-out !important;
   transform-origin: center center !important;
-  will-change: transform !important; /* Stops shaking */
+  will-change: transform !important;
 }
 .tt-table td:hover:not(.tt-tea):not(.tt-lunch):not(.tt-prayers):not(.tt-activities) {
   background-color: #e0f2fe !important;
   box-shadow: 0 20px 40px rgba(0,0,0,0.5) !important;
   border: 2px solid #0284c7 !important;
-  transform: scale(1.75) !important; /* 75% Zoom */
+  transform: scale(1.75) !important;
   z-index: 9999 !important;
   position: relative !important;
   color: #0c4a6e !important;
   white-space: normal !important;
   border-radius: 6px !important;
-  pointer-events: none !important; /* Stops flickering */
+  pointer-events: none !important;
 }
 .tt-table td:hover:not(.tt-tea):not(.tt-lunch):not(.tt-prayers):not(.tt-activities) * {
   color: #0c4a6e !important;
   font-weight: 800 !important;
 }
 
-
-/* ─── HOVER ZOOM ─── */
-.tt-table td {
-  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, background-color 0.15s ease-out !important;
-  transform-origin: center center !important;
-  will-change: transform !important; /* Prevents shaking */
-}
-
-.tt-table td:hover:not(.tt-tea):not(.tt-lunch):not(.tt-prayers):not(.tt-activities) {
-  background-color: #e0f2fe !important;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.5) !important;
-  border: 2px solid #0284c7 !important;
-  transform: scale(1.75) !important; /* 75% zoom */
-  z-index: 9999 !important;
-  position: relative !important;
-  color: #0c4a6e !important;
-  white-space: normal !important;
-  border-radius: 6px !important;
-  pointer-events: none !important; /* Prevents hover flickering */
-}
-
-.tt-table td:hover:not(.tt-tea):not(.tt-lunch):not(.tt-prayers):not(.tt-activities) * {
-  color: #0c4a6e !important;
-  font-weight: 800 !important;
-}
-
-
-/* ─── STYLISH TOOLBAR & MOTION ─── */
+/* 6. BUTTONS */
 .tt-header {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+  background: #ffffff !important;
   border: 2px solid #0284c7 !important;
   border-radius: 12px !important;
-  padding: 1rem !important;
-  box-shadow: 0 8px 24px rgba(2,132,199,0.15) !important;
-  margin-bottom: 1.5rem !important;
-  transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+  padding: 12px 16px !important;
+  margin-bottom: 1rem !important;
+  box-shadow: 0 4px 12px rgba(2,132,199,0.1) !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  align-items: center !important;
 }
-
-.tt-header:hover {
-  transform: translateY(-2px) !important;
-  box-shadow: 0 12px 32px rgba(2,132,199,0.25) !important;
-}
-
-/* Base style for all top buttons */
 .tt-header button, .tt-actions button {
-  background: #ffffff !important;
-  border: 2px solid #0284c7 !important;
-  color: #0284c7 !important;
-  font-weight: 700 !important;
-  border-radius: 8px !important;
-  padding: 6px 12px !important;
-  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
-  cursor: pointer !important;
-}
-
-/* Heavy Motion on Hover */
-.tt-header button:hover, .tt-actions button:hover {
   background: #0284c7 !important;
   color: #ffffff !important;
-  transform: translateY(-4px) scale(1.05) !important;
-  box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
-}
-
-.tt-header button:active, .tt-actions button:active {
-  transform: translateY(1px) scale(0.98) !important;
-}
-
-/* Fingerprint & Badges */
-.tt-fingerprint, .tt-changes-banner, .tt-fresh-badge {
-  background: #ffffff !important;
-  border: 1px solid #bae6fd !important;
-  border-radius: 8px !important;
-  padding: 6px 10px !important;
-  color: #0c4a6e !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 8px 14px !important;
   font-weight: 700 !important;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+  font-size: 0.75rem !important;
+  cursor: pointer !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+  box-shadow: 0 2px 4px rgba(2,132,199,0.2) !important;
+}
+.tt-header button:hover, .tt-actions button:hover {
+  transform: translateY(-3px) scale(1.05) !important;
+  box-shadow: 0 6px 12px rgba(2,132,199,0.4) !important;
+  background: #0369a1 !important;
 }
 
-/* Live Panel Frame (Added for extra style) */
-.live-panel-top-wrapper {
-  border: 2px solid #22b4f0 !important;
-  box-shadow: 0 10px 30px rgba(34,180,240,0.15) !important;
-  transition: transform 0.3s ease !important;
+/* 7. FINGERPRINT (Bright Yellow) */
+.tt-fingerprint {
+  background: #0f172a !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 6px !important;
+  padding: 6px 12px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  box-shadow: inset 0 0 10px rgba(34,197,94,0.15) !important;
 }
-.live-panel-top-wrapper:hover {
-  transform: translateY(-3px) !important;
-  box-shadow: 0 15px 40px rgba(34,180,240,0.25) !important;
+.tt-fp-label, .tt-fp-ver, .tt-fp-time {
+  color: #facc15 !important; /* Bright Yellow */
+  font-size: 0.65rem !important;
+  font-weight: 800 !important; /* Bold */
 }
+.tt-fp-hash { 
+  color: #22c55e !important; /* Green */
+  font-family: 'Courier New', monospace !important; 
+  font-weight: 800 !important; 
+  text-shadow: 0 0 8px rgba(34,197,94,0.8) !important; 
+  font-size: 0.78rem !important; 
+}
+
+/* 8. TEACHER ROSTER (Larger Font) */
+.tt-teacher-roster {
+  background: #ffffff !important;
+  border: 2px solid #0284c7 !important;
+  border-radius: 12px !important;
+  padding: 16px !important;
+  margin-top: 16px !important;
+  box-shadow: 0 4px 16px rgba(2,132,199,0.1) !important;
+}
+.tt-tr-head {
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+  color: #0284c7 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  margin-bottom: 12px !important;
+  padding-bottom: 8px !important;
+  border-bottom: 2px solid #e0f2fe !important;
+}
+.tt-tr-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+  gap: 10px !important;
+}
+.tt-tr-item {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  padding: 8px 12px !important;
+  font-size: 0.85rem !important; /* Larger font */
+  color: #334155 !important;
+  transition: all 0.2s ease !important;
+}
+.tt-tr-item b { color: #0284c7 !important; font-weight: 800 !important; }

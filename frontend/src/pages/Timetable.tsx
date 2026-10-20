@@ -1062,6 +1062,7 @@ function Timetable() {
         }
       } catch (err) {
       }
+      setError(""); // Clear any previous error on successful load
       setVersion(
         timetableVersion.name ||
           latestRun.timetable_version ||
@@ -1438,6 +1439,20 @@ function Timetable() {
   }, [entries]);
 
 
+    const uniquePeriods = useMemo(() => {
+    const map = new Map();
+    for (const e of entries) {
+      if (e.period_number && !map.has(e.period_number)) {
+        map.set(e.period_number, {
+          period_number: e.period_number,
+          start_time: e.period_start_time,
+          end_time: e.period_end_time
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [entries]);
+
   const entriesBySlot = useMemo(() => {
     const map = new Map<string, TimetableEntryResult[]>();
 
@@ -1471,697 +1486,138 @@ function Timetable() {
 
   return (
     <>
-      <style>{`
+      
 
-        /* A3 landscape for printable masthead + table + roster */
-        @page { size: A3 landscape; margin: 6mm; }
-        @media print {
-          html, body {
-            background: #fff !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 100% !important;
-          }
-          /* Hide everything that isn't the timetable itself */
-          .tt-actions,
-          .tt-fingerprint,
-          .tt-changes-banner,
-          .tt-hard-reload,
-          .tt-dl-png,
-          .tt-dl-pdf,
-          .tt-dl-row,
-          .tt-highlight-toggle,
-          .tt-nuke-cache,
-          .tt-run-picker,
-          .tt-force-btn,
-          .tt-fresh-badge,
-          .tt-fresh-dot,
-          .tt-fresh-v,
-          .tt-fresh-t,
-          .tt-subtitle,
-          .tt-status,
-          .tt-error,
-          .no-print { display: none !important; visibility: hidden !important; }
-
-          /* Page: no zoom, full width */
-          .tt-page {
-            zoom: 1 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            max-width: none !important;
-            width: 100% !important;
-          }
-
-          /* Masthead stays compact and centred */
-          .tt-masthead {
-            display: block !important;
-            text-align: center !important;
-            padding: 2px 0 !important;
-            margin: 2px 0 4px 0 !important;
-            border-bottom: 1px solid #244b72 !important;
-            page-break-after: avoid !important;
-            break-after: avoid !important;
-          }
-          .tt-mast-school { font-size: 11pt !important; font-weight: 800 !important; }
-          .tt-masthead .tt-title { font-size: 13pt !important; font-weight: 900 !important; }
-          .tt-mast-line { font-size: 8pt !important; margin-top: 2px !important; }
-
-          /* Table: fixed layout so every column fits inside A3 landscape */
-          .tt-table-wrap {
-            border: 1px solid #9fb4cb !important;
-            overflow: visible !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-            width: 100% !important;
-          }
-          .tt-table {
-            table-layout: fixed !important;
-            width: 100% !important;
-            min-width: 0 !important;
-            max-width: 100% !important;
-            border-collapse: collapse !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          .tt-table thead { display: table-header-group !important; }
-          .tt-table tr {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-
-          /* Small fonts + tight padding so every cell stays compact */
-          .tt-table th,
-          .tt-table td {
-            padding: 1px 2px !important;
-            font-size: 6pt !important;
-            line-height: 1.05 !important;
-            overflow: hidden !important;
-            word-break: break-word !important;
-          }
-          .tt-table th { font-size: 6pt !important; }
-
-          /* Day + class columns are narrow */
-          .tt-class-head, .tt-class {
-            width: 34px !important;
-            min-width: 34px !important;
-            max-width: 34px !important;
-          }
-
-          /* Non-lesson columns (TEA, LUNCH, PRAYERS, ACTIVITIES) narrower */
-          .tt-cell.tt-tea,
-          .tt-cell.tt-lunch,
-          .tt-cell.tt-prayers,
-          .tt-cell.tt-activities {
-            font-size: 5pt !important;
-          }
-
-          /* Text inside cells */
-          .tt-cell .tt-subject,
-          .tt-cell .tt-subject-name,
-          .tt-cell .tt-teacher,
-          .tt-cell .tt-room {
-            font-size: 5.5pt !important;
-            white-space: normal !important;
-            overflow: hidden !important;
-            text-overflow: clip !important;
-            line-height: 1.02 !important;
-            word-break: break-word !important;
-            display: block !important;
-          }
-          .tt-cell .tt-room { color: #166534 !important; font-weight: 700 !important; }
-
-          /* Roster: 5 columns, compact, no split */
-          .tt-teacher-roster {
-            display: block !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-            margin-top: 6px !important;
-            padding: 4px 6px !important;
-            border: 1px solid #d3dfeb !important;
-            background: #f8fafc !important;
-          }
-          .tt-tr-head { font-size: 8pt !important; margin-bottom: 2px !important; }
-          .tt-tr-grid {
-            grid-template-columns: repeat(5, 1fr) !important;
-            gap: 1px 6px !important;
-            font-size: 6pt !important;
-          }
-        }
-
-        .tt-page {
-          min-width: 0;
-          width: 100%;
-          padding: 18px;
-          box-sizing: border-box;
-          background: #ffffff;
-        }
-
-        .tt-header {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 18px;
-          margin-bottom: 14px;
-        }
-
-        .tt-title {
-          margin: 0;
-          font-size: 24px;
-          line-height: 1.1;
-          font-weight: 800;
-          letter-spacing: -0.4px;
-          color: #12315b;
-        }
-
-        .tt-subtitle {
-          margin: 5px 0 0;
-          color: #718096;
-          font-size: 13px;
-        }
-
-        .tt-live {
-          display: inline-flex;
-          align-items: center;
-          margin-left: 8px;
-          padding: 3px 8px;
-          border-radius: 5px;
-          background: #22a447;
-          color: white;
-          font-size: 11px;
-          font-weight: 800;
-          vertical-align: middle;
-        }
-
-        .tt-actions {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .tt-status {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 16px;
-          border: 1px solid #cfe5d5;
-          border-radius: 5px;
-          background: #f5fbf6;
-          color: #27783b;
-          font-size: 13px;
-          white-space: nowrap;
-        }
-
-        .tt-status-dot {
-          width: 9px;
-          height: 9px;
-          border-radius: 50%;
-          background: #20a347;
-        }
-
-        .tt-button {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          height: 40px;
-          padding: 0 16px;
-          border: 1px solid #2878dc;
-          border-radius: 5px;
-          background: white;
-          color: #1262bd;
-          font-weight: 700;
-          cursor: pointer;
-        }
-
-        .tt-button:disabled {
-          opacity: 0.6;
-          cursor: wait;
-        }
-
+      <main className="tt-page" data-student={isStudentView || undefined}>
+<style>{`
+        /* ─── THE APPROVED A3 GRID CSS ─── */
+        
+        /* Table container and borders */
         .tt-table-wrap {
-          width: 100%;
-          overflow-x: auto;
-          border: 1px solid #b9cbe0;
-          box-sizing: border-box;
+          border: 3px solid #0f172a !important;
+          border-radius: 8px !important;
+          background: #fff !important;
+          overflow-x: auto !important;
+          overflow-y: visible !important;
+          width: 100% !important;
+          padding-bottom: 20px !important;
+          margin-bottom: 1rem !important;
         }
 
         .tt-table {
-          width: 100%;
-          min-width: 1760px;
-          table-layout: fixed;
-          border-collapse: collapse;
-          background: white;
+          min-width: 1300px !important; /* Wide enough for 3 lines */
+          width: 100% !important;
+          table-layout: fixed !important;
+          border-collapse: collapse !important;
+          font-size: 0.72rem !important;
         }
 
-        .tt-table th,
-        .tt-table td {
-          border-right: 1px solid #d3dfeb;
-          border-bottom: 1px solid #d3dfeb;
-          padding: 0;
-          box-sizing: border-box;
+        .tt-table th, .tt-table td {
+          border: 1px solid #94a3b8 !important;
+          padding: 4px !important;
+          text-align: center !important;
+          vertical-align: middle !important;
         }
 
-        .tt-day-head,
-        .tt-class-head {
-          height: 54px;
-          background: #244b72;
-          color: white;
-          text-align: center;
-          font-size: 14px;
-          font-weight: 800;
-        }
-
-        .tt-day-head {
-          width: 112px;
-        }
-
-        .tt-class-head {
-          width: 112px;
+        /* Dark Blue Headers */
+        .tt-table th, .tt-day-head, .tt-class-head, .tt-day, .tt-class {
+          background: #0f172a !important;
+          color: #ffffff !important;
+          font-weight: 800 !important;
         }
 
         .tt-period-head {
-          height: 54px;
-          background: #edf4fa;
-          color: #16263a;
-          text-align: center;
-          vertical-align: middle;
-          font-weight: 800;
+          background: #0f172a !important;
+          color: #ffffff !important;
         }
+        .tt-period-label { color: #ffffff !important; font-size: 0.75rem; }
+        .tt-period-time { color: #cbd5e1 !important; font-size: 0.6rem; }
 
-        .tt-period-head .tt-period-label {
-          display: block;
-          font-size: 14px;
-          line-height: 18px;
+        /* Vertical Day and Class columns */
+        .tt-day-head, .tt-day {
+          writing-mode: vertical-rl !important;
+          transform: rotate(180deg) !important;
+          padding: 8px 2px !important;
+          width: 40px !important;
         }
+        .tt-class-head, .tt-class { width: 60px !important; }
 
-        .tt-period-head .tt-period-time {
-          display: block;
-          margin-top: 2px;
-          font-size: 10px;
-          font-weight: 500;
-          white-space: nowrap;
-        }
+        /* Vertical Breaks */
+        .tt-tea, td.tt-tea { background: #fef3c7 !important; color: #92400e !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
+        .tt-lunch, td.tt-lunch { background: #dcfce7 !important; color: #166534 !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
+        .tt-prayers, td.tt-prayers { background: #f3e8ff !important; color: #6b21a8 !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
+        .tt-activities, td.tt-activities { background: #dbeafe !important; color: #1e40af !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
 
-        .tt-period-head.tt-tea {
-          background: #fff8dd;
-        }
-
-        .tt-period-head.tt-lunch {
-          background: #eff9e9;
-        }
-
-        .tt-period-head.tt-prayers,
-        .tt-period-head.tt-activities {
-          background: #f0edf9;
-        }
-
-        .tt-day {
-          width: 112px;
-          min-width: 112px;
-          text-align: center;
-          vertical-align: middle;
-          background: #f5f9fd;
-          color: #17366a;
-          font-size: 16px;
-          font-weight: 800;
-        }
-
-        .tt-class {
-          width: 112px;
-          min-width: 112px;
-          height: 28px;
-          padding-left: 8px !important;
-          background: #ffffff;
-          color: #1c2735;
-          font-size: 12px;
-          font-weight: 700;
-          text-align: left;
-          white-space: nowrap;
-        }
-
-        .tt-cell {
-          height: 28px;
-          min-height: 28px;
-          background: #ffffff;
-          color: #4b5563;
-          text-align: center;
-          vertical-align: middle;
-          font-size: 10px;
-          font-weight: 600;
-          white-space: nowrap;
-        }
-
-        .tt-cell.tt-tea {
-          background: #fff9df;
-          color: #1f2937;
-          font-weight: 800;
-        }
-
-        .tt-cell.tt-lunch {
-          background: #eff9e9;
-          color: #1f2937;
-          font-weight: 800;
-        }
-
-        .tt-cell.tt-prayers,
-        .tt-cell.tt-activities {
-          background: #f2effa;
-          color: #1f2937;
-          font-weight: 800;
-        }
-
+        /* THE 3-LINE CELL STACKING */
         .tt-lesson {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 28px;
-          line-height: 12px;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 1px !important;
+          width: 100% !important;
         }
-
-        .tt-subject {
-          font-weight: 800;
-          color: #18395f;
-        }
-
-        .tt-subject-name {
-          max-width: 100%;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          font-size: 8px;
-          color: #59697b;
-          font-weight: 600;
-        }
-
-        .tt-teacher { font-size: 11px; opacity: 0.9; font-weight: 600; }
-        .tt-run-picker {
-                appearance: none;
-                margin: 0 0 10px 8px;
-                padding: 5px 10px;
-                border: 1px solid #cbd5e1;
-                border-radius: 8px;
-                font-size: 11px; font-weight: 700; color: #0f172a;
-                background: #fff;
-                cursor: pointer;
-                max-width: 320px;
-              }
-              .tt-force-btn {
-                margin: 0 0 10px 6px;
-                padding: 5px 10px;
-                border: 1px solid #cbd5e1;
-                border-radius: 8px;
-                background: #fff;
-                font-size: 13px; font-weight: 800; color: #15803d;
-                cursor: pointer;
-                transition: all .15s ease;
-              }
-              .tt-force-btn:hover { background: #f0fdf4; border-color: #86efac; }
-              .tt-fresh-badge {
-                display: inline-flex; align-items: center; gap: 8px;
-                margin: 0 0 10px 0;
-                padding: 5px 10px;
-                background: #f0fdf4;
-                border: 1px solid #bbf7d0;
-                border-radius: 999px;
-                font-size: 11px; font-weight: 700;
-                color: #14532d;
-                letter-spacing: .02em;
-              }
-              .tt-fresh-dot {
-                width: 7px; height: 7px; border-radius: 50%;
-                background: #16a34a;
-                box-shadow: 0 0 0 3px rgba(22,163,74,.18);
-              }
-              .tt-fresh-v { color: #14532d; }
-              .tt-fresh-t { color: #64748b; font-weight: 500; }
-                      .tt-fingerprint {
-                display: inline-flex; align-items: center; gap: 8px;
-                margin: 10px 0;
-                padding: 6px 12px;
-                background: #eef2ff; border: 1px solid #c7d2fe;
-                border-radius: 8px;
-                font-size: 11px; font-weight: 700;
-                color: #3730a3;
-              }
-              .tt-fp-label { letter-spacing: .12em; font-size: 9px; opacity: .7; }
-              .tt-fp-hash { font-family: ui-monospace, Menlo, monospace; color: #0f172a; font-weight: 800; letter-spacing: .04em; }
-              .tt-fp-ver  { color: #15803d; }
-              .tt-fp-time { color: #64748b; font-weight: 500; }
-              .tt-hard-reload {
-                margin: 10px 0 10px 10px;
-                padding: 6px 12px; border-radius: 8px;
-                border: 1px solid #fdba74; background: #fff7ed;
-                color: #c2410c; font-weight: 800; font-size: 11px;
-                cursor: pointer; transition: all .15s ease;
-              }
-              .tt-hard-reload:hover { background: #ffedd5; border-color: #fb923c; }
-                      .tt-changes-banner {
-                display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
-                margin: 6px 0 12px 0;
-                padding: 8px 12px;
-                background: #fefce8; border: 1px solid #fde68a;
-                border-radius: 8px;
-                font-size: 11px; font-weight: 700; color: #713f12;
-              }
-              .tt-cb-label { letter-spacing: .1em; font-size: 9px; opacity: .8; }
-              .tt-cb-count {
-                padding: 2px 10px; border-radius: 999px;
-                background: #f1f5f9; color: #475569; font-weight: 800;
-              }
-              .tt-cb-count.has-changes { background: #16a34a; color: #fff; }
-              .tt-cb-breakdown { display: flex; gap: 8px; }
-              .tt-cb-day { color: #64748b; }
-              .tt-cb-day b { color: #0f172a; }
-              .tt-cb-details {
-                margin-left: auto; font-size: 10px;
-              }
-              .tt-cb-details summary { cursor: pointer; color: #b45309; font-weight: 800; }
-              .tt-cb-details ul {
-                margin: 6px 0 0; padding: 8px 12px 8px 24px;
-                background: #fff; border-radius: 6px; list-style: disc;
-                font-family: ui-monospace, Menlo, monospace; font-size: 10px;
-                color: #334155; max-height: 220px; overflow-y: auto;
-              }
-              .tt-cb-details li { margin: 2px 0; }
-                      .tt-dl-png,
-              .tt-dl-pdf {
-                margin-left: 8px;
-                padding: 6px 12px; border-radius: 8px;
-                border: 1px solid #cbd5e1; background: #fff;
-                font-size: 12px; font-weight: 800;
-                color: #0f172a; cursor: pointer;
-                transition: all .15s ease;
-              }
-              .tt-dl-png:hover { background: #f0fdf4; border-color: #86efac; color: #15803d; }
-              .tt-dl-pdf:hover { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
-                      .tt-dl-png,
-              .tt-dl-pdf {
-                margin: 10px 0 10px 8px;
-                padding: 6px 14px; border-radius: 8px;
-                border: 1px solid #cbd5e1; background: #fff;
-                font-size: 12px; font-weight: 800;
-                color: #0f172a; cursor: pointer;
-                transition: all .15s ease;
-              }
-              .tt-dl-png:hover { background: #f0fdf4; border-color: #86efac; color: #15803d; }
-              .tt-dl-pdf:hover { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
-              .tt-dl-row { display: flex; gap: 8px; margin: 10px 0; }
-              .tt-room {
-                display: block;
-                color: #15803d;
-                font-size: 12px;
-                font-weight: 800;
-                line-height: 1.2;
-                letter-spacing: 0.03em;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                max-width: 100%;
-                margin-top: 2px;
-              }
-              .tt-subject,
-              .tt-teacher,
-              .tt-room {
-                display: block;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                max-width: 100%;
-              }
-              .tt-subject { font-weight: 700; }
-              .tt-teacher { font-size: 9px; opacity: 0.85; }
-              td, .tt-cell, .lesson-cell { overflow: hidden; }
-              .tt-room[data-empty="true"] { color: #cbd5e1; font-weight: 400; }
-
-
-        .tt-elective {
-          margin-top: 1px;
-          padding: 1px 4px;
-          border-radius: 3px;
-          background: #eef3ff;
-          color: #35558c;
-          font-size: 7px;
-          font-weight: 800;
-          text-transform: uppercase;
-        }
-
-        .tt-footer {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 8px 4px;
-          color: #718096;
-          font-size: 11px;
-        }
-
-        .tt-error {
-          margin: 10px 0;
-          padding: 10px 12px;
-          border: 1px solid #f0b5b5;
-          background: #fff5f5;
-          color: #a33a3a;
-          font-size: 13px;
-        }
-
-        @media print {
-          .tt-page {
-            padding: 0;
-          }
-
-          .tt-actions {
-            display: none;
-          }
-
-          .tt-table-wrap {
-            overflow: visible;
-            border: 1px solid #9fb4cb;
-          }
-
-          .tt-table {
-            min-width: 1760px;
-          }
-
-          .tt-header {
-            margin-bottom: 8px;
-          }
-        }
-
-        /* --- Masthead (school name, title, generated time) --- */
-        .tt-masthead {
-          text-align: center;
-          margin: 6px 0 14px 0;
-          padding: 10px 12px;
-          border-bottom: 2px solid #244b72;
-        }
-        .tt-mast-school {
-          font-size: 18px;
-          font-weight: 800;
-          color: #18395f;
-          letter-spacing: 0.05em;
-          margin-bottom: 4px;
-        }
-        .tt-masthead .tt-title {
-          font-size: 22px;
-          font-weight: 900;
-          color: #0f172a;
-          letter-spacing: 0.08em;
-          margin: 0;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .tt-mast-line {
-          margin-top: 6px;
-          font-size: 12px;
-          color: #475569;
-          font-weight: 600;
-        }
-
-        /* --- Teacher roster below the table --- */
-        .tt-teacher-roster {
-          margin-top: 18px;
-          padding: 12px 14px;
-          background: #f8fafc;
-          border: 1px solid #d3dfeb;
-          border-radius: 8px;
-          page-break-inside: avoid;
-        }
-        .tt-tr-head {
-          font-size: 12px;
-          font-weight: 800;
-          color: #244b72;
-          letter-spacing: 0.08em;
-          margin-bottom: 8px;
-        }
-        .tt-tr-grid {
-          display: grid;
-          grid-template-columns: repeat(5, 1fr);
-          gap: 6px 14px;
-          font-size: 11px;
-          color: #1f2937;
-        }
-        .tt-tr-item {
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .tt-tr-item b {
-          color: #244b72;
-          margin-right: 4px;
-        }
-
-        /* --- Cell sizing fixes --- */
-        /* Multi-subject cells (parallel blocks): allow rooms to wrap */
-        .tt-cell .tt-room,
-        .tt-cell .tt-subject,
-        .tt-cell .tt-teacher {
-          white-space: normal !important;
-          overflow: visible !important;
-          text-overflow: clip !important;
-          word-break: break-word;
-          line-height: 1.05 !important;
-        }
-        .tt-cell .tt-room { font-size: 8px !important; }
-        .tt-cell .tt-subject { font-size: 9px !important; }
-        .tt-cell .tt-teacher { font-size: 8px !important; }
-        .tt-cell .tt-subject-name { font-size: 7px !important; }
-
-        .tt-class-head, .tt-class {
-          width: 66px !important;
-          min-width: 66px !important;
-          max-width: 66px !important;
-        }
-        .tt-room { font-size: 10px !important; }
-        .tt-subject { font-size: 11px !important; }
-        .tt-subject-name { font-size: 7px !important; }
-
-        @media print {
-          .tt-masthead { page-break-after: avoid; }
         
-          .tt-masthead { display: block; page-break-after: avoid; }
-          .tt-mast-school { font-size: 15px; }
-          .tt-masthead .tt-title { font-size: 18px; }
-          .tt-mast-line { font-size: 11px; }
-          .tt-teacher-roster { display: block; page-break-inside: avoid; margin-top: 14px; }
-          .tt-tr-grid { grid-template-columns: repeat(5, 1fr); }
-}
+        .tt-subject, .tt-teacher, .tt-room {
+          display: block !important;
+          width: 100% !important;
+          text-align: center !important;
+          white-space: nowrap !important; /* Forces exactly 1 line */
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          line-height: 1.1 !important;
+        }
+        
+        .tt-subject { font-weight: 800 !important; font-size: 0.7rem !important; color: #0f172a !important; }
+        .tt-teacher { font-weight: 600 !important; font-size: 0.62rem !important; color: #475569 !important; }
+        .tt-room    { font-weight: 500 !important; font-size: 0.58rem !important; color: #64748b !important; }
+
+        /* 75% ZOOM HOVER */
+        .tt-table td {
+          transition: transform 0.15s ease-out, box-shadow 0.15s ease-out !important;
+          transform-origin: center center !important;
+          will-change: transform !important;
+        }
+        .tt-table td:hover:not(.tt-tea):not(.tt-lunch):not(.tt-prayers):not(.tt-activities) {
+          background-color: #e0f2fe !important;
+          box-shadow: 0 20px 40px rgba(0,0,0,0.5) !important;
+          border: 2px solid #0284c7 !important;
+          transform: scale(1.75) !important;
+          z-index: 9999 !important;
+          position: relative !important;
+          pointer-events: none !important;
+        }
+
+        /* Fingerprint */
+        .tt-fingerprint {
+          background: #0f172a !important;
+          border: 1px solid #1e293b !important;
+          border-radius: 6px !important;
+          padding: 6px 12px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 8px !important;
+        }
+        .tt-fp-label, .tt-fp-ver, .tt-fp-time { color: #facc15 !important; font-weight: 800 !important; font-size: 0.65rem !important; }
+        .tt-fp-hash { color: #22c55e !important; font-family: monospace !important; font-weight: 800 !important; text-shadow: 0 0 8px rgba(34,197,94,0.8) !important; font-size: 0.78rem !important; }
+
+        /* Teacher Roster */
+        .tt-teacher-roster {
+          background: #ffffff !important;
+          border: 2px solid #0284c7 !important;
+          border-radius: 12px !important;
+          padding: 16px !important;
+          margin-top: 16px !important;
+        }
+        .tt-tr-head { font-size: 1rem !important; font-weight: 800 !important; color: #0284c7 !important; margin-bottom: 12px !important; border-bottom: 2px solid #e0f2fe !important; padding-bottom: 8px !important; }
+        .tt-tr-grid { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important; gap: 10px !important; }
+        .tt-tr-item { background: #f8fafc !important; border: 1px solid #e2e8f0 !important; border-radius: 6px !important; padding: 8px 12px !important; font-size: 0.85rem !important; color: #334155 !important; }
+        .tt-tr-item b { color: #0284c7 !important; font-weight: 800 !important; }
       `}</style>
 
-      <main className="tt-page" data-student={isStudentView || undefined}>
-      {isStudentView && (
-        <style>{`
-          .tt-hard-reload, .tt-dl-png, .tt-dl-pdf, .tt-highlight-toggle,
-          .tt-nuke-cache, .tt-fingerprint, .tt-changes-banner, .tt-run-picker,
-          .tt-force-btn, .tt-fresh-badge, .tt-actions, .tt-subtitle,
-          .tt-footer, .tt-fp-label, .tt-fp-hash, .tt-fp-ver, .tt-fp-time,
-          [class*="tt-filter"], [class*="tt-highlight"],
-          [class*="tt-force"], [class*="tt-fresh"], [class*="tt-run-picker"] {
-            display: none !important;
-            visibility: hidden !important;
-          }
-          .tt-header { justify-content: center !important; text-align: center !important; }
-          .tt-masthead { text-align: center !important; }
-        `}</style>
-      )}
+
+
+        
 
         <header className="tt-header">
           <div>
@@ -2320,18 +1776,23 @@ function Timetable() {
                 <h2>LIVE SCHEDULE OVERVIEW</h2>
                 <p>Real-time active classes, teachers, and rooms.</p>
               </div>
-              <ActiveSessionsPanel entriesBySlot={entriesBySlot} days={DAYS} />
+              <ActiveSessionsPanel entriesBySlot={entriesBySlot} days={DAYS} periods={uniquePeriods} />
             </div>
             <div className="tt-masthead">
           <div className="tt-mast-school">{schoolName}</div>
-          <h1 className="tt-title">{viewTitle.toUpperCase()}<span className="tt-live">LIVE</span></h1>
+          <h1 className="tt-title">
+            <span>{schoolName}</span>
+            <span className="tt-live">LIVE</span>
+          </h1>
           <div className="tt-mast-line">
             {termDisplay || "Current Term"}{runCompletedAt ? ` • Generated: ${new Date(runCompletedAt).toLocaleString()}` : ""}
           </div>
         </div>
 
 <div className="tt-table-wrap" data-tt-capture>
-          <table className="tt-table">
+          
+
+<table className="tt-table">
             <thead>
               <tr>
                 <th className="tt-day-head">DAY</th>
