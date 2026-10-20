@@ -1809,11 +1809,11 @@ function Timetable() {
                       column.kind === "activities" ? "tt-activities" : "",
                     ].join(" ")}
                   >
-                    <span className="tt-period-label">
+                    <span className="tt-period-label" style={{ display: "block", width: "100%", textAlign: "center", fontSize: "0.85rem", fontWeight: 800, color: "#ffffff", lineHeight: 1.1, whiteSpace: "nowrap" }}>
                       {column.label}
                     </span>
 
-                    <span className="tt-period-time">
+                    <span className="tt-period-time" style={{ display: "block", width: "100%", textAlign: "center", fontSize: "0.55rem", color: "#94a3b8", lineHeight: 1.1, whiteSpace: "nowrap" }}>
                       {column.time}
                     </span>
                   </th>

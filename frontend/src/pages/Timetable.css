@@ -54,14 +54,10 @@
   width: 60px !important;
 }
 
-.tt-period-head {
-  background: #0f172a !important;
-  color: #ffffff !important;
-  padding: 6px 2px !important;
-}
-.tt-period-head span { display: block; }
-.tt-period-label { font-size: 0.75rem; font-weight: 800; color: #ffffff; }
-.tt-period-time { font-size: 0.6rem; color: #cbd5e1; }
+
+
+
+
 
 /* 3. BREAK COLUMNS (Vertical Colored) */
 .tt-tea, td.tt-tea { background: #fef3c7 !important; color: #92400e !important; writing-mode: vertical-rl !important; transform: rotate(180deg) !important; font-weight: 800 !important; }
@@ -207,24 +203,57 @@
 .tt-tr-item b { color: #0284c7 !important; font-weight: 800 !important; }
 
 
-/* ─── PERIOD HEADERS STACKING ─── */
-.tt-period-head {
+
+
+
+
+
+
+
+
+.tt-table th
+
+
+/* ─── NUCLEAR: PERIOD HEADERS 2-LINE ─── */
+.tt-table thead tr th.tt-period-head {
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 2px !important;
-  padding: 8px 4px !important;
+  padding: 4px 2px !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  transform: none !important;
+  min-width: 65px !important;
+  max-width: 100px !important;
   background: #0f172a !important;
+  color: #ffffff !important;
+  vertical-align: middle !important;
 }
-.tt-period-label {
+
+.tt-table thead tr th.tt-period-head > span.tt-period-label {
+  display: block !important;
+  width: 100% !important;
+  text-align: center !important;
   font-size: 0.85rem !important;
   font-weight: 800 !important;
   color: #ffffff !important;
-  line-height: 1 !important;
+  line-height: 1.1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
 }
-.tt-period-time {
-  font-size: 0.6rem !important;
+
+.tt-table thead tr th.tt-period-head > span.tt-period-time {
+  display: block !important;
+  width: 100% !important;
+  text-align: center !important;
+  font-size: 0.55rem !important;
   color: #94a3b8 !important;
-  line-height: 1 !important;
+  line-height: 1.1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
 }
