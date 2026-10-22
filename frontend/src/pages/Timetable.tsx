@@ -1619,18 +1619,29 @@ function Timetable() {
 
         
 
-        <style>{`
+        
+
+      <style>{`
         /* INJECTED HEADER STYLES */
         .tt-header { background: #ffffff; border: 2px solid #0284c7; padding: 16px; border-radius: 16px; box-shadow: 0 8px 24px rgba(2,132,199,0.15); display: flex; flex-direction: column; gap: 16px; }
         
         /* 6-column Grid for the 5 buttons */
         .tt-header > div:first-child { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; background: #f0f9ff; padding: 12px; border-radius: 12px; border: 2px solid #bae6fd; }
         
-        /* Base Button Style */
+        /* Base Button Style (Thicker border, Dark Text) */
         .tt-hard-reload, .tt-dl-png, .tt-dl-pdf, .tt-highlight-toggle, .tt-nuke-cache {
-            background: #f97316 !important; color: white !important; border: 2px solid #ea580c !important;
-            font-weight: 800 !important; font-size: 0.75rem !important; border-radius: 8px !important; padding: 8px 12px !important;
-            cursor: pointer !important; transition: all 0.2s ease !important; display: flex !important; align-items: center !important; justify-content: center !important;
+            background: #f97316 !important; 
+            color: #431407 !important; /* Dark text for contrast */
+            border: 3px solid #c2410c !important; /* Thicker border */
+            font-weight: 900 !important; 
+            font-size: 0.75rem !important; 
+            border-radius: 8px !important; 
+            padding: 8px 12px !important;
+            cursor: pointer !important; 
+            transition: all 0.2s ease !important; 
+            display: flex !important; 
+            align-items: center !important; 
+            justify-content: center !important;
         }
         
         /* 3 on top, 2 on bottom */
@@ -1639,11 +1650,45 @@ function Timetable() {
         
         /* Hover Effect */
         .tt-hard-reload:hover, .tt-dl-png:hover, .tt-dl-pdf:hover, .tt-highlight-toggle:hover, .tt-nuke-cache:hover {
-            background: #0284c7 !important; border-color: #0284c7 !important; transform: translateY(-4px) scale(1.05) !important; box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
+            background: #0284c7 !important; 
+            color: #ffffff !important;
+            border-color: #0284c7 !important; 
+            transform: translateY(-4px) scale(1.05) !important; 
+            box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
         }
         
         /* Force full width for fingerprint and banners */
-        .tt-fingerprint, .tt-changes-banner, .tt-subtitle { grid-column: span 6; margin-top: 8px; }
+        .tt-fingerprint, .tt-subtitle { grid-column: span 6; margin-top: 8px; }
+
+        /* ─── POWERSHELL TERMINAL STYLE FOR CHANGES BANNER ─── */
+        .tt-changes-banner {
+            grid-column: span 6;
+            background: #012456 !important; /* PowerShell Dark Blue */
+            color: #eeedf0 !important;
+            font-family: 'Consolas', 'Courier New', monospace !important;
+            border: 2px solid #1e3a8a !important;
+            border-radius: 8px !important;
+            padding: 12px 16px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 8px !important;
+            font-size: 0.8rem !important;
+            margin-top: 12px !important;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5) !important;
+        }
+        .tt-changes-banner details { width: 100%; margin-top: 8px; }
+        .tt-changes-banner summary { cursor: pointer; color: #facc15 !important; font-weight: bold; user-select: none; }
+        .tt-changes-banner ul {
+            margin: 8px 0 0 0; padding: 8px; background: #000000 !important;
+            border: 1px solid #1e3a8a; border-radius: 4px; list-style-type: none;
+            max-height: 250px; overflow-y: auto;
+        }
+        .tt-changes-banner li { margin-bottom: 4px; color: #22c55e !important; white-space: pre-wrap; }
+        .tt-cb-label { color: #94a3b8 !important; font-weight: bold; text-transform: uppercase; }
+        .tt-cb-count { background: #1e3a8a !important; padding: 2px 6px; border-radius: 4px; color: #facc15 !important; font-weight: bold; }
+        .tt-cb-breakdown { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tt-cb-day { color: #a78bfa !important; }
       `}</style>
 
       <header className="tt-header">
