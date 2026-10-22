@@ -1621,6 +1621,8 @@ function Timetable() {
 
         
 
+      
+
       <style>{`
         /* INJECTED HEADER STYLES */
         .tt-header { background: #ffffff; border: 2px solid #0284c7; padding: 16px; border-radius: 16px; box-shadow: 0 8px 24px rgba(2,132,199,0.15); display: flex; flex-direction: column; gap: 16px; }
@@ -1631,8 +1633,8 @@ function Timetable() {
         /* Base Button Style (Thicker border, Dark Text) */
         .tt-hard-reload, .tt-dl-png, .tt-dl-pdf, .tt-highlight-toggle, .tt-nuke-cache {
             background: #f97316 !important; 
-            color: #431407 !important; /* Dark text for contrast */
-            border: 3px solid #c2410c !important; /* Thicker border */
+            color: #431407 !important; 
+            border: 3px solid #c2410c !important; 
             font-weight: 900 !important; 
             font-size: 0.75rem !important; 
             border-radius: 8px !important; 
@@ -1657,13 +1659,13 @@ function Timetable() {
             box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
         }
         
-        /* Force full width for fingerprint and banners */
-        .tt-fingerprint, .tt-subtitle { grid-column: span 6; margin-top: 8px; }
+        /* Force full width for fingerprint */
+        .tt-fingerprint { grid-column: span 6; margin-top: 8px; }
 
         /* ─── POWERSHELL TERMINAL STYLE FOR CHANGES BANNER ─── */
         .tt-changes-banner {
             grid-column: span 6;
-            background: #012456 !important; /* PowerShell Dark Blue */
+            background: #012456 !important; 
             color: #eeedf0 !important;
             font-family: 'Consolas', 'Courier New', monospace !important;
             border: 2px solid #1e3a8a !important;
@@ -1673,7 +1675,7 @@ function Timetable() {
             flex-direction: column !important;
             align-items: flex-start !important;
             gap: 8px !important;
-            font-size: 0.8rem !important;
+            font-size: 0.9rem !important; /* INCREASED FONT SIZE */
             margin-top: 12px !important;
             box-shadow: inset 0 0 10px rgba(0,0,0,0.5) !important;
         }
@@ -1684,11 +1686,58 @@ function Timetable() {
             border: 1px solid #1e3a8a; border-radius: 4px; list-style-type: none;
             max-height: 250px; overflow-y: auto;
         }
-        .tt-changes-banner li { margin-bottom: 4px; color: #22c55e !important; white-space: pre-wrap; }
+        .tt-changes-banner li { margin-bottom: 6px; color: #22c55e !important; white-space: pre-wrap; font-size: 0.85rem; }
         .tt-cb-label { color: #94a3b8 !important; font-weight: bold; text-transform: uppercase; }
         .tt-cb-count { background: #1e3a8a !important; padding: 2px 6px; border-radius: 4px; color: #facc15 !important; font-weight: bold; }
         .tt-cb-breakdown { display: flex; gap: 8px; flex-wrap: wrap; }
         .tt-cb-day { color: #a78bfa !important; }
+
+        /* ─── ACTIONS (Refresh & Print) ─── */
+        .tt-actions {
+            display: flex !important;
+            gap: 12px !important;
+            align-items: center !important;
+            width: 100% !important;
+            margin-top: 8px !important;
+        }
+        .tt-button {
+            flex: 1 !important;
+            background: #f97316 !important; 
+            color: #431407 !important; 
+            border: 3px solid #c2410c !important; 
+            font-weight: 900 !important; 
+            font-size: 0.75rem !important; 
+            border-radius: 8px !important; 
+            padding: 10px 16px !important;
+            cursor: pointer !important; 
+            transition: all 0.2s ease !important; 
+            display: flex !important; 
+            align-items: center !important; 
+            justify-content: center !important;
+        }
+        .tt-button:hover {
+            background: #0284c7 !important; 
+            color: #ffffff !important;
+            border-color: #0284c7 !important; 
+            transform: translateY(-4px) scale(1.05) !important; 
+            box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
+        }
+
+        /* ─── MARQUEE TEXT ANIMATION ─── */
+        .tt-subtitle, .tt-status {
+            display: block !important;
+            white-space: nowrap !important;
+            width: 100% !important;
+            overflow: hidden !important;
+            font-weight: 700 !important;
+            font-size: 0.85rem !important;
+            color: #0284c7 !important;
+            animation: slideText 15s linear infinite !important;
+        }
+        @keyframes slideText {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
       `}</style>
 
       <header className="tt-header">
