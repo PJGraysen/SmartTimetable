@@ -1623,11 +1623,13 @@ function Timetable() {
 
       
 
+      
+
       <style>{`
         /* INJECTED HEADER STYLES */
         .tt-header { background: #ffffff; border: 2px solid #0284c7; padding: 16px; border-radius: 16px; box-shadow: 0 8px 24px rgba(2,132,199,0.15); display: flex; flex-direction: column; gap: 16px; }
         
-        /* 6-column Grid for the 5 buttons */
+        /* 6-column Grid for the layout */
         .tt-header > div:first-child { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; background: #f0f9ff; padding: 12px; border-radius: 12px; border: 2px solid #bae6fd; }
         
         /* Base Button Style (Thicker border, Dark Text) */
@@ -1659,38 +1661,11 @@ function Timetable() {
             box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
         }
         
-        /* Force full width for fingerprint */
-        .tt-fingerprint { grid-column: span 6; margin-top: 8px; }
-
-        /* ─── POWERSHELL TERMINAL STYLE FOR CHANGES BANNER ─── */
-        .tt-changes-banner {
-            grid-column: span 6;
-            background: #012456 !important; 
-            color: #eeedf0 !important;
-            font-family: 'Consolas', 'Courier New', monospace !important;
-            border: 2px solid #1e3a8a !important;
-            border-radius: 8px !important;
-            padding: 12px 16px !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: flex-start !important;
-            gap: 8px !important;
-            font-size: 0.9rem !important; /* INCREASED FONT SIZE */
-            margin-top: 12px !important;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.5) !important;
+        /* Force full width for these rows */
+        .tt-fingerprint, .tt-subtitle, .tt-status, .tt-actions, .tt-changes-banner { 
+            grid-column: span 6 !important; 
+            margin-top: 8px !important;
         }
-        .tt-changes-banner details { width: 100%; margin-top: 8px; }
-        .tt-changes-banner summary { cursor: pointer; color: #facc15 !important; font-weight: bold; user-select: none; }
-        .tt-changes-banner ul {
-            margin: 8px 0 0 0; padding: 8px; background: #000000 !important;
-            border: 1px solid #1e3a8a; border-radius: 4px; list-style-type: none;
-            max-height: 250px; overflow-y: auto;
-        }
-        .tt-changes-banner li { margin-bottom: 6px; color: #22c55e !important; white-space: pre-wrap; font-size: 0.85rem; }
-        .tt-cb-label { color: #94a3b8 !important; font-weight: bold; text-transform: uppercase; }
-        .tt-cb-count { background: #1e3a8a !important; padding: 2px 6px; border-radius: 4px; color: #facc15 !important; font-weight: bold; }
-        .tt-cb-breakdown { display: flex; gap: 8px; flex-wrap: wrap; }
-        .tt-cb-day { color: #a78bfa !important; }
 
         /* ─── ACTIONS (Refresh & Print) ─── */
         .tt-actions {
@@ -1698,7 +1673,6 @@ function Timetable() {
             gap: 12px !important;
             align-items: center !important;
             width: 100% !important;
-            margin-top: 8px !important;
         }
         .tt-button {
             flex: 1 !important;
@@ -1706,7 +1680,7 @@ function Timetable() {
             color: #431407 !important; 
             border: 3px solid #c2410c !important; 
             font-weight: 900 !important; 
-            font-size: 0.75rem !important; 
+            font-size: 0.85rem !important; 
             border-radius: 8px !important; 
             padding: 10px 16px !important;
             cursor: pointer !important; 
@@ -1726,18 +1700,61 @@ function Timetable() {
         /* ─── MARQUEE TEXT ANIMATION ─── */
         .tt-subtitle, .tt-status {
             display: block !important;
-            white-space: nowrap !important;
             width: 100% !important;
+            white-space: nowrap !important;
             overflow: hidden !important;
+            background: #0f172a !important; /* Dark Terminal Background */
+            color: #38bdf8 !important; /* Bright Sky Blue Text */
+            font-family: 'Consolas', 'Courier New', monospace !important; 
+            font-size: 1.05rem !important; /* Bigger, readable text */
             font-weight: 700 !important;
-            font-size: 0.85rem !important;
-            color: #0284c7 !important;
-            animation: slideText 15s linear infinite !important;
+            padding: 10px 16px !important;
+            border-radius: 8px !important;
+            border: 2px solid #1e293b !important;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.6) !important;
+            text-indent: 100% !important;
+            animation: marqueeText 25s linear infinite !important; /* Slower, readable speed */
         }
-        @keyframes slideText {
-            0% { transform: translateX(100%); }
-            100% { transform: translateX(-100%); }
+
+        /* Override colors for the Live Status specific text */
+        .tt-status {
+            color: #4ade80 !important; /* Bright Green */
+            background: #064e3b !important; /* Dark Green */
+            border-color: #065f46 !important;
         }
+
+        @keyframes marqueeText {
+            0% { text-indent: 100%; }
+            100% { text-indent: -100%; }
+        }
+
+        /* ─── POWERSHELL TERMINAL STYLE ─── */
+        .tt-changes-banner {
+            background: #012456 !important; 
+            color: #eeedf0 !important;
+            font-family: 'Consolas', 'Courier New', monospace !important;
+            border: 2px solid #1e3a8a !important;
+            border-radius: 8px !important;
+            padding: 12px 16px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 8px !important;
+            font-size: 0.9rem !important; 
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5) !important;
+        }
+        .tt-changes-banner details { width: 100%; margin-top: 8px; }
+        .tt-changes-banner summary { cursor: pointer; color: #facc15 !important; font-weight: bold; user-select: none; }
+        .tt-changes-banner ul {
+            margin: 8px 0 0 0; padding: 8px; background: #000000 !important;
+            border: 1px solid #1e3a8a; border-radius: 4px; list-style-type: none;
+            max-height: 250px; overflow-y: auto;
+        }
+        .tt-changes-banner li { margin-bottom: 6px; color: #22c55e !important; white-space: pre-wrap; font-size: 0.85rem; }
+        .tt-cb-label { color: #94a3b8 !important; font-weight: bold; text-transform: uppercase; }
+        .tt-cb-count { background: #1e3a8a !important; padding: 2px 6px; border-radius: 4px; color: #facc15 !important; font-weight: bold; }
+        .tt-cb-breakdown { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tt-cb-day { color: #a78bfa !important; }
       `}</style>
 
       <header className="tt-header">
