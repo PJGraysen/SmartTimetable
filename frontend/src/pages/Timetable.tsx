@@ -1619,7 +1619,34 @@ function Timetable() {
 
         
 
-        <header className="tt-header">
+        <style>{`
+        /* INJECTED HEADER STYLES */
+        .tt-header { background: #ffffff; border: 2px solid #0284c7; padding: 16px; border-radius: 16px; box-shadow: 0 8px 24px rgba(2,132,199,0.15); display: flex; flex-direction: column; gap: 16px; }
+        
+        /* 6-column Grid for the 5 buttons */
+        .tt-header > div:first-child { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; background: #f0f9ff; padding: 12px; border-radius: 12px; border: 2px solid #bae6fd; }
+        
+        /* Base Button Style */
+        .tt-hard-reload, .tt-dl-png, .tt-dl-pdf, .tt-highlight-toggle, .tt-nuke-cache {
+            background: #f97316 !important; color: white !important; border: 2px solid #ea580c !important;
+            font-weight: 800 !important; font-size: 0.75rem !important; border-radius: 8px !important; padding: 8px 12px !important;
+            cursor: pointer !important; transition: all 0.2s ease !important; display: flex !important; align-items: center !important; justify-content: center !important;
+        }
+        
+        /* 3 on top, 2 on bottom */
+        .tt-hard-reload, .tt-dl-png, .tt-dl-pdf { grid-column: span 2; }
+        .tt-highlight-toggle, .tt-nuke-cache { grid-column: span 3; }
+        
+        /* Hover Effect */
+        .tt-hard-reload:hover, .tt-dl-png:hover, .tt-dl-pdf:hover, .tt-highlight-toggle:hover, .tt-nuke-cache:hover {
+            background: #0284c7 !important; border-color: #0284c7 !important; transform: translateY(-4px) scale(1.05) !important; box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
+        }
+        
+        /* Force full width for fingerprint and banners */
+        .tt-fingerprint, .tt-changes-banner, .tt-subtitle { grid-column: span 6; margin-top: 8px; }
+      `}</style>
+
+      <header className="tt-header">
           <div>
             <button type="button" className="tt-hard-reload" onClick={() => window.location.reload()} title="Hard reload the whole page">&#x21BB; Hard Reload</button>
         <button type="button" className="tt-dl-png" onClick={() => void downloadTimetablePNG()} title="Download visible timetable as PNG">📷 PNG</button>
