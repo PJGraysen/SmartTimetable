@@ -1625,27 +1625,20 @@ function Timetable() {
 
       
 
+      
+
       <style>{`
         /* INJECTED HEADER STYLES */
         .tt-header { background: #ffffff; border: 2px solid #0284c7; padding: 16px; border-radius: 16px; box-shadow: 0 8px 24px rgba(2,132,199,0.15); display: flex; flex-direction: column; gap: 16px; }
         
-        /* 6-column Grid for the layout */
-        .tt-header > div:first-child { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; background: #f0f9ff; padding: 12px; border-radius: 12px; border: 2px solid #bae6fd; }
+        /* 6-column Grid for layout */
+        .tt-header > div:first-child { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; background: #f0f9ff; padding: 12px; border-radius: 12px; border: 2px solid #bae6fd; overflow: hidden; }
         
-        /* Base Button Style (Thicker border, Dark Text) */
+        /* Base Button Style */
         .tt-hard-reload, .tt-dl-png, .tt-dl-pdf, .tt-highlight-toggle, .tt-nuke-cache {
-            background: #f97316 !important; 
-            color: #431407 !important; 
-            border: 3px solid #c2410c !important; 
-            font-weight: 900 !important; 
-            font-size: 0.75rem !important; 
-            border-radius: 8px !important; 
-            padding: 8px 12px !important;
-            cursor: pointer !important; 
-            transition: all 0.2s ease !important; 
-            display: flex !important; 
-            align-items: center !important; 
-            justify-content: center !important;
+            background: #f97316 !important; color: #431407 !important; border: 3px solid #c2410c !important; 
+            font-weight: 900 !important; font-size: 0.75rem !important; border-radius: 8px !important; padding: 8px 12px !important;
+            cursor: pointer !important; transition: all 0.2s ease !important; display: flex !important; align-items: center !important; justify-content: center !important;
         }
         
         /* 3 on top, 2 on bottom */
@@ -1654,101 +1647,71 @@ function Timetable() {
         
         /* Hover Effect */
         .tt-hard-reload:hover, .tt-dl-png:hover, .tt-dl-pdf:hover, .tt-highlight-toggle:hover, .tt-nuke-cache:hover {
-            background: #0284c7 !important; 
-            color: #ffffff !important;
-            border-color: #0284c7 !important; 
-            transform: translateY(-4px) scale(1.05) !important; 
-            box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
+            background: #0284c7 !important; color: #ffffff !important; border-color: #0284c7 !important; 
+            transform: translateY(-4px) scale(1.05) !important; box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
         }
         
         /* Force full width for these rows */
         .tt-fingerprint, .tt-subtitle, .tt-status, .tt-actions, .tt-changes-banner { 
-            grid-column: span 6 !important; 
-            margin-top: 8px !important;
+            grid-column: span 6 !important; margin-top: 8px !important;
         }
 
-        /* ─── ACTIONS (Refresh & Print) ─── */
+        /* ─── REFRESH & PRINT BUTTONS ─── */
         .tt-actions {
-            display: flex !important;
-            gap: 12px !important;
-            align-items: center !important;
-            width: 100% !important;
+            display: flex !important; gap: 12px !important; align-items: center !important; width: 100% !important;
         }
         .tt-button {
-            flex: 1 !important;
-            background: #f97316 !important; 
-            color: #431407 !important; 
-            border: 3px solid #c2410c !important; 
-            font-weight: 900 !important; 
-            font-size: 0.85rem !important; 
-            border-radius: 8px !important; 
-            padding: 10px 16px !important;
-            cursor: pointer !important; 
-            transition: all 0.2s ease !important; 
-            display: flex !important; 
-            align-items: center !important; 
-            justify-content: center !important;
+            flex: 1 !important; background: #f97316 !important; color: #431407 !important; border: 3px solid #c2410c !important; 
+            font-weight: 900 !important; font-size: 0.85rem !important; border-radius: 8px !important; padding: 10px 16px !important;
+            cursor: pointer !important; transition: all 0.2s ease !important; display: flex !important; align-items: center !important; justify-content: center !important;
         }
         .tt-button:hover {
-            background: #0284c7 !important; 
-            color: #ffffff !important;
-            border-color: #0284c7 !important; 
-            transform: translateY(-4px) scale(1.05) !important; 
-            box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
+            background: #0284c7 !important; color: #ffffff !important; border-color: #0284c7 !important; 
+            transform: translateY(-4px) scale(1.05) !important; box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
         }
 
-        /* ─── MARQUEE TEXT ANIMATION ─── */
+        /* ─── MARQUEE TEXT ANIMATION (FIXED) ─── */
         .tt-subtitle, .tt-status {
             display: block !important;
             width: 100% !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            background: #0f172a !important; /* Dark Terminal Background */
-            color: #38bdf8 !important; /* Bright Sky Blue Text */
+            white-space: nowrap !important; /* Forces single line */
+            overflow: hidden !important; 
+            background: #0f172a !important; 
+            color: #38bdf8 !important; 
             font-family: 'Consolas', 'Courier New', monospace !important; 
-            font-size: 1.05rem !important; /* Bigger, readable text */
+            font-size: 1.1rem !important; /* Increased size */
             font-weight: 700 !important;
             padding: 10px 16px !important;
             border-radius: 8px !important;
             border: 2px solid #1e293b !important;
             box-shadow: inset 0 0 15px rgba(0,0,0,0.6) !important;
-            text-indent: 100% !important;
-            animation: marqueeText 25s linear infinite !important; /* Slower, readable speed */
+            /* The fix: animate to -200% so it goes entirely off screen before looping */
+            animation: marqueeText 20s linear infinite !important;
         }
 
-        /* Override colors for the Live Status specific text */
         .tt-status {
-            color: #4ade80 !important; /* Bright Green */
-            background: #064e3b !important; /* Dark Green */
+            color: #4ade80 !important; 
+            background: #064e3b !important; 
             border-color: #065f46 !important;
         }
 
         @keyframes marqueeText {
             0% { text-indent: 100%; }
-            100% { text-indent: -100%; }
+            100% { text-indent: -200%; } /* Forces it completely off-screen left */
         }
 
-        /* ─── POWERSHELL TERMINAL STYLE ─── */
+        /* ─── POWERSHELL TERMINAL BANNER ─── */
         .tt-changes-banner {
-            background: #012456 !important; 
-            color: #eeedf0 !important;
-            font-family: 'Consolas', 'Courier New', monospace !important;
-            border: 2px solid #1e3a8a !important;
-            border-radius: 8px !important;
-            padding: 12px 16px !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: flex-start !important;
-            gap: 8px !important;
-            font-size: 0.9rem !important; 
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.5) !important;
+            background: #012456 !important; color: #eeedf0 !important; font-family: 'Consolas', 'Courier New', monospace !important;
+            border: 2px solid #1e3a8a !important; border-radius: 8px !important; padding: 12px 16px !important;
+            display: flex !important; flex-direction: column !important; align-items: flex-start !important;
+            gap: 8px !important; font-size: 0.9rem !important; box-shadow: inset 0 0 10px rgba(0,0,0,0.5) !important;
         }
         .tt-changes-banner details { width: 100%; margin-top: 8px; }
         .tt-changes-banner summary { cursor: pointer; color: #facc15 !important; font-weight: bold; user-select: none; }
         .tt-changes-banner ul {
             margin: 8px 0 0 0; padding: 8px; background: #000000 !important;
-            border: 1px solid #1e3a8a; border-radius: 4px; list-style-type: none;
-            max-height: 250px; overflow-y: auto;
+            border: 1px solid #1e3a8a; border-radius: 4px; list-style-type: none; max-height: 250px; overflow-y: auto;
         }
         .tt-changes-banner li { margin-bottom: 6px; color: #22c55e !important; white-space: pre-wrap; font-size: 0.85rem; }
         .tt-cb-label { color: #94a3b8 !important; font-weight: bold; text-transform: uppercase; }
