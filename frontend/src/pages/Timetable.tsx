@@ -1627,6 +1627,8 @@ function Timetable() {
 
       
 
+      
+
       <style>{`
         /* INJECTED HEADER STYLES */
         .tt-header { background: #ffffff; border: 2px solid #0284c7; padding: 16px; border-radius: 16px; box-shadow: 0 8px 24px rgba(2,132,199,0.15); display: flex; flex-direction: column; gap: 16px; }
@@ -1670,34 +1672,29 @@ function Timetable() {
             transform: translateY(-4px) scale(1.05) !important; box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
         }
 
-        /* ─── MARQUEE TEXT ANIMATION (FIXED) ─── */
-        .tt-subtitle, .tt-status {
-            display: block !important;
-            width: 100% !important;
-            white-space: nowrap !important; /* Forces single line */
-            overflow: hidden !important; 
-            background: #0f172a !important; 
-            color: #38bdf8 !important; 
-            font-family: 'Consolas', 'Courier New', monospace !important; 
-            font-size: 1.1rem !important; /* Increased size */
-            font-weight: 700 !important;
-            padding: 10px 16px !important;
-            border-radius: 8px !important;
-            border: 2px solid #1e293b !important;
-            box-shadow: inset 0 0 15px rgba(0,0,0,0.6) !important;
-            /* The fix: animate to -200% so it goes entirely off screen before looping */
-            animation: marqueeText 20s linear infinite !important;
+        /* ─── MARQUEE TEXT ANIMATION (SEAMLESS) ─── */
+        .tt-subtitle {
+            display: block !important; width: 100% !important; white-space: nowrap !important; overflow: hidden !important;
+            background: #0f172a !important; color: #38bdf8 !important; font-family: 'Consolas', 'Courier New', monospace !important; 
+            font-size: 1.1rem !important; font-weight: 700 !important; padding: 10px 0 !important; border-radius: 8px !important;
+            border: 2px solid #1e293b !important; box-shadow: inset 0 0 15px rgba(0,0,0,0.6) !important;
+            /* 40s duration, 100% to -100% forces immediate loop */
+            animation: marqueeText 40s linear infinite !important; 
         }
 
         .tt-status {
-            color: #4ade80 !important; 
-            background: #064e3b !important; 
-            border-color: #065f46 !important;
+            display: block !important; width: 100% !important; white-space: nowrap !important; overflow: hidden !important;
+            background: #064e3b !important; color: #4ade80 !important; font-family: 'Consolas', 'Courier New', monospace !important; 
+            font-size: 1.1rem !important; font-weight: 700 !important; padding: 10px 0 !important; border-radius: 8px !important;
+            border: 2px solid #065f46 !important; box-shadow: inset 0 0 15px rgba(0,0,0,0.6) !important;
+            /* 45s duration and -15s delay so it is offset from the top text */
+            animation: marqueeText 45s linear infinite !important; 
+            animation-delay: -15s !important;
         }
 
         @keyframes marqueeText {
             0% { text-indent: 100%; }
-            100% { text-indent: -200%; } /* Forces it completely off-screen left */
+            100% { text-indent: -100%; } /* Travels exactly its own width, snapping back immediately */
         }
 
         /* ─── POWERSHELL TERMINAL BANNER ─── */
