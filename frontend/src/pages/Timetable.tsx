@@ -1428,6 +1428,123 @@ function Timetable() {
     console.log(`[export] vertical-text cells normalized: ${vCount}`);
   }
 
+  // ==========================================================================
+  // EXPORT — HARD RULE: A3 Landscape ONLY. No auto-detection.
+  //   * PNG: exact A3 Landscape dims (4961x3508px @ 300 DPI = 420x297mm).
+  //   * PDF: jsPDF format="a3" landscape.
+  // ==========================================================================
+  const A3_LANDSCAPE_PX: [number, number] = [4961, 3508];
+  const A3_LANDSCAPE_MM: [number, number] = [420, 297];
+  const EXPORT_DPI = 300;
+
+  let _crcTable: Uint32Array | null = null;
+  function crc32(bytes: Uint8Array): number {
+    if (!_crcTable) {
+      _crcTable = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        _crcTable[n] = c >>> 0;
+      }
+    }
+    let crc = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) {
+      crc = (crc >>> 8) ^ _crcTable[(crc ^ bytes[i]) & 0xff];
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  function canvasToA3PngBlob(canvas: HTMLCanvasElement): Blob {
+    const dataUrl = canvas.toDataURL("image/png");
+    const b64 = dataUrl.substring(dataUrl.indexOf(",") + 1);
+    const bin = atob(b64);
+    const png = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) png[i] = bin.charCodeAt(i);
+
+    const ppu = Math.round(EXPORT_DPI / 0.0254);
+    const chunk = new Uint8Array(21);
+    const dv = new DataView(chunk.buffer);
+    dv.setUint32(0, 9);
+    chunk.set([0x70, 0x48, 0x59, 0x73], 4);
+    dv.setUint32(8, ppu);
+    dv.setUint32(12, ppu);
+    chunk[16] = 1;
+    dv.setUint32(17, crc32(chunk.slice(4, 17)));
+
+    const out = new Uint8Array(png.length + 21);
+    out.set(png.slice(0, 33), 0);
+    out.set(chunk, 33);
+    out.set(png.slice(33), 54);
+    return new Blob([out], { type: "image/png" });
+  }
+
+  function padToA3Landscape(canvas: HTMLCanvasElement): HTMLCanvasElement {
+    const W = A3_LANDSCAPE_PX[0];
+    const H = A3_LANDSCAPE_PX[1];
+    const out = document.createElement("canvas");
+    out.width = W;
+    out.height = H;
+    const ctx = out.getContext("2d");
+    if (!ctx) return canvas;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, W, H);
+    const contentRatio = canvas.width / canvas.height;
+    const pageRatio = W / H;
+    let dw: number, dh: number, dx: number, dy: number;
+    if (contentRatio > pageRatio) {
+      dw = W; dh = W / contentRatio; dx = 0; dy = (H - dh) / 2;
+    } else {
+      dh = H; dw = H * contentRatio; dx = (W - dw) / 2; dy = 0;
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(canvas, dx, dy, dw, dh);
+    return out;
+  }
+
+  function stableCloneOverrides(clonedDoc: Document) {
+    // Force a wide fixed layout so the table never squishes
+    clonedDoc.querySelectorAll("[data-tt-capture], .tt-grid-wrap, .tt-table-wrap").forEach((el) => {
+      (el as HTMLElement).style.width = "max-content";
+      (el as HTMLElement).style.minWidth = "3500px";
+    });
+
+    clonedDoc.querySelectorAll("table").forEach((t) => {
+      const tbl = t as HTMLElement;
+      tbl.style.tableLayout = "fixed";
+      tbl.style.width = "3500px"; // Force wide layout
+      tbl.style.maxWidth = "none";
+      tbl.style.borderCollapse = "collapse";
+    });
+
+    clonedDoc.querySelectorAll("th, td").forEach((c) => {
+      const cell = c as HTMLElement;
+      cell.style.whiteSpace = "nowrap";
+      cell.style.overflow = "visible";
+      cell.style.maxWidth = "none";
+    });
+
+    // Fix upside-down text: strip writing-mode and transform completely.
+    const win: any = clonedDoc.defaultView || window;
+    let vCount = 0;
+    clonedDoc.querySelectorAll<HTMLElement>("*").forEach((el) => {
+      let cs: CSSStyleDeclaration | null = null;
+      try { cs = win.getComputedStyle(el); } catch { return; }
+      if (!cs) return;
+      const wm = (cs as any).writingMode || (cs as any).webkitWritingMode || "";
+      if (/vertical/.test(wm)) {
+        vCount++;
+        el.style.writingMode = "horizontal-tb";
+        (el.style as any).webkitWritingMode = "horizontal-tb";
+        el.style.transform = "none";
+        el.style.display = "inline-block";
+        el.style.whiteSpace = "nowrap";
+      }
+    });
+    // eslint-disable-next-line no-console
+    console.log(`[export] vertical-text cells normalized: ${vCount}`);
+  }
+
   async function downloadTimetablePNG() {
     try {
       await waitForRenderFlush();
