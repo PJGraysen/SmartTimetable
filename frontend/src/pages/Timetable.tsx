@@ -1132,6 +1132,100 @@ function Timetable() {
     );
   };
 
+  // ==========================================================================
+  // EXPORT — Surgical A3 Landscape Capture
+  // Leaves CSS intact. Only fixes the html2canvas vertical-text bug.
+  // ==========================================================================
+  const A3_W = 4961;
+  const A3_H = 3508;
+  const EXPORT_DPI = 300;
+
+  let _crcTable: Uint32Array | null = null;
+  function crc32(bytes: Uint8Array): number {
+    if (!_crcTable) {
+      _crcTable = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        _crcTable[n] = c >>> 0;
+      }
+    }
+    let crc = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) {
+      crc = (crc >>> 8) ^ _crcTable[(crc ^ bytes[i]) & 0xff];
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  function canvasToA3PngBlob(canvas: HTMLCanvasElement): Blob {
+    const dataUrl = canvas.toDataURL("image/png");
+    const b64 = dataUrl.substring(dataUrl.indexOf(",") + 1);
+    const bin = atob(b64);
+    const png = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) png[i] = bin.charCodeAt(i);
+
+    const ppu = Math.round(EXPORT_DPI / 0.0254);
+    const chunk = new Uint8Array(21);
+    const dv = new DataView(chunk.buffer);
+    dv.setUint32(0, 9);
+    chunk.set([0x70, 0x48, 0x59, 0x73], 4);
+    dv.setUint32(8, ppu);
+    dv.setUint32(12, ppu);
+    chunk[16] = 1;
+    dv.setUint32(17, crc32(chunk.slice(4, 17)));
+
+    const out = new Uint8Array(png.length + 21);
+    out.set(png.slice(0, 33), 0);
+    out.set(chunk, 33);
+    out.set(png.slice(33), 54);
+    return new Blob([out], { type: "image/png" });
+  }
+
+  function padToA3(canvas: HTMLCanvasElement): HTMLCanvasElement {
+    if (canvas.width === A3_W && canvas.height === A3_H) return canvas;
+    const out = document.createElement("canvas");
+    out.width = A3_W;
+    out.height = A3_H;
+    const ctx = out.getContext("2d");
+    if (!ctx) return canvas;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, A3_W, A3_H);
+    const contentRatio = canvas.width / canvas.height;
+    const pageRatio = A3_W / A3_H;
+    let dw, dh, dx, dy;
+    if (contentRatio > pageRatio) {
+      dw = A3_W; dh = A3_W / contentRatio; dx = 0; dy = (A3_H - dh) / 2;
+    } else {
+      dh = A3_H; dw = A3_H * contentRatio; dx = (A3_W - dw) / 2; dy = 0;
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(canvas, dx, dy, dw, dh);
+    return out;
+  }
+
+  function surgicalClone(clonedDoc: Document) {
+    // html2canvas cannot render writing-mode: vertical-rl.
+    // It renders it horizontally, then your CSS applies rotate(180deg).
+    // We strip both on the clone so the text is upright and readable.
+    const win: any = clonedDoc.defaultView || window;
+    let vCount = 0;
+    
+    // We target exactly the classes from your Timetable.css
+    clonedDoc.querySelectorAll(".tt-day-head, .tt-day, .tt-tea, .tt-lunch, .tt-prayers, .tt-activities").forEach((el) => {
+      vCount++;
+      const htmlEl = el as HTMLElement;
+      htmlEl.style.setProperty("writing-mode", "horizontal-tb", "important");
+      htmlEl.style.setProperty("transform", "none", "important");
+      htmlEl.style.setProperty("display", "flex", "important");
+      htmlEl.style.setProperty("align-items", "center", "important");
+      htmlEl.style.setProperty("justify-content", "center", "important");
+      htmlEl.style.setProperty("text-align", "center", "important");
+      htmlEl.style.setProperty("font-size", "0.65rem", "important"); // Slightly smaller to fit
+    });
+    console.log(`[export] uprighted ${vCount} vertical-text cells.`);
+  }
+
   async function downloadTimetablePNG() {
     try {
       await waitForRenderFlush();
@@ -1139,17 +1233,30 @@ function Timetable() {
       const html2canvas = (mod as any).default || (mod as any);
       const el = captureTarget();
       if (!el) { alert("Could not find the timetable to capture."); return; }
-      const canvas = await html2canvas(el, {
-        scale: 2,
+      
+      // Calculate scale to reach A3 width based on the ACTUAL table width
+      const scale = Math.max(2, A3_W / el.scrollWidth);
+      
+      const raw = await html2canvas(el, {
+        scale,
         backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+        onclone: surgicalClone,
       });
+      
+      const a3 = padToA3(raw);
+      const blob = canvasToA3PngBlob(a3);
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
-      link.download = safe + ".png";
-      link.href = canvas.toDataURL("image/png");
+      link.download = safe + "_A3.png";
+      link.href = url;
       link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      console.log(`[export] PNG saved (${a3.width}x${a3.height}px)`);
     } catch (err) {
       console.log("[download] PNG failed:", err);
       alert("PNG download failed - see console.");
@@ -1165,19 +1272,28 @@ function Timetable() {
       const jsPDF = jsPdfMod.jsPDF || jsPdfMod.default;
       const el = captureTarget();
       if (!el) { alert("Could not find the timetable to capture."); return; }
-      const canvas = await html2canvas(el, {
-        scale: 2,
+      
+      const scale = Math.max(2, A3_W / el.scrollWidth);
+      
+      const raw = await html2canvas(el, {
+        scale,
         backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+        onclone: surgicalClone,
       });
-      const imgData = canvas.toDataURL("image/png");
+      
+      const a3 = padToA3(raw);
+      const imgData = a3.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
       const pw = pdf.internal.pageSize.getWidth();
       const ph = pdf.internal.pageSize.getHeight();
       pdf.addImage(imgData, "PNG", 0, 0, pw, ph);
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
-      pdf.save(safe + ".pdf");
+      pdf.save(safe + "_A3.pdf");
+      console.log(`[export] PDF saved (A3 Landscape)`);
     } catch (err) {
       console.log("[download] PDF failed:", err);
       alert("PDF download failed - see console.");
