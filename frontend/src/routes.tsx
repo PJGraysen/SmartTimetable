@@ -15,6 +15,7 @@ import LoginPage from "./pages/LoginPage";
 import HomeHub from "./pages/HomeHub";
 import Dashboard from "./pages/Dashboard";
 import Placeholder from "./pages/Placeholder";
+import ValidationPage from "./pages/ValidationPage";
 import SettingsPage from "./pages/SettingsPage";
 import AIAssistant from "./pages/AIAssistant";
 import Scheduling from "./Scheduling";
@@ -155,7 +156,7 @@ export const PROTECTED_ROUTES: AppRoute[] = [
   { path: "/library/rules", element: <LibraryShell><LoanRulesPage /></LibraryShell> },
   { path: "/library/settings", element: <LibraryShell><LoanRulesPage /></LibraryShell> },
 
-  { path: "/validation", element: <Placeholder title="Validation" /> },
+  { path: "/validation", element: <ValidationPage /> },
   { path: "/settings", element: <SettingsPage /> },
 
   { path: "/ai", element: <AIAssistant /> },
