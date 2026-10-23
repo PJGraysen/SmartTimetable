@@ -1146,7 +1146,8 @@ function Timetable() {
   //   3. Vertical writing-mode / rotation (which html2canvas cannot render)
   //      is flipped to horizontal text on the copy.
   //   4. A title block (view title, school name, current year/term) is added
-  //      above the table so the printed sheet is self-describing.
+  //      above the table, and the teacher roster below it, so the printed
+  //      sheet is self-describing.
   //   5. `display` is NEVER changed on <th>/<td>. Setting display:flex on a
   //      table cell breaks table layout and the DAY rowSpan, which is what
   //      shifted PRAYERS/ACTIVITIES and distorted the previous export.
@@ -1206,6 +1207,18 @@ function Timetable() {
       .tt-export-host .tt-subject { font-size: 12px !important; }
       .tt-export-host .tt-teacher { font-size: 10.5px !important; }
       .tt-export-host .tt-room    { font-size: 9.5px !important; }
+      /* Teacher roster: same look as the on-screen roster, fixed to 5 columns. */
+      .tt-export-host .tt-teacher-roster {
+        margin-top: 18px !important; padding: 18px !important;
+        box-sizing: border-box !important; width: 100% !important;
+      }
+      .tt-export-host .tt-tr-head { font-size: 18px !important; margin-bottom: 12px !important; }
+      .tt-export-host .tt-tr-grid {
+        display: grid !important; grid-template-columns: repeat(5, 1fr) !important; gap: 10px !important;
+      }
+      .tt-export-host .tt-tr-item {
+        font-size: 14px !important; white-space: nowrap !important; overflow: hidden !important;
+      }
     `;
 
     const host = document.createElement("div");
@@ -1237,6 +1250,33 @@ function Timetable() {
     page.appendChild(head);
     const table = src.cloneNode(true) as HTMLElement;
     page.appendChild(table);
+
+    // Teacher roster below the table: the same list the page shows
+    // (teacherRoster is built from the timetable entries + the teachers in the
+    // database). Built with createElement/textContent so names are never parsed
+    // as HTML.
+    if (teacherRoster.length > 0) {
+      const roster = document.createElement("section");
+      roster.className = "tt-teacher-roster";
+      const rosterHead = document.createElement("div");
+      rosterHead.className = "tt-tr-head";
+      rosterHead.textContent = "TEACHER ROSTER (" + teacherRoster.length + ")";
+      const rosterGrid = document.createElement("div");
+      rosterGrid.className = "tt-tr-grid";
+      for (const t of teacherRoster) {
+        const item = document.createElement("div");
+        item.className = "tt-tr-item";
+        const code = document.createElement("b");
+        code.textContent = t.code;
+        item.appendChild(code);
+        if (t.name) item.appendChild(document.createTextNode(" \u00b7 " + t.name));
+        rosterGrid.appendChild(item);
+      }
+      roster.appendChild(rosterHead);
+      roster.appendChild(rosterGrid);
+      page.appendChild(roster);
+    }
+    page.style.paddingBottom = "16px";
     host.appendChild(page);
     document.body.appendChild(host);
 
@@ -1245,7 +1285,7 @@ function Timetable() {
         el.style.setProperty(prop, val, "important");
 
       const FIXED_W: Record<string, number> = {
-        day: 40, cls: 56, tea: 70, lunch: 70, prayers: 80, activities: 90,
+        day: 60, cls: 56, tea: 70, lunch: 70, prayers: 80, activities: 90,
       };
       const LESSON_MIN = 150;
       const ths = Array.from(table.querySelectorAll<HTMLElement>("thead th"));
@@ -1275,7 +1315,7 @@ function Timetable() {
       };
 
       // 1) Lay out at the minimum lesson width and measure the natural height
-      //    of the whole page (title block + table).
+      //    of the whole page (title block + table + teacher roster).
       let W = applyWidths(LESSON_MIN);
       const H = page.offsetHeight;
 
