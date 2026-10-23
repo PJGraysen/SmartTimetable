@@ -1132,45 +1132,71 @@ function Timetable() {
     );
   };
 
+  // ==========================================================================
+  // EXPORT — HARD RULE: A3 only, never A4.
+  // Timetables are A3 sheets. Any shrink to A4 is a bug.
+  //   * PNG: rendered at >= 3508px shortest edge (A3/300 DPI) so it prints
+  //          at A3 without upscaling artefacts.
+  //   * PDF: A3 page, orientation auto-derived from the capture aspect.
+  // ==========================================================================
+  const A3_SHORT_PX = 3508;
+  const A3_LONG_PX = 4961;
+
+  function a3TargetWidth(el: HTMLElement): number {
+    const isLandscape = el.scrollWidth >= el.scrollHeight;
+    return isLandscape ? A3_LONG_PX : A3_SHORT_PX;
+  }
+
+  function stableCloneOverrides(clonedDoc: Document) {
+    clonedDoc.querySelectorAll("table").forEach((t) => {
+      const tbl = t as HTMLElement;
+      tbl.style.tableLayout = "fixed";
+      tbl.style.width = "auto";
+      tbl.style.minWidth = "100%";
+      tbl.style.borderCollapse = "collapse";
+    });
+    clonedDoc.querySelectorAll("th, td").forEach((c) => {
+      const cell = c as HTMLElement;
+      cell.style.whiteSpace = "nowrap";
+      cell.style.overflow = "visible";
+      cell.style.maxWidth = "none";
+    });
+    clonedDoc.querySelectorAll("table thead tr").forEach((row) => {
+      const cells = Array.from(row.children) as HTMLElement[];
+      const n = cells.length;
+      if (n === 0) return;
+      cells.forEach((c, i) => {
+        c.style.width = i === 0 ? "8%" : `${92 / (n - 1)}%`;
+      });
+    });
+  }
+
   async function downloadTimetablePNG() {
     try {
       await waitForRenderFlush();
       const mod = await import("html2canvas");
       const html2canvas = (mod as any).default || (mod as any);
       const el = captureTarget();
-      if (!el) {
-        alert("Could not find the timetable to capture.");
-        return;
-      }
+      if (!el) { alert("Could not find the timetable to capture."); return; }
+      const scale = Math.max(2, a3TargetWidth(el) / Math.max(1, el.scrollWidth));
       const canvas = await html2canvas(el, {
-        scale: 2,
+        scale,
         backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
-        // html2canvas has a bug where table-layout:auto + rowspan explodes
-        // into hundreds of columns. onclone forces a stable layout on the
-        // cloned DOM before it is rasterized.
-        onclone: (clonedDoc: Document) => {
-          clonedDoc.querySelectorAll("table").forEach((t) => {
-            (t as HTMLElement).style.tableLayout = "fixed";
-            (t as HTMLElement).style.width = "100%";
-            (t as HTMLElement).style.minWidth = "0";
-          });
-          clonedDoc.querySelectorAll("th, td").forEach((c) => {
-            const el = c as HTMLElement;
-            el.style.whiteSpace = "normal";
-            el.style.overflow = "hidden";
-            el.style.maxWidth = "160px";
-          });
-        },
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+        onclone: stableCloneOverrides,
       });
+      console.log(
+        `[export] PNG ${canvas.width}x${canvas.height}px -- ${canvas.width >= 3508 || canvas.height >= 3508 ? "A3 PASS" : "BELOW A3 FAIL"}`,
+      );
       const link = document.createElement("a");
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
-      link.download = safe + ".png";
+      link.download = safe + "_A3.png";
       link.href = canvas.toDataURL("image/png");
       link.click();
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.log("[download] PNG failed:", err);
       alert("PNG download failed - see console.");
     }
@@ -1184,45 +1210,41 @@ function Timetable() {
       const jsPdfMod: any = await import("jspdf");
       const jsPDF = jsPdfMod.jsPDF || jsPdfMod.default;
       const el = captureTarget();
-      if (!el) {
-        alert("Could not find the timetable to capture.");
-        return;
-      }
+      if (!el) { alert("Could not find the timetable to capture."); return; }
+      const scale = Math.max(2, a3TargetWidth(el) / Math.max(1, el.scrollWidth));
       const canvas = await html2canvas(el, {
-        scale: 2,
+        scale,
         backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
-        windowWidth: el.scrollWidth,
-        windowHeight: el.scrollHeight,
-        onclone: (clonedDoc: Document) => {
-          clonedDoc.querySelectorAll("table").forEach((t) => {
-            (t as HTMLElement).style.tableLayout = "fixed";
-            (t as HTMLElement).style.width = "100%";
-            (t as HTMLElement).style.minWidth = "0";
-          });
-          clonedDoc.querySelectorAll("th, td").forEach((c) => {
-            const el = c as HTMLElement;
-            el.style.whiteSpace = "normal";
-            el.style.overflow = "hidden";
-            el.style.maxWidth = "160px";
-          });
-        },
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+        onclone: stableCloneOverrides,
       });
       const imgData = canvas.toDataURL("image/png");
-      // A3 PORTRAIT — 297 x 420 mm. Full-page fill, no margins.
+      const isLandscape = canvas.width >= canvas.height;
       const pdf = new jsPDF({
-        orientation: "portrait",
+        orientation: isLandscape ? "landscape" : "portrait",
         unit: "mm",
         format: "a3",
       });
       const pw = pdf.internal.pageSize.getWidth();
       const ph = pdf.internal.pageSize.getHeight();
-      pdf.addImage(imgData, "PNG", 0, 0, pw, ph);
+      const imgRatio = canvas.width / canvas.height;
+      const pageRatio = pw / ph;
+      let drawW: number, drawH: number, offX: number, offY: number;
+      if (imgRatio > pageRatio) {
+        drawW = pw; drawH = pw / imgRatio; offX = 0; offY = (ph - drawH) / 2;
+      } else {
+        drawH = ph; drawW = ph * imgRatio; offX = (pw - drawW) / 2; offY = 0;
+      }
+      pdf.addImage(imgData, "PNG", offX, offY, drawW, drawH);
+      console.log(
+        `[export] PDF A3 ${isLandscape ? "landscape" : "portrait"} ${pw.toFixed(0)}x${ph.toFixed(0)}mm -- image ${canvas.width}x${canvas.height}px`,
+      );
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
-      pdf.save(safe + ".pdf");
+      pdf.save(safe + "_A3.pdf");
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.log("[download] PDF failed:", err);
       alert("PDF download failed - see console.");
     }
