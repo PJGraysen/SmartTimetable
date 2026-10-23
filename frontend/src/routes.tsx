@@ -75,6 +75,7 @@ import InventoryMaintenance from "./pages/inventory/Maintenance";
 import InventoryAudits from "./pages/inventory/Audits";
 import InventoryReports from "./pages/inventory/Reports";
 import { Navigate } from "react-router-dom";
+import MessagesPage from "./pages/MessagesPage";
 
 export type AppRoute = {
   path: string;
@@ -168,5 +169,6 @@ export const PROTECTED_ROUTES: AppRoute[] = [
   { path: "/admin/teachers", element: <TeachersAdminPage /> },
   { path: "/admin/teachers/merge", element: <MergeTeachersPage /> },
   { path: "/admin/duty-roster", element: <DutyRosterPage /> },
+  { path: "/messages", element: <MessagesPage /> },
 ];
 

@@ -322,3 +322,70 @@
 .tt-hard-reload:active, .tt-dl-png:active, .tt-dl-pdf:active, .tt-highlight-toggle:active, .tt-nuke-cache:active {
   transform: translateY(2px) scale(0.95) !important;
 }
+
+
+/* ─── STRICT FLEXBOX BUTTON LAYOUT (APPENDED) ─── */
+.tt-header {
+  background: #ffffff !important;
+  border: 2px solid #0284c7 !important;
+  border-radius: 16px !important;
+  padding: 16px !important;
+  margin-bottom: 1.5rem !important;
+  box-shadow: 0 8px 24px rgba(2,132,199,0.15) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+
+.tt-header > div:first-child {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  background: #f0f9ff !important;
+  padding: 12px !important;
+  border-radius: 12px !important;
+  border: 2px solid #bae6fd !important;
+}
+
+/* Base Button Style */
+.tt-hard-reload, .tt-dl-png, .tt-dl-pdf, .tt-highlight-toggle, .tt-nuke-cache {
+  background: #f97316 !important;
+  border: 2px solid #ea580c !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  font-size: 0.75rem !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+  cursor: pointer !important;
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Force 3 buttons on top row */
+.tt-hard-reload, .tt-dl-png, .tt-dl-pdf {
+  flex: 1 1 30% !important;
+}
+
+/* Force 2 buttons on bottom row */
+.tt-highlight-toggle, .tt-nuke-cache {
+  flex: 1 1 45% !important;
+}
+
+/* Force fingerprint and banners to their own row */
+.tt-fingerprint, .tt-changes-banner, .tt-subtitle {
+  flex: 1 1 100% !important;
+  margin-top: 8px !important;
+}
+
+/* Hover Motion */
+.tt-hard-reload:hover, .tt-dl-png:hover, .tt-dl-pdf:hover, .tt-highlight-toggle:hover, .tt-nuke-cache:hover {
+  background: #0284c7 !important;
+  border-color: #0284c7 !important;
+  transform: translateY(-4px) scale(1.05) !important;
+  box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
+}
+.tt-hard-reload:active, .tt-dl-png:active, .tt-dl-pdf:active, .tt-highlight-toggle:active, .tt-nuke-cache:active {
+  transform: translateY(2px) scale(0.95) !important;
+}

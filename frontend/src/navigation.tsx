@@ -31,6 +31,7 @@ import {
   Activity,
   GitMerge,
 } from "lucide-react";;;;;;
+import { Mail } from "lucide-react";
 
 export type RoleName =
   | "SUPER_ADMIN" | "PRINCIPAL" | "ADMIN" | "SECRETARY"
@@ -148,6 +149,7 @@ export const MODULE_NAV: Record<string, NavItem[]> = {
   ],
   scheduling: [
     { to: "/timetables", label: "Master Timetable", icon: CalendarDays },  // everyone
+    { to: "/messages", label: "Messages", icon: Mail },
     { to: "/scheduling", label: "Scheduling Runs", icon: PlayCircle, requires: ADMINS_ONLY },
     { to: "/validation", label: "Validation", icon: ClipboardCheck, requires: ADMINS_ONLY },
   ],
@@ -170,6 +172,7 @@ export const STUDENT_HUB: NavItem[] = [
   { to: "/home", label: "My Dashboard", icon: HomeIcon, end: true },
   { to: "/academics", label: "My Academics", icon: GraduationCap, end: true },
   { to: "/timetables", label: "My Timetable", icon: CalendarDays },
+  { to: "/messages", label: "Messages", icon: Mail },
   { to: "/library/catalogue", label: "Library", icon: BookOpen },
   { to: "/ai", label: "AI Assistant", icon: Bot },
 ];
@@ -187,6 +190,7 @@ export const STUDENT_LIBRARY_NAV: NavItem[] = [
 
 export const STUDENT_TIMETABLE_NAV: NavItem[] = [
   { to: "/timetables", label: "My Timetable", icon: CalendarDays },
+  { to: "/messages", label: "Messages", icon: Mail },
 ];
 
 export const STUDENT_ACADEMICS_NAV: NavItem[] = [
@@ -197,6 +201,7 @@ export const HUB_NAV: NavItem[] = [
   { to: "/home", label: "Home", icon: HomeIcon, end: true },
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/timetables", label: "Master Timetable", icon: CalendarDays },
+  { to: "/messages", label: "Messages", icon: Mail },
   { to: "/ai", label: "AI Assistant", icon: Bot },
   { to: "/admin", label: "Admin Console", icon: UserCog, requires: ADMINS_ONLY },];
 

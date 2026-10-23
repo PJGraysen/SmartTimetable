@@ -152,6 +152,12 @@ from django.db import models as _N_models
 from django.utils import timezone as _N_tz
 
 
+def _notification_attachment_path(instance, filename):
+    import os, uuid
+    ext = os.path.splitext(filename)[1]
+    return f"notifications/{instance.recipient_id}/{uuid.uuid4().hex}{ext}"
+
+
 class Notification(_N_models.Model):
     """
     In-app notification. Recipients are users. Created via
@@ -180,6 +186,28 @@ class Notification(_N_models.Model):
     is_read = _N_models.BooleanField(default=False)
     created_at = _N_models.DateTimeField(auto_now_add=True)
     read_at = _N_models.DateTimeField(null=True, blank=True)
+    sender = _N_models.ForeignKey(
+        _N_settings.AUTH_USER_MODEL,
+        on_delete=_N_models.SET_NULL,
+        related_name="sent_notifications",
+        null=True,
+        blank=True,
+    )
+    parent = _N_models.ForeignKey(
+        "self",
+        on_delete=_N_models.SET_NULL,
+        related_name="replies",
+        null=True,
+        blank=True,
+    )
+    attachment = _N_models.FileField(
+        upload_to=_notification_attachment_path,
+        null=True,
+        blank=True,
+    )
+    attachment_name = _N_models.CharField(max_length=255, blank=True, default="")
+    is_archived = _N_models.BooleanField(default=False)
+    is_starred = _N_models.BooleanField(default=False)
 
     class Meta:
         ordering = ("-created_at",)
