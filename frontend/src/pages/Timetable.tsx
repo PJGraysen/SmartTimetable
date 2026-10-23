@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router-dom";
+﻿import { useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { Printer, RefreshCw } from "lucide-react";
@@ -105,95 +105,95 @@ const COLUMNS: TimetableColumn[] = [
   {
     key: "p1",
     label: "P1",
-    time: "08:00–08:40",
+    time: "08:00â€“08:40",
     kind: "lesson",
     period: 1,
   },
   {
     key: "p2",
     label: "P2",
-    time: "08:40–09:20",
+    time: "08:40â€“09:20",
     kind: "lesson",
     period: 2,
   },
   {
     key: "p3",
     label: "P3",
-    time: "09:20–10:00",
+    time: "09:20â€“10:00",
     kind: "lesson",
     period: 3,
   },
   {
     key: "p4",
     label: "P4",
-    time: "10:00–10:40",
+    time: "10:00â€“10:40",
     kind: "lesson",
     period: 4,
   },
   {
     key: "tea",
     label: "TEA",
-    time: "10:40–11:00",
+    time: "10:40â€“11:00",
     kind: "tea",
   },
   {
     key: "p5",
     label: "P5",
-    time: "11:00–11:40",
+    time: "11:00â€“11:40",
     kind: "lesson",
     period: 6,
   },
   {
     key: "p6",
     label: "P6",
-    time: "11:40–12:20",
+    time: "11:40â€“12:20",
     kind: "lesson",
     period: 7,
   },
   {
     key: "p7",
     label: "P7",
-    time: "12:20–13:00",
+    time: "12:20â€“13:00",
     kind: "lesson",
     period: 8,
   },
   {
     key: "lunch",
     label: "LUNCH",
-    time: "13:00–14:00",
+    time: "13:00â€“14:00",
     kind: "lunch",
   },
   {
     key: "p8",
     label: "P8",
-    time: "14:00–14:40",
+    time: "14:00â€“14:40",
     kind: "lesson",
     period: 10,
   },
   {
     key: "p9",
     label: "P9",
-    time: "14:40–15:20",
+    time: "14:40â€“15:20",
     kind: "lesson",
     period: 11,
   },
   {
     key: "p10",
     label: "P10",
-    time: "15:20–16:00",
+    time: "15:20â€“16:00",
     kind: "lesson",
     period: 12,
   },
   {
     key: "prayers",
     label: "PRAYERS",
-    time: "16:00–16:30",
+    time: "16:00â€“16:30",
     kind: "prayers",
   },
   {
     key: "activities",
     label: "ACTIVITIES",
-    time: "16:30–17:45",
+    time: "16:30â€“17:45",
     kind: "activities",
   },
 ];
@@ -1133,7 +1133,7 @@ function Timetable() {
   };
 
   // ==========================================================================
-  // EXPORT — HARD RULE: A3 only, never A4.
+  // EXPORT â€” HARD RULE: A3 only, never A4.
   // Timetables are A3 sheets. Any shrink to A4 is a bug.
   //   * PNG: rendered at >= 3508px shortest edge (A3/300 DPI) so it prints
   //          at A3 without upscaling artefacts.
@@ -1171,6 +1171,146 @@ function Timetable() {
     });
   }
 
+  // ==========================================================================
+  // EXPORT — HARD RULE: A3 only, never A4.
+  //   * PNG: padded to exact A3 pixel dims + pHYs chunk declaring 300 DPI,
+  //          so the file IS a 297x420mm (or 420x297mm) image at the byte level.
+  //   * PDF: jsPDF format="a3", aspect-preserving fit.
+  // ==========================================================================
+  const A3_PORTRAIT_PX: [number, number] = [3508, 4961];
+  const A3_LANDSCAPE_PX: [number, number] = [4961, 3508];
+  const A3_PORTRAIT_MM: [number, number] = [297, 420];
+  const A3_LANDSCAPE_MM: [number, number] = [420, 297];
+  const EXPORT_DPI = 300;
+
+  function a3Dims(el: HTMLElement) {
+    const landscape = el.scrollWidth >= el.scrollHeight;
+    return landscape
+      ? { px: A3_LANDSCAPE_PX, mm: A3_LANDSCAPE_MM, landscape: true }
+      : { px: A3_PORTRAIT_PX,  mm: A3_PORTRAIT_MM,  landscape: false };
+  }
+
+  let _crcTable: Uint32Array | null = null;
+  function crc32(bytes: Uint8Array): number {
+    if (!_crcTable) {
+      _crcTable = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        _crcTable[n] = c >>> 0;
+      }
+    }
+    let crc = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) {
+      crc = (crc >>> 8) ^ _crcTable[(crc ^ bytes[i]) & 0xff];
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  function canvasToA3PngBlob(canvas: HTMLCanvasElement): Blob {
+    const dataUrl = canvas.toDataURL("image/png");
+    const b64 = dataUrl.substring(dataUrl.indexOf(",") + 1);
+    const bin = atob(b64);
+    const png = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) png[i] = bin.charCodeAt(i);
+
+    const ppu = Math.round(EXPORT_DPI / 0.0254);
+    const chunk = new Uint8Array(21);
+    const dv = new DataView(chunk.buffer);
+    dv.setUint32(0, 9);
+    chunk.set([0x70, 0x48, 0x59, 0x73], 4);
+    dv.setUint32(8, ppu);
+    dv.setUint32(12, ppu);
+    chunk[16] = 1;
+    dv.setUint32(17, crc32(chunk.slice(4, 17)));
+
+    const out = new Uint8Array(png.length + 21);
+    out.set(png.slice(0, 33), 0);
+    out.set(chunk, 33);
+    out.set(png.slice(33), 54);
+    return new Blob([out], { type: "image/png" });
+  }
+
+  function padToA3(canvas: HTMLCanvasElement, dims: { px: [number, number] }): HTMLCanvasElement {
+    const W = dims.px[0];
+    const H = dims.px[1];
+    const out = document.createElement("canvas");
+    out.width = W;
+    out.height = H;
+    const ctx = out.getContext("2d");
+    if (!ctx) return canvas;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, W, H);
+    const contentRatio = canvas.width / canvas.height;
+    const pageRatio = W / H;
+    let dw: number, dh: number, dx: number, dy: number;
+    if (contentRatio > pageRatio) {
+      dw = W; dh = W / contentRatio; dx = 0; dy = (H - dh) / 2;
+    } else {
+      dh = H; dw = H * contentRatio; dx = (W - dw) / 2; dy = 0;
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(canvas, dx, dy, dw, dh);
+    return out;
+  }
+
+  function stableCloneOverrides(clonedDoc: Document) {
+    clonedDoc.querySelectorAll("table").forEach((t) => {
+      const tbl = t as HTMLElement;
+      tbl.style.tableLayout = "fixed";
+      tbl.style.width = "auto";
+      tbl.style.minWidth = "100%";
+      tbl.style.borderCollapse = "collapse";
+    });
+    clonedDoc.querySelectorAll("th, td").forEach((c) => {
+      const cell = c as HTMLElement;
+      cell.style.whiteSpace = "nowrap";
+      cell.style.overflow = "visible";
+      cell.style.maxWidth = "none";
+    });
+    clonedDoc.querySelectorAll("table thead tr").forEach((row) => {
+      const cells = Array.from(row.children) as HTMLElement[];
+      const n = cells.length;
+      if (n === 0) return;
+      cells.forEach((c, i) => {
+        c.style.width = i === 0 ? "8%" : `${92 / (n - 1)}%`;
+      });
+    });
+
+    // Normalize vertical-mode text (TEA BREAK / LUNCH / PRAYERS) — html2canvas
+    // flips these because it renders horizontally then applies the baked 180deg
+    // rotate. Strip writing-mode, apply a single explicit rotate.
+    const win: any = clonedDoc.defaultView || window;
+    let vCount = 0;
+    clonedDoc.querySelectorAll<HTMLElement>("*").forEach((el) => {
+      let cs: CSSStyleDeclaration | null = null;
+      try { cs = win.getComputedStyle(el); } catch { return; }
+      if (!cs) return;
+      const wm = (cs as any).writingMode || (cs as any).webkitWritingMode || "";
+      if (!/vertical/.test(wm)) return;
+      vCount++;
+      const tr = cs.transform || "";
+      const flipped = /matrix\(-1,\s*0,\s*0,\s*-1/.test(tr);
+      const dir = flipped ? -90 : 90;
+      const apply = (target: HTMLElement) => {
+        target.style.writingMode = "horizontal-tb";
+        (target.style as any).webkitWritingMode = "horizontal-tb";
+        target.style.transform = `rotate(${dir}deg)`;
+        target.style.transformOrigin = "center center";
+        target.style.whiteSpace = "nowrap";
+        target.style.display = "inline-block";
+      };
+      if (el.tagName === "TD" || el.tagName === "TH") {
+        Array.from(el.children).forEach((c) => apply(c as HTMLElement));
+      } else {
+        apply(el);
+      }
+    });
+    // eslint-disable-next-line no-console
+    console.log(`[export] vertical-text cells normalized: ${vCount}`);
+  }
+
   async function downloadTimetablePNG() {
     try {
       await waitForRenderFlush();
@@ -1178,8 +1318,9 @@ function Timetable() {
       const html2canvas = (mod as any).default || (mod as any);
       const el = captureTarget();
       if (!el) { alert("Could not find the timetable to capture."); return; }
-      const scale = Math.max(2, a3TargetWidth(el) / Math.max(1, el.scrollWidth));
-      const canvas = await html2canvas(el, {
+      const dims = a3Dims(el);
+      const scale = Math.max(2, dims.px[0] / Math.max(1, el.scrollWidth));
+      const raw = await html2canvas(el, {
         scale,
         backgroundColor: "#ffffff",
         useCORS: true,
@@ -1188,15 +1329,24 @@ function Timetable() {
         height: el.scrollHeight,
         onclone: stableCloneOverrides,
       });
-      console.log(
-        `[export] PNG ${canvas.width}x${canvas.height}px -- ${canvas.width >= 3508 || canvas.height >= 3508 ? "A3 PASS" : "BELOW A3 FAIL"}`,
-      );
+      const a3 = padToA3(raw, dims);
+      const blob = canvasToA3PngBlob(a3);
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
       link.download = safe + "_A3.png";
-      link.href = canvas.toDataURL("image/png");
+      link.href = url;
       link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      const mmW = dims.px[0] / EXPORT_DPI * 25.4;
+      const mmH = dims.px[1] / EXPORT_DPI * 25.4;
+      // eslint-disable-next-line no-console
+      console.log(
+        `[export] PNG ${dims.px[0]}x${dims.px[1]}px @ ${EXPORT_DPI}DPI = ` +
+        `${mmW.toFixed(1)} x ${mmH.toFixed(1)} mm (${dims.landscape ? "A3 LANDSCAPE" : "A3 PORTRAIT"})`,
+      );
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.log("[download] PNG failed:", err);
       alert("PNG download failed - see console.");
     }
@@ -1211,8 +1361,9 @@ function Timetable() {
       const jsPDF = jsPdfMod.jsPDF || jsPdfMod.default;
       const el = captureTarget();
       if (!el) { alert("Could not find the timetable to capture."); return; }
-      const scale = Math.max(2, a3TargetWidth(el) / Math.max(1, el.scrollWidth));
-      const canvas = await html2canvas(el, {
+      const dims = a3Dims(el);
+      const scale = Math.max(2, dims.px[0] / Math.max(1, el.scrollWidth));
+      const raw = await html2canvas(el, {
         scale,
         backgroundColor: "#ffffff",
         useCORS: true,
@@ -1221,30 +1372,25 @@ function Timetable() {
         height: el.scrollHeight,
         onclone: stableCloneOverrides,
       });
-      const imgData = canvas.toDataURL("image/png");
-      const isLandscape = canvas.width >= canvas.height;
+      const a3 = padToA3(raw, dims);
+      const imgData = a3.toDataURL("image/png");
       const pdf = new jsPDF({
-        orientation: isLandscape ? "landscape" : "portrait",
+        orientation: dims.landscape ? "landscape" : "portrait",
         unit: "mm",
         format: "a3",
       });
       const pw = pdf.internal.pageSize.getWidth();
       const ph = pdf.internal.pageSize.getHeight();
-      const imgRatio = canvas.width / canvas.height;
-      const pageRatio = pw / ph;
-      let drawW: number, drawH: number, offX: number, offY: number;
-      if (imgRatio > pageRatio) {
-        drawW = pw; drawH = pw / imgRatio; offX = 0; offY = (ph - drawH) / 2;
-      } else {
-        drawH = ph; drawW = ph * imgRatio; offX = (pw - drawW) / 2; offY = 0;
-      }
-      pdf.addImage(imgData, "PNG", offX, offY, drawW, drawH);
-      console.log(
-        `[export] PDF A3 ${isLandscape ? "landscape" : "portrait"} ${pw.toFixed(0)}x${ph.toFixed(0)}mm -- image ${canvas.width}x${canvas.height}px`,
-      );
+      pdf.addImage(imgData, "PNG", 0, 0, pw, ph);
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
       pdf.save(safe + "_A3.pdf");
+      // eslint-disable-next-line no-console
+      console.log(
+        `[export] PDF A3 ${dims.landscape ? "landscape" : "portrait"} ` +
+        `${pw.toFixed(1)} x ${ph.toFixed(1)} mm`,
+      );
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.log("[download] PDF failed:", err);
       alert("PDF download failed - see console.");
     }
@@ -1449,7 +1595,7 @@ function Timetable() {
     return "Master Timetable";
   }, [filterMode, filterValue, subjectValue, selectedGrade]);
 
-  // Unique subject codes present in the loaded timetable — used by
+  // Unique subject codes present in the loaded timetable â€” used by
   // the subject-mode dropdown.
   const allSubjects = useMemo(() => {
     const s = new Set<string>();
@@ -1512,7 +1658,7 @@ function Timetable() {
 
       <main className="tt-page" data-student={isStudentView || undefined}>
 <style>{`
-        /* ─── THE APPROVED A3 GRID CSS ─── */
+        /* â”€â”€â”€ THE APPROVED A3 GRID CSS â”€â”€â”€ */
         
         /* Table container and borders */
         .tt-table-wrap {
@@ -1654,7 +1800,7 @@ function Timetable() {
       
 
       <style>{`
-        /* ─── 1. BUTTONS & TOOLBAR (Preserved) ─── */
+        /* â”€â”€â”€ 1. BUTTONS & TOOLBAR (Preserved) â”€â”€â”€ */
         .tt-header { background: #ffffff; border: 2px solid #0284c7; padding: 16px; border-radius: 16px; box-shadow: 0 8px 24px rgba(2,132,199,0.15); display: flex; flex-direction: column; gap: 16px; }
         .tt-header > div:first-child { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; background: #f0f9ff; padding: 12px; border-radius: 12px; border: 2px solid #bae6fd; overflow: hidden; }
         
@@ -1673,7 +1819,7 @@ function Timetable() {
         
         .tt-fingerprint, .tt-subtitle, .tt-status, .tt-actions, .tt-changes-banner { grid-column: span 6 !important; margin-top: 8px !important; }
 
-        /* ─── 2. ACTIONS (Refresh & Print) ─── */
+        /* â”€â”€â”€ 2. ACTIONS (Refresh & Print) â”€â”€â”€ */
         .tt-actions { display: flex !important; gap: 12px !important; align-items: center !important; width: 100% !important; }
         .tt-button {
             flex: 1 !important; background: #f97316 !important; color: #431407 !important; border: 3px solid #c2410c !important; 
@@ -1685,7 +1831,7 @@ function Timetable() {
             transform: translateY(-4px) scale(1.05) !important; box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
         }
 
-        /* ─── 3. MARQUEE TEXT (Preserved) ─── */
+        /* â”€â”€â”€ 3. MARQUEE TEXT (Preserved) â”€â”€â”€ */
         .tt-subtitle {
             display: block !important; width: 100% !important; white-space: nowrap !important; overflow: hidden !important;
             background: #0f172a !important; color: #38bdf8 !important; font-family: 'Consolas', monospace !important; 
@@ -1702,7 +1848,7 @@ function Timetable() {
         }
         @keyframes marqueeText { 0% { text-indent: 100%; } 100% { text-indent: -100%; } }
 
-        /* ─── 4. POWERSHELL TERMINAL ─── */
+        /* â”€â”€â”€ 4. POWERSHELL TERMINAL â”€â”€â”€ */
         .tt-changes-banner {
             background: #012456 !important; color: #eeedf0 !important; font-family: 'Consolas', monospace !important;
             border: 2px solid #1e3a8a !important; border-radius: 8px !important; padding: 12px 16px !important;
@@ -1718,7 +1864,7 @@ function Timetable() {
         .tt-cb-breakdown { display: flex; gap: 8px; flex-wrap: wrap; }
         .tt-cb-day { color: #a78bfa !important; }
 
-        /* ─── 5. NEW: LIVE SCHEDULE OVERVIEW HEADER ─── */
+        /* â”€â”€â”€ 5. NEW: LIVE SCHEDULE OVERVIEW HEADER â”€â”€â”€ */
         .live-panel-header {
             background: linear-gradient(135deg, #1e293b, #0f172a) !important;
             padding: 24px 16px !important;
@@ -1757,7 +1903,7 @@ function Timetable() {
         }
         @keyframes blinkRed { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
-        /* ─── 6. NEW: TIMETABLE MASTHEAD (CENTERED & BEAMING) ─── */
+        /* â”€â”€â”€ 6. NEW: TIMETABLE MASTHEAD (CENTERED & BEAMING) â”€â”€â”€ */
         .tt-masthead {
             display: flex !important;
             flex-direction: column !important;
@@ -1813,7 +1959,7 @@ function Timetable() {
       `}</style>
 
       <style>{`
-        /* ─── 1. BUTTONS & TOOLBAR ─── */
+        /* â”€â”€â”€ 1. BUTTONS & TOOLBAR â”€â”€â”€ */
         .tt-header { background: #ffffff; border: 2px solid #0284c7; padding: 16px; border-radius: 16px; box-shadow: 0 8px 24px rgba(2,132,199,0.15); display: flex; flex-direction: column; gap: 16px; }
         .tt-header > div:first-child { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; background: #f0f9ff; padding: 12px; border-radius: 12px; border: 2px solid #bae6fd; overflow: hidden; }
         
@@ -1832,7 +1978,7 @@ function Timetable() {
         
         .tt-fingerprint, .tt-subtitle, .tt-status, .tt-actions, .tt-changes-banner { grid-column: span 6 !important; margin-top: 8px !important; }
 
-        /* ─── 2. REFRESH & PRINT ─── */
+        /* â”€â”€â”€ 2. REFRESH & PRINT â”€â”€â”€ */
         .tt-actions { display: flex !important; gap: 12px !important; align-items: center !important; width: 100% !important; }
         .tt-button {
             flex: 1 !important; background: #f97316 !important; color: #431407 !important; border: 3px solid #c2410c !important; 
@@ -1844,7 +1990,7 @@ function Timetable() {
             transform: translateY(-4px) scale(1.05) !important; box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important;
         }
 
-        /* ─── 3. MARQUEE TEXT ─── */
+        /* â”€â”€â”€ 3. MARQUEE TEXT â”€â”€â”€ */
         .tt-subtitle {
             display: block !important; width: 100% !important; white-space: nowrap !important; overflow: hidden !important;
             background: #0f172a !important; color: #38bdf8 !important; font-family: 'Consolas', monospace !important; 
@@ -1861,7 +2007,7 @@ function Timetable() {
         }
         @keyframes marqueeText { 0% { text-indent: 100%; } 100% { text-indent: -100%; } }
 
-        /* ─── 4. POWERSHELL TERMINAL ─── */
+        /* â”€â”€â”€ 4. POWERSHELL TERMINAL â”€â”€â”€ */
         .tt-changes-banner {
             background: #012456 !important; color: #eeedf0 !important; font-family: 'Consolas', monospace !important;
             border: 2px solid #1e3a8a !important; border-radius: 8px !important; padding: 12px 16px !important;
@@ -1877,7 +2023,7 @@ function Timetable() {
         .tt-cb-breakdown { display: flex; gap: 8px; flex-wrap: wrap; }
         .tt-cb-day { color: #a78bfa !important; }
 
-        /* ─── 5. LIVE SCHEDULE OVERVIEW ─── */
+        /* â”€â”€â”€ 5. LIVE SCHEDULE OVERVIEW â”€â”€â”€ */
         .live-panel-header {
             background: linear-gradient(135deg, #1e293b, #0f172a) !important;
             padding: 24px 16px !important;
@@ -1900,7 +2046,7 @@ function Timetable() {
         }
         @keyframes blinkRed { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
-        /* ─── 6. TIMETABLE MASTHEAD (REORDERED & CENTERED) ─── */
+        /* â”€â”€â”€ 6. TIMETABLE MASTHEAD (REORDERED & CENTERED) â”€â”€â”€ */
         .tt-masthead {
             display: flex !important;
             flex-direction: column !important;
@@ -1966,7 +2112,7 @@ function Timetable() {
       `}</style>
 
       <style>{`
-        /* ─── 1. BUTTONS & TOOLBAR ─── */
+        /* â”€â”€â”€ 1. BUTTONS & TOOLBAR â”€â”€â”€ */
         .tt-header { background: #ffffff; border: 2px solid #0284c7; padding: 16px; border-radius: 16px; box-shadow: 0 8px 24px rgba(2,132,199,0.15); display: flex; flex-direction: column; gap: 16px; }
         .tt-header > div:first-child { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; background: #f0f9ff; padding: 12px; border-radius: 12px; border: 2px solid #bae6fd; overflow: hidden; }
         .tt-hard-reload, .tt-dl-png, .tt-dl-pdf, .tt-highlight-toggle, .tt-nuke-cache { background: #f97316 !important; color: #431407 !important; border: 3px solid #c2410c !important; font-weight: 900 !important; font-size: 0.75rem !important; border-radius: 8px !important; padding: 8px 12px !important; cursor: pointer !important; transition: all 0.2s ease !important; display: flex !important; align-items: center !important; justify-content: center !important; }
@@ -1975,17 +2121,17 @@ function Timetable() {
         .tt-hard-reload:hover, .tt-dl-png:hover, .tt-dl-pdf:hover, .tt-highlight-toggle:hover, .tt-nuke-cache:hover { background: #0284c7 !important; color: #ffffff !important; border-color: #0284c7 !important; transform: translateY(-4px) scale(1.05) !important; box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important; }
         .tt-fingerprint, .tt-subtitle, .tt-status, .tt-actions, .tt-changes-banner { grid-column: span 6 !important; margin-top: 8px !important; }
 
-        /* ─── 2. REFRESH & PRINT ─── */
+        /* â”€â”€â”€ 2. REFRESH & PRINT â”€â”€â”€ */
         .tt-actions { display: flex !important; gap: 12px !important; align-items: center !important; width: 100% !important; }
         .tt-button { flex: 1 !important; background: #f97316 !important; color: #431407 !important; border: 3px solid #c2410c !important; font-weight: 900 !important; font-size: 0.85rem !important; border-radius: 8px !important; padding: 10px 16px !important; cursor: pointer !important; transition: all 0.2s ease !important; display: flex !important; align-items: center !important; justify-content: center !important; }
         .tt-button:hover { background: #0284c7 !important; color: #ffffff !important; border-color: #0284c7 !important; transform: translateY(-4px) scale(1.05) !important; box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important; }
 
-        /* ─── 3. MARQUEE TEXT ─── */
+        /* â”€â”€â”€ 3. MARQUEE TEXT â”€â”€â”€ */
         .tt-subtitle { display: block !important; width: 100% !important; white-space: nowrap !important; overflow: hidden !important; background: #0f172a !important; color: #38bdf8 !important; font-family: 'Consolas', monospace !important; font-size: 1.1rem !important; font-weight: 700 !important; padding: 10px 0 !important; border-radius: 8px !important; border: 2px solid #1e293b !important; box-shadow: inset 0 0 15px rgba(0,0,0,0.6) !important; animation: marqueeText 40s linear infinite !important; }
         .tt-status { display: block !important; width: 100% !important; white-space: nowrap !important; overflow: hidden !important; background: #064e3b !important; color: #4ade80 !important; font-family: 'Consolas', monospace !important; font-size: 1.1rem !important; font-weight: 700 !important; padding: 10px 0 !important; border-radius: 8px !important; border: 2px solid #065f46 !important; box-shadow: inset 0 0 15px rgba(0,0,0,0.6) !important; animation: marqueeText 45s linear infinite !important; animation-delay: -15s !important; }
         @keyframes marqueeText { 0% { text-indent: 100%; } 100% { text-indent: -100%; } }
 
-        /* ─── 4. POWERSHELL TERMINAL ─── */
+        /* â”€â”€â”€ 4. POWERSHELL TERMINAL â”€â”€â”€ */
         .tt-changes-banner { background: #012456 !important; color: #eeedf0 !important; font-family: 'Consolas', monospace !important; border: 2px solid #1e3a8a !important; border-radius: 8px !important; padding: 12px 16px !important; display: flex !important; flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; font-size: 0.9rem !important; box-shadow: inset 0 0 10px rgba(0,0,0,0.5) !important; }
         .tt-changes-banner details { width: 100%; margin-top: 8px; }
         .tt-changes-banner summary { cursor: pointer; color: #facc15 !important; font-weight: bold; user-select: none; }
@@ -1996,14 +2142,14 @@ function Timetable() {
         .tt-cb-breakdown { display: flex; gap: 8px; flex-wrap: wrap; }
         .tt-cb-day { color: #a78bfa !important; }
 
-        /* ─── 5. LIVE SCHEDULE OVERVIEW ─── */
+        /* â”€â”€â”€ 5. LIVE SCHEDULE OVERVIEW â”€â”€â”€ */
         .live-panel-header { background: linear-gradient(135deg, #1e293b, #0f172a) !important; padding: 24px 16px !important; text-align: center !important; border-bottom: 3px solid #38bdf8 !important; border-radius: 12px 12px 0 0 !important; }
         .live-panel-header h2 { color: #38bdf8 !important; font-size: 1.6rem !important; font-weight: 900 !important; letter-spacing: 2px !important; text-transform: uppercase !important; margin-bottom: 8px !important; display: flex !important; justify-content: center !important; align-items: center !important; gap: 12px !important; }
         .live-panel-header h2::after { content: "LIVE"; color: #ef4444 !important; font-size: 1rem !important; background: #450a0a !important; padding: 2px 8px !important; border-radius: 4px !important; border: 1px solid #ef4444 !important; animation: blinkRed 1s infinite !important; }
         .live-panel-header p { color: #cbd5e1 !important; font-size: 1rem !important; font-weight: 500 !important; margin: 0 !important; }
         @keyframes blinkRed { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
-        /* ─── 6. TIMETABLE MASTHEAD ─── */
+        /* â”€â”€â”€ 6. TIMETABLE MASTHEAD â”€â”€â”€ */
         .tt-masthead { display: flex !important; flex-direction: column !important; align-items: center !important; text-align: center !important; background: #ffffff !important; padding: 24px !important; border-radius: 16px !important; box-shadow: 0 10px 30px rgba(0,0,0,0.08) !important; margin-bottom: 24px !important; border-top: 5px solid #0284c7 !important; }
         
         .tt-title { font-size: 2.4rem !important; color: #0f172a !important; font-weight: 900 !important; margin: 0 0 12px 0 !important; display: flex !important; justify-content: center !important; align-items: center !important; gap: 20px !important; }
@@ -2016,7 +2162,7 @@ function Timetable() {
       `}</style>
 
       <style>{`
-        /* ─── BUTTONS & TOOLBAR ─── */
+        /* â”€â”€â”€ BUTTONS & TOOLBAR â”€â”€â”€ */
         .tt-header { background: #ffffff; border: 2px solid #0284c7; padding: 16px; border-radius: 16px; box-shadow: 0 8px 24px rgba(2,132,199,0.15); display: flex; flex-direction: column; gap: 16px; }
         .tt-header > div:first-child { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; background: #f0f9ff; padding: 12px; border-radius: 12px; border: 2px solid #bae6fd; overflow: hidden; }
         .tt-hard-reload, .tt-dl-png, .tt-dl-pdf, .tt-highlight-toggle, .tt-nuke-cache { background: #f97316 !important; color: #431407 !important; border: 3px solid #c2410c !important; font-weight: 900 !important; font-size: 0.75rem !important; border-radius: 8px !important; padding: 8px 12px !important; cursor: pointer !important; transition: all 0.2s ease !important; display: flex !important; align-items: center !important; justify-content: center !important; }
@@ -2029,12 +2175,12 @@ function Timetable() {
         .tt-button { flex: 1 !important; background: #f97316 !important; color: #431407 !important; border: 3px solid #c2410c !important; font-weight: 900 !important; font-size: 0.85rem !important; border-radius: 8px !important; padding: 10px 16px !important; cursor: pointer !important; transition: all 0.2s ease !important; display: flex !important; align-items: center !important; justify-content: center !important; }
         .tt-button:hover { background: #0284c7 !important; color: #ffffff !important; border-color: #0284c7 !important; transform: translateY(-4px) scale(1.05) !important; box-shadow: 0 10px 20px rgba(2,132,199,0.4) !important; }
 
-        /* ─── MARQUEE TEXT ─── */
+        /* â”€â”€â”€ MARQUEE TEXT â”€â”€â”€ */
         .tt-subtitle { display: block !important; width: 100% !important; white-space: nowrap !important; overflow: hidden !important; background: #0f172a !important; color: #38bdf8 !important; font-family: 'Consolas', monospace !important; font-size: 1.1rem !important; font-weight: 700 !important; padding: 10px 0 !important; border-radius: 8px !important; border: 2px solid #1e293b !important; box-shadow: inset 0 0 15px rgba(0,0,0,0.6) !important; animation: marqueeText 40s linear infinite !important; }
         .tt-status { display: block !important; width: 100% !important; white-space: nowrap !important; overflow: hidden !important; background: #064e3b !important; color: #4ade80 !important; font-family: 'Consolas', monospace !important; font-size: 1.1rem !important; font-weight: 700 !important; padding: 10px 0 !important; border-radius: 8px !important; border: 2px solid #065f46 !important; box-shadow: inset 0 0 15px rgba(0,0,0,0.6) !important; animation: marqueeText 45s linear infinite !important; animation-delay: -15s !important; }
         @keyframes marqueeText { 0% { text-indent: 100%; } 100% { text-indent: -100%; } }
 
-        /* ─── POWERSHELL TERMINAL ─── */
+        /* â”€â”€â”€ POWERSHELL TERMINAL â”€â”€â”€ */
         .tt-changes-banner { background: #012456 !important; color: #eeedf0 !important; font-family: 'Consolas', monospace !important; border: 2px solid #1e3a8a !important; border-radius: 8px !important; padding: 12px 16px !important; display: flex !important; flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; font-size: 0.9rem !important; box-shadow: inset 0 0 10px rgba(0,0,0,0.5) !important; }
         .tt-changes-banner details { width: 100%; margin-top: 8px; }
         .tt-changes-banner summary { cursor: pointer; color: #facc15 !important; font-weight: bold; user-select: none; }
@@ -2045,14 +2191,14 @@ function Timetable() {
         .tt-cb-breakdown { display: flex; gap: 8px; flex-wrap: wrap; }
         .tt-cb-day { color: #a78bfa !important; }
 
-        /* ─── LIVE SCHEDULE OVERVIEW ─── */
+        /* â”€â”€â”€ LIVE SCHEDULE OVERVIEW â”€â”€â”€ */
         .live-panel-header { background: linear-gradient(135deg, #1e293b, #0f172a) !important; padding: 24px 16px !important; text-align: center !important; border-bottom: 3px solid #38bdf8 !important; border-radius: 12px 12px 0 0 !important; }
         .live-panel-header h2 { color: #38bdf8 !important; font-size: 1.6rem !important; font-weight: 900 !important; letter-spacing: 2px !important; text-transform: uppercase !important; margin-bottom: 8px !important; display: flex !important; justify-content: center !important; align-items: center !important; gap: 12px !important; }
         .live-panel-header h2::after { content: "LIVE"; color: #ef4444 !important; font-size: 1rem !important; background: #450a0a !important; padding: 2px 8px !important; border-radius: 4px !important; border: 1px solid #ef4444 !important; animation: blinkRed 1s infinite !important; }
         .live-panel-header p { color: #cbd5e1 !important; font-size: 1rem !important; font-weight: 500 !important; margin: 0 !important; }
         @keyframes blinkRed { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
-        /* ─── TIMETABLE MASTHEAD (CENTERED & ORDERED) ─── */
+        /* â”€â”€â”€ TIMETABLE MASTHEAD (CENTERED & ORDERED) â”€â”€â”€ */
         .tt-masthead { display: flex !important; flex-direction: column !important; align-items: center !important; text-align: center !important; background: #ffffff !important; padding: 24px !important; border-radius: 16px !important; box-shadow: 0 10px 30px rgba(0,0,0,0.08) !important; margin-bottom: 24px !important; border-top: 5px solid #0284c7 !important; }
         
         /* 1. Master Timetable LIVE */
@@ -2073,10 +2219,10 @@ function Timetable() {
       <header className="tt-header">
           <div>
             <button type="button" className="tt-hard-reload" onClick={() => window.location.reload()} title="Hard reload the whole page">&#x21BB; Hard Reload</button>
-        <button type="button" className="tt-dl-png" onClick={() => void downloadTimetablePNG()} title="Download visible timetable as PNG">📷 PNG</button>
-        <button type="button" className="tt-dl-pdf" onClick={() => void downloadTimetablePDF()} title="Download visible timetable as PDF">📄 PDF</button>
-        <button type="button" className="tt-highlight-toggle" onClick={() => setHighlightOn((v) => !v)} title="Toggle highlight of cells that differ from the previous load"> {highlightOn ? "✦ Highlight ON" : "✦ Highlight OFF"}</button>
-        <button type="button" className="tt-nuke-cache" onClick={() => { localStorage.clear(); sessionStorage.clear();  if ("caches" in window) { caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))); }  window.location.reload(); }} title="Clear all caches and reload"> 🧨 Nuke Cache</button><div className="tt-fingerprint"><span className="tt-fp-label">FINGERPRINT</span><span className="tt-fp-hash">{entrySignature || "--------"}</span><span className="tt-fp-ver">{version}</span>{loadedAt ? <span className="tt-fp-time">{loadedAt.toLocaleTimeString()}</span> : null}</div>
+        <button type="button" className="tt-dl-png" onClick={() => void downloadTimetablePNG()} title="Download visible timetable as PNG">ðŸ“· PNG</button>
+        <button type="button" className="tt-dl-pdf" onClick={() => void downloadTimetablePDF()} title="Download visible timetable as PDF">ðŸ“„ PDF</button>
+        <button type="button" className="tt-highlight-toggle" onClick={() => setHighlightOn((v) => !v)} title="Toggle highlight of cells that differ from the previous load"> {highlightOn ? "âœ¦ Highlight ON" : "âœ¦ Highlight OFF"}</button>
+        <button type="button" className="tt-nuke-cache" onClick={() => { localStorage.clear(); sessionStorage.clear();  if ("caches" in window) { caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))); }  window.location.reload(); }} title="Clear all caches and reload"> ðŸ§¨ Nuke Cache</button><div className="tt-fingerprint"><span className="tt-fp-label">FINGERPRINT</span><span className="tt-fp-hash">{entrySignature || "--------"}</span><span className="tt-fp-ver">{version}</span>{loadedAt ? <span className="tt-fp-time">{loadedAt.toLocaleTimeString()}</span> : null}</div>
         {changesSummary ? (
           <div className="tt-changes-banner">
             <span className="tt-cb-label">CHANGES vs previous load</span>
@@ -2104,7 +2250,7 @@ function Timetable() {
         ) : null}
 
             <p className="tt-subtitle">
-              {version} • 5 Days • {CLASSES.length} Classes • Backend-defined Learning Periods
+              {version} â€¢ 5 Days â€¢ {CLASSES.length} Classes â€¢ Backend-defined Learning Periods
             </p>
           </div>
 
@@ -2219,7 +2365,7 @@ function Timetable() {
             </button>
           )}
           <span style={{ marginLeft: "auto", fontSize: "12px", color: "#64748b" }}>
-            Showing {visibleClasses.length} of {CLASSES.length} classes · {scheduledEntries} of {entries.length} lessons
+            Showing {visibleClasses.length} of {CLASSES.length} classes Â· {scheduledEntries} of {entries.length} lessons
           </span>
         </div>
                 <div className="live-panel-top-wrapper">
@@ -2236,7 +2382,7 @@ function Timetable() {
               </h1>
               <div className="tt-mast-school">{schoolName}</div>
               <div className="tt-mast-line">
-                {termDisplay || "Current Term"} {runCompletedAt ? ` • Generated: ${new Date(runCompletedAt).toLocaleString()}` : ""}
+                {termDisplay || "Current Term"} {runCompletedAt ? ` â€¢ Generated: ${new Date(runCompletedAt).toLocaleString()}` : ""}
               </div>
               <div className="tt-mast-filter">
                 Showing: {viewTitle}
@@ -2470,7 +2616,7 @@ function Timetable() {
                               );
                             })()
                           ) : (
-                            "—"
+                            "â€”"
                           )}
                         </td>
                       );
@@ -2489,7 +2635,7 @@ function Timetable() {
             <div className="tt-tr-grid">
               {teacherRoster.map((t) => (
                 <div key={t.code} className="tt-tr-item">
-                  <b>{t.code}</b>{t.name ? ` · ${t.name}` : ""}
+                  <b>{t.code}</b>{t.name ? ` Â· ${t.name}` : ""}
                 </div>
               ))}
             </div>
@@ -2515,7 +2661,7 @@ function Timetable() {
             <option value="">Newest completed (auto)</option>
             {availableRuns.map((r) => (
               <option key={r.id} value={r.id}>
-                {String(r.id).slice(0, 8)} · {r.completed_at ? new Date(r.completed_at).toLocaleTimeString() : "-"}
+                {String(r.id).slice(0, 8)} Â· {r.completed_at ? new Date(r.completed_at).toLocaleTimeString() : "-"}
               </option>
             ))}
           </select>
@@ -2525,7 +2671,7 @@ function Timetable() {
             onClick={() => void loadTimetable()}
             title="Force reload from backend"
           >
-            ⟳
+            âŸ³
           </button>
             <span className="tt-fresh-dot" />
             <span className="tt-fresh-v">{version}</span>
@@ -2537,9 +2683,9 @@ function Timetable() {
           </div>
           {/* Live Now - active sessions */}
           
-          <span>Subject Code · Teacher Code · Room</span>
+          <span>Subject Code Â· Teacher Code Â· Room</span>
 
-          <span>✓ {scheduledEntries} backend entries</span>
+          <span>âœ“ {scheduledEntries} backend entries</span>
 
           <span>All times are local time</span>
         </footer>
