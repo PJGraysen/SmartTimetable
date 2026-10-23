@@ -1226,36 +1226,92 @@ function Timetable() {
     console.log(`[export] uprighted ${vCount} vertical-text cells.`);
   }
 
+  // ==========================================================================
+  // EXPORT — True A3 Landscape Capture
+  // Logic: Force the DOM to 4961px width inside onclone. This guarantees the
+  // table expands horizontally before capture, filling the A3 canvas perfectly.
+  // ==========================================================================
+  const A3_W = 4961;
+  const A3_H = 3508;
+
+  function padToA3(raw: HTMLCanvasElement): HTMLCanvasElement {
+    const out = document.createElement("canvas");
+    out.width = A3_W;
+    out.height = A3_H;
+    const ctx = out.getContext("2d");
+    if (!ctx) return raw;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, A3_W, A3_H);
+    
+    // Scale to fit perfectly within A3
+    const ratio = Math.min(A3_W / raw.width, A3_H / raw.height);
+    const dw = raw.width * ratio;
+    const dh = raw.height * ratio;
+    const dx = (A3_W - dw) / 2;
+    const dy = (A3_H - dh) / 2;
+    
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(raw, dx, dy, dw, dh);
+    return out;
+  }
+
+  async function captureTable(): Promise<HTMLCanvasElement | null> {
+    await waitForRenderFlush();
+    
+    // Target the actual table
+    const el = document.querySelector<HTMLElement>(".tt-table");
+    if (!el) { alert("Could not find .tt-table"); return null; }
+    
+    const mod = await import("html2canvas");
+    const html2canvas = (mod as any).default || (mod as any);
+    
+    return await html2canvas(el, {
+      scale: 1, // 1 is enough because we are forcing 4961px width
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      logging: false,
+      windowWidth: A3_W, // Force iframe width
+      onclone: (clonedDoc) => {
+        // 1. Fix upside-down text
+        clonedDoc.querySelectorAll(".tt-day-head, .tt-day, .tt-tea, .tt-lunch, .tt-prayers, .tt-activities").forEach((e) => {
+          const h = e as HTMLElement;
+          h.style.setProperty("writing-mode", "horizontal-tb", "important");
+          h.style.setProperty("transform", "none", "important");
+          h.style.setProperty("display", "flex", "important");
+          h.style.setProperty("align-items", "center", "important");
+          h.style.setProperty("justify-content", "center", "important");
+        });
+        
+        // 2. Force the table and wrapper to 4961px width
+        const tbl = clonedDoc.querySelector(".tt-table") as HTMLElement;
+        if (tbl) {
+          tbl.style.setProperty("width", A3_W + "px", "important");
+          tbl.style.setProperty("min-width", A3_W + "px", "important");
+          tbl.style.setProperty("max-width", "none", "important");
+        }
+        
+        const wrap = clonedDoc.querySelector(".tt-table-wrap") as HTMLElement;
+        if (wrap) {
+          wrap.style.setProperty("width", A3_W + "px", "important");
+          wrap.style.setProperty("overflow", "visible", "important");
+        }
+      }
+    });
+  }
+
   async function downloadTimetablePNG() {
     try {
-      await waitForRenderFlush();
-      const mod = await import("html2canvas");
-      const html2canvas = (mod as any).default || (mod as any);
-      const el = captureTarget();
-      if (!el) { alert("Could not find the timetable to capture."); return; }
-      
-      // Calculate scale to reach A3 width based on the ACTUAL table width
-      const scale = Math.max(2, A3_W / el.scrollWidth);
-      
-      const raw = await html2canvas(el, {
-        scale,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        logging: false,
-        width: el.scrollWidth,
-        height: el.scrollHeight,
-        onclone: surgicalClone,
-      });
-      
+      const raw = await captureTable();
+      if (!raw) return;
       const a3 = padToA3(raw);
-      const blob = canvasToA3PngBlob(a3);
-      const url = URL.createObjectURL(blob);
+      
+      // Simple PNG export
       const link = document.createElement("a");
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
       link.download = safe + "_A3.png";
-      link.href = url;
+      link.href = a3.toDataURL("image/png");
       link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
       console.log(`[export] PNG saved (${a3.width}x${a3.height}px)`);
     } catch (err) {
       console.log("[download] PNG failed:", err);
@@ -1265,32 +1321,15 @@ function Timetable() {
 
   async function downloadTimetablePDF() {
     try {
-      await waitForRenderFlush();
-      const h2cMod = await import("html2canvas");
-      const html2canvas = (h2cMod as any).default || (h2cMod as any);
+      const raw = await captureTable();
+      if (!raw) return;
+      const a3 = padToA3(raw);
+      
       const jsPdfMod: any = await import("jspdf");
       const jsPDF = jsPdfMod.jsPDF || jsPdfMod.default;
-      const el = captureTarget();
-      if (!el) { alert("Could not find the timetable to capture."); return; }
-      
-      const scale = Math.max(2, A3_W / el.scrollWidth);
-      
-      const raw = await html2canvas(el, {
-        scale,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        logging: false,
-        width: el.scrollWidth,
-        height: el.scrollHeight,
-        onclone: surgicalClone,
-      });
-      
-      const a3 = padToA3(raw);
-      const imgData = a3.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
-      const pw = pdf.internal.pageSize.getWidth();
-      const ph = pdf.internal.pageSize.getHeight();
-      pdf.addImage(imgData, "PNG", 0, 0, pw, ph);
+      pdf.addImage(a3.toDataURL("image/png"), "PNG", 0, 0, 420, 297);
+      
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
       pdf.save(safe + "_A3.pdf");
       console.log(`[export] PDF saved (A3 Landscape)`);
