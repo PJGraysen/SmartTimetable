@@ -1134,9 +1134,9 @@ function Timetable() {
 
   // ==========================================================================
   // EXPORT — A3 Landscape (420x297mm / 4961x3508px)
-  // FIX: width: A3_W forces html2canvas to capture the FORCED-WIDE clone,
-  // not the narrow live element. Without it, canvas stays ~1300px wide and
-  // padToA3 stamps a tiny image onto a huge white page.
+  // FIX: Captures the table at natural size with scale: 4, then mathematically
+  // scales the high-res image up to fill the A3 page. This makes the text
+  // large and readable, and prevents the "squished rows" bug.
   // ==========================================================================
   const A3_W = 4961;
   const A3_H = 3508;
@@ -1149,11 +1149,14 @@ function Timetable() {
     if (!ctx) return raw;
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, A3_W, A3_H);
+    
+    // Scale the image to fit perfectly within A3
     const ratio = Math.min(A3_W / raw.width, A3_H / raw.height);
     const dw = raw.width * ratio;
     const dh = raw.height * ratio;
     const dx = (A3_W - dw) / 2;
     const dy = (A3_H - dh) / 2;
+    
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(raw, dx, dy, dw, dh);
@@ -1162,18 +1165,21 @@ function Timetable() {
 
   async function captureTable(): Promise<HTMLCanvasElement | null> {
     await waitForRenderFlush();
+    
+    // Target the actual table, not the scroll wrapper
     const el = document.querySelector<HTMLElement>(".tt-table");
     if (!el) { alert("Could not find .tt-table"); return null; }
+    
     const mod = await import("html2canvas");
     const html2canvas = (mod as any).default || (mod as any);
+    
     return await html2canvas(el, {
-      scale: 1,
-      width: A3_W,
-      windowWidth: A3_W,
+      scale: 4, // High-res capture
       backgroundColor: "#ffffff",
       useCORS: true,
       logging: false,
       onclone: (clonedDoc) => {
+        // Only fix the upside-down text. DO NOT force widths.
         clonedDoc.querySelectorAll(".tt-day-head, .tt-day, .tt-tea, .tt-lunch, .tt-prayers, .tt-activities").forEach((e) => {
           const h = e as HTMLElement;
           h.style.setProperty("writing-mode", "horizontal-tb", "important");
@@ -1182,17 +1188,6 @@ function Timetable() {
           h.style.setProperty("align-items", "center", "important");
           h.style.setProperty("justify-content", "center", "important");
         });
-        const tbl = clonedDoc.querySelector(".tt-table") as HTMLElement;
-        if (tbl) {
-          tbl.style.setProperty("width", A3_W + "px", "important");
-          tbl.style.setProperty("min-width", A3_W + "px", "important");
-          tbl.style.setProperty("max-width", "none", "important");
-        }
-        const wrap = clonedDoc.querySelector(".tt-table-wrap") as HTMLElement;
-        if (wrap) {
-          wrap.style.setProperty("width", A3_W + "px", "important");
-          wrap.style.setProperty("overflow", "visible", "important");
-        }
       }
     });
   }
@@ -1202,6 +1197,7 @@ function Timetable() {
       const raw = await captureTable();
       if (!raw) return;
       const a3 = padToA3(raw);
+      
       const link = document.createElement("a");
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
       link.download = safe + "_A3.png";
@@ -1219,10 +1215,12 @@ function Timetable() {
       const raw = await captureTable();
       if (!raw) return;
       const a3 = padToA3(raw);
+      
       const jsPdfMod: any = await import("jspdf");
       const jsPDF = jsPdfMod.jsPDF || jsPdfMod.default;
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
       pdf.addImage(a3.toDataURL("image/png"), "PNG", 0, 0, 420, 297);
+      
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
       pdf.save(safe + "_A3.pdf");
       console.log(`[export] PDF saved (A3 Landscape)`);
