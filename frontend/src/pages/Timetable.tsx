@@ -1132,175 +1132,25 @@ function Timetable() {
     );
   };
 
-  // ==========================================================================
-  // EXPORT — HARD RULE: A3 Landscape ONLY (420x297mm, 4961x3508px @ 300 DPI).
-  // ==========================================================================
-  const A3_W = 4961;
-  const A3_H = 3508;
-  const EXPORT_DPI = 300;
-
-  let _crcTable: Uint32Array | null = null;
-  function crc32(bytes: Uint8Array): number {
-    if (!_crcTable) {
-      _crcTable = new Uint32Array(256);
-      for (let n = 0; n < 256; n++) {
-        let c = n;
-        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-        _crcTable[n] = c >>> 0;
-      }
-    }
-    let crc = 0xffffffff;
-    for (let i = 0; i < bytes.length; i++) {
-      crc = (crc >>> 8) ^ _crcTable[(crc ^ bytes[i]) & 0xff];
-    }
-    return (crc ^ 0xffffffff) >>> 0;
-  }
-
-  function canvasToA3PngBlob(canvas: HTMLCanvasElement): Blob {
-    const dataUrl = canvas.toDataURL("image/png");
-    const b64 = dataUrl.substring(dataUrl.indexOf(",") + 1);
-    const bin = atob(b64);
-    const png = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) png[i] = bin.charCodeAt(i);
-
-    const ppu = Math.round(EXPORT_DPI / 0.0254);
-    const chunk = new Uint8Array(21);
-    const dv = new DataView(chunk.buffer);
-    dv.setUint32(0, 9);
-    chunk.set([0x70, 0x48, 0x59, 0x73], 4);
-    dv.setUint32(8, ppu);
-    dv.setUint32(12, ppu);
-    chunk[16] = 1;
-    dv.setUint32(17, crc32(chunk.slice(4, 17)));
-
-    const out = new Uint8Array(png.length + 21);
-    out.set(png.slice(0, 33), 0);
-    out.set(chunk, 33);
-    out.set(png.slice(33), 54);
-    return new Blob([out], { type: "image/png" });
-  }
-
-  function padToA3(canvas: HTMLCanvasElement): HTMLCanvasElement {
-    if (canvas.width === A3_W && canvas.height === A3_H) return canvas;
-    const out = document.createElement("canvas");
-    out.width = A3_W;
-    out.height = A3_H;
-    const ctx = out.getContext("2d");
-    if (!ctx) return canvas;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, A3_W, A3_H);
-    const contentRatio = canvas.width / canvas.height;
-    const pageRatio = A3_W / A3_H;
-    let dw, dh, dx, dy;
-    if (contentRatio > pageRatio) {
-      dw = A3_W; dh = A3_W / contentRatio; dx = 0; dy = (A3_H - dh) / 2;
-    } else {
-      dh = A3_H; dw = A3_H * contentRatio; dx = (A3_W - dw) / 2; dy = 0;
-    }
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(canvas, dx, dy, dw, dh);
-    return out;
-  }
-
-  function stableCloneOverrides(clonedDoc: Document) {
-    // 1. Strip max-width / overflow / fixed-width from EVERY ancestor
-    //    of the captured element so the table can expand to fill the viewport.
-    const target =
-      clonedDoc.querySelector("[data-tt-capture]") ||
-      clonedDoc.querySelector(".tt-grid-wrap") ||
-      clonedDoc.querySelector(".tt-table-wrap");
-    if (target) {
-      let p: HTMLElement | null = target as HTMLElement;
-      while (p) {
-        p.style.maxWidth = "none";
-        p.style.minWidth = "0";
-        p.style.width = "100%";
-        p.style.overflow = "visible";
-        p.style.display = "block";
-        p.style.flex = "0 0 auto";
-        p = p.parentElement;
-      }
-    }
-
-    // 2. Force table to fill 100% of the (now wide) viewport with fixed layout
-    clonedDoc.querySelectorAll("table").forEach((t) => {
-      const tbl = t as HTMLElement;
-      tbl.style.tableLayout = "fixed";
-      tbl.style.width = "100%";
-      tbl.style.maxWidth = "none";
-      tbl.style.borderCollapse = "collapse";
-    });
-
-    clonedDoc.querySelectorAll("th, td").forEach((c) => {
-      const cell = c as HTMLElement;
-      cell.style.whiteSpace = "nowrap";
-      cell.style.overflow = "visible";
-      cell.style.maxWidth = "none";
-    });
-
-    // 3. Fix upside-down text: strip writing-mode + transform
-    const win: any = clonedDoc.defaultView || window;
-    let vCount = 0;
-    clonedDoc.querySelectorAll<HTMLElement>("*").forEach((el) => {
-      let cs: CSSStyleDeclaration | null = null;
-      try { cs = win.getComputedStyle(el); } catch { return; }
-      if (!cs) return;
-      const wm = (cs as any).writingMode || (cs as any).webkitWritingMode || "";
-      if (/vertical/.test(wm)) {
-        vCount++;
-        el.style.writingMode = "horizontal-tb";
-        (el.style as any).webkitWritingMode = "horizontal-tb";
-        el.style.transform = "none";
-        el.style.display = "inline-block";
-        el.style.whiteSpace = "nowrap";
-      }
-    });
-    // eslint-disable-next-line no-console
-    console.log(`[export] vertical-text cells normalized: ${vCount}`);
-  }
-
-  async function renderWide(el: HTMLElement): Promise<HTMLCanvasElement> {
-    const mod = await import("html2canvas");
-    const html2canvas = (mod as any).default || (mod as any);
-    // Render the iframe at A3 pixel dimensions, crop at the same width.
-    // No el.scrollWidth — that was clipping the wide clone back to the
-    // narrow live viewport (the "squished" bug).
-    const raw = await html2canvas(el, {
-      scale: 1,
-      windowWidth: A3_W,
-      windowHeight: A3_H,
-      width: A3_W,
-      height: A3_H,
-      backgroundColor: "#ffffff",
-      useCORS: true,
-      logging: false,
-      onclone: stableCloneOverrides,
-    });
-    // eslint-disable-next-line no-console
-    console.log(`[export] raw canvas: ${raw.width}x${raw.height}px (target ${A3_W}x${A3_H})`);
-    return raw;
-  }
-
   async function downloadTimetablePNG() {
     try {
       await waitForRenderFlush();
+      const mod = await import("html2canvas");
+      const html2canvas = (mod as any).default || (mod as any);
       const el = captureTarget();
       if (!el) { alert("Could not find the timetable to capture."); return; }
-      const raw = await renderWide(el);
-      const a3 = padToA3(raw);
-      const blob = canvasToA3PngBlob(a3);
-      const url = URL.createObjectURL(blob);
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        logging: false,
+      });
       const link = document.createElement("a");
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
-      link.download = safe + "_A3.png";
-      link.href = url;
+      link.download = safe + ".png";
+      link.href = canvas.toDataURL("image/png");
       link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      // eslint-disable-next-line no-console
-      console.log(`[export] PNG ${A3_W}x${A3_H}px @ ${EXPORT_DPI}DPI = 420.0 x 297.0 mm (A3 LANDSCAPE)`);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.log("[download] PNG failed:", err);
       alert("PNG download failed - see console.");
     }
@@ -1315,23 +1165,20 @@ function Timetable() {
       const jsPDF = jsPdfMod.jsPDF || jsPdfMod.default;
       const el = captureTarget();
       if (!el) { alert("Could not find the timetable to capture."); return; }
-      const raw = await renderWide(el);
-      const a3 = padToA3(raw);
-      const imgData = a3.toDataURL("image/png");
-      const pdf = new jsPDF({
-        orientation: "landscape",
-        unit: "mm",
-        format: "a3",
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        logging: false,
       });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
       const pw = pdf.internal.pageSize.getWidth();
       const ph = pdf.internal.pageSize.getHeight();
       pdf.addImage(imgData, "PNG", 0, 0, pw, ph);
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
-      pdf.save(safe + "_A3.pdf");
-      // eslint-disable-next-line no-console
-      console.log(`[export] PDF A3 landscape 420.0 x 297.0 mm`);
+      pdf.save(safe + ".pdf");
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.log("[download] PDF failed:", err);
       alert("PDF download failed - see console.");
     }
