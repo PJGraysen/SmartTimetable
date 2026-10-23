@@ -1133,103 +1133,10 @@ function Timetable() {
   };
 
   // ==========================================================================
-  // EXPORT — Surgical A3 Landscape Capture
-  // Leaves CSS intact. Only fixes the html2canvas vertical-text bug.
-  // ==========================================================================
-  const A3_W = 4961;
-  const A3_H = 3508;
-  const EXPORT_DPI = 300;
-
-  let _crcTable: Uint32Array | null = null;
-  function crc32(bytes: Uint8Array): number {
-    if (!_crcTable) {
-      _crcTable = new Uint32Array(256);
-      for (let n = 0; n < 256; n++) {
-        let c = n;
-        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-        _crcTable[n] = c >>> 0;
-      }
-    }
-    let crc = 0xffffffff;
-    for (let i = 0; i < bytes.length; i++) {
-      crc = (crc >>> 8) ^ _crcTable[(crc ^ bytes[i]) & 0xff];
-    }
-    return (crc ^ 0xffffffff) >>> 0;
-  }
-
-  function canvasToA3PngBlob(canvas: HTMLCanvasElement): Blob {
-    const dataUrl = canvas.toDataURL("image/png");
-    const b64 = dataUrl.substring(dataUrl.indexOf(",") + 1);
-    const bin = atob(b64);
-    const png = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) png[i] = bin.charCodeAt(i);
-
-    const ppu = Math.round(EXPORT_DPI / 0.0254);
-    const chunk = new Uint8Array(21);
-    const dv = new DataView(chunk.buffer);
-    dv.setUint32(0, 9);
-    chunk.set([0x70, 0x48, 0x59, 0x73], 4);
-    dv.setUint32(8, ppu);
-    dv.setUint32(12, ppu);
-    chunk[16] = 1;
-    dv.setUint32(17, crc32(chunk.slice(4, 17)));
-
-    const out = new Uint8Array(png.length + 21);
-    out.set(png.slice(0, 33), 0);
-    out.set(chunk, 33);
-    out.set(png.slice(33), 54);
-    return new Blob([out], { type: "image/png" });
-  }
-
-  function padToA3(canvas: HTMLCanvasElement): HTMLCanvasElement {
-    if (canvas.width === A3_W && canvas.height === A3_H) return canvas;
-    const out = document.createElement("canvas");
-    out.width = A3_W;
-    out.height = A3_H;
-    const ctx = out.getContext("2d");
-    if (!ctx) return canvas;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, A3_W, A3_H);
-    const contentRatio = canvas.width / canvas.height;
-    const pageRatio = A3_W / A3_H;
-    let dw, dh, dx, dy;
-    if (contentRatio > pageRatio) {
-      dw = A3_W; dh = A3_W / contentRatio; dx = 0; dy = (A3_H - dh) / 2;
-    } else {
-      dh = A3_H; dw = A3_H * contentRatio; dx = (A3_W - dw) / 2; dy = 0;
-    }
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(canvas, dx, dy, dw, dh);
-    return out;
-  }
-
-  function surgicalClone(clonedDoc: Document) {
-    // html2canvas cannot render writing-mode: vertical-rl.
-    // It renders it horizontally, then your CSS applies rotate(180deg).
-    // We strip both on the clone so the text is upright and readable.
-    const win: any = clonedDoc.defaultView || window;
-    let vCount = 0;
-    
-    // We target exactly the classes from your Timetable.css
-    clonedDoc.querySelectorAll(".tt-day-head, .tt-day, .tt-tea, .tt-lunch, .tt-prayers, .tt-activities").forEach((el) => {
-      vCount++;
-      const htmlEl = el as HTMLElement;
-      htmlEl.style.setProperty("writing-mode", "horizontal-tb", "important");
-      htmlEl.style.setProperty("transform", "none", "important");
-      htmlEl.style.setProperty("display", "flex", "important");
-      htmlEl.style.setProperty("align-items", "center", "important");
-      htmlEl.style.setProperty("justify-content", "center", "important");
-      htmlEl.style.setProperty("text-align", "center", "important");
-      htmlEl.style.setProperty("font-size", "0.65rem", "important"); // Slightly smaller to fit
-    });
-    console.log(`[export] uprighted ${vCount} vertical-text cells.`);
-  }
-
-  // ==========================================================================
-  // EXPORT — True A3 Landscape Capture
-  // Logic: Force the DOM to 4961px width inside onclone. This guarantees the
-  // table expands horizontally before capture, filling the A3 canvas perfectly.
+  // EXPORT — A3 Landscape (420x297mm / 4961x3508px)
+  // FIX: width: A3_W forces html2canvas to capture the FORCED-WIDE clone,
+  // not the narrow live element. Without it, canvas stays ~1300px wide and
+  // padToA3 stamps a tiny image onto a huge white page.
   // ==========================================================================
   const A3_W = 4961;
   const A3_H = 3508;
@@ -1242,14 +1149,11 @@ function Timetable() {
     if (!ctx) return raw;
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, A3_W, A3_H);
-    
-    // Scale to fit perfectly within A3
     const ratio = Math.min(A3_W / raw.width, A3_H / raw.height);
     const dw = raw.width * ratio;
     const dh = raw.height * ratio;
     const dx = (A3_W - dw) / 2;
     const dy = (A3_H - dh) / 2;
-    
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(raw, dx, dy, dw, dh);
@@ -1258,22 +1162,18 @@ function Timetable() {
 
   async function captureTable(): Promise<HTMLCanvasElement | null> {
     await waitForRenderFlush();
-    
-    // Target the actual table
     const el = document.querySelector<HTMLElement>(".tt-table");
     if (!el) { alert("Could not find .tt-table"); return null; }
-    
     const mod = await import("html2canvas");
     const html2canvas = (mod as any).default || (mod as any);
-    
     return await html2canvas(el, {
-      scale: 1, // 1 is enough because we are forcing 4961px width
+      scale: 1,
+      width: A3_W,
+      windowWidth: A3_W,
       backgroundColor: "#ffffff",
       useCORS: true,
       logging: false,
-      windowWidth: A3_W, // Force iframe width
       onclone: (clonedDoc) => {
-        // 1. Fix upside-down text
         clonedDoc.querySelectorAll(".tt-day-head, .tt-day, .tt-tea, .tt-lunch, .tt-prayers, .tt-activities").forEach((e) => {
           const h = e as HTMLElement;
           h.style.setProperty("writing-mode", "horizontal-tb", "important");
@@ -1282,15 +1182,12 @@ function Timetable() {
           h.style.setProperty("align-items", "center", "important");
           h.style.setProperty("justify-content", "center", "important");
         });
-        
-        // 2. Force the table and wrapper to 4961px width
         const tbl = clonedDoc.querySelector(".tt-table") as HTMLElement;
         if (tbl) {
           tbl.style.setProperty("width", A3_W + "px", "important");
           tbl.style.setProperty("min-width", A3_W + "px", "important");
           tbl.style.setProperty("max-width", "none", "important");
         }
-        
         const wrap = clonedDoc.querySelector(".tt-table-wrap") as HTMLElement;
         if (wrap) {
           wrap.style.setProperty("width", A3_W + "px", "important");
@@ -1305,8 +1202,6 @@ function Timetable() {
       const raw = await captureTable();
       if (!raw) return;
       const a3 = padToA3(raw);
-      
-      // Simple PNG export
       const link = document.createElement("a");
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
       link.download = safe + "_A3.png";
@@ -1324,12 +1219,10 @@ function Timetable() {
       const raw = await captureTable();
       if (!raw) return;
       const a3 = padToA3(raw);
-      
       const jsPdfMod: any = await import("jspdf");
       const jsPDF = jsPdfMod.jsPDF || jsPdfMod.default;
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
       pdf.addImage(a3.toDataURL("image/png"), "PNG", 0, 0, 420, 297);
-      
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
       pdf.save(safe + "_A3.pdf");
       console.log(`[export] PDF saved (A3 Landscape)`);
