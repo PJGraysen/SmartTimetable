@@ -842,15 +842,8 @@ export default function Scheduling() {
   }
 
   async function handleApproveRun(runId: string) {
-    console.log("[scheduling] Approve clicked for run", runId);
-    try {
-      await approveSchedulingRun(runId);
-      toast.push({ type: "success", title: "Run approved", message: "The timetable is now active." });
-      await loadDashboard();
-    } catch (e: any) {
-      const msg = e?.response?.data?.detail || (e instanceof Error ? e.message : String(e));
-      toast.push({ type: "error", title: "Approve failed", message: String(msg).slice(0, 300) });
-    }
+    // Redirect to the Validation page to perform final checks and distribute
+    window.location.href = `/validation?run=${runId}`;
   }
 
   async function handleDiscardRun(runId: string) {

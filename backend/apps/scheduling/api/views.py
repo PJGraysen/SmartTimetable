@@ -712,6 +712,27 @@ class SchedulingRunApproveView(_APIView):
                 is_active=True, is_published=True
             )
 
+        # Notify all active teachers about the new timetable
+        try:
+            from apps.users.models import Teacher
+            from apps.core.models import Notification
+            
+            teachers = Teacher.objects.filter(is_active=True, user__isnull=False)
+            notifications = []
+            for t in teachers:
+                notifications.append(Notification(
+                    recipient_id=t.user_id,
+                    kind=Notification.Kind.APPROVED,
+                    title="New Timetable Published",
+                    body="The administration has published a new timetable. Please review your schedule and confirm your times are aligned.",
+                    url="/timetables"
+                ))
+            if notifications:
+                Notification.objects.bulk_create(notifications)
+        except Exception as _e_notif:
+            import sys as _sys_n
+            print(f"[NOTIFY] Failed to send teacher notifications: {_e_notif}", file=_sys_n.stderr)
+
         # Audit
         try:
             from apps.academics.audit_util import log_event

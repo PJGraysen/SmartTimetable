@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   AlertCircle, CheckCircle2, ShieldAlert, Info, ChevronDown, CheckCheck,
-  LayoutGrid, ListFilter,
+  LayoutGrid, ListFilter, Send
 } from "lucide-react";
-import { fetchSchedulingRuns, getSchedulingRunReport, resolveValidation, type SchedulingRun } from "../services/scheduling";
+import { fetchSchedulingRuns, getSchedulingRunReport, resolveValidation, approveSchedulingRun, type SchedulingRun } from "../services/scheduling";
 
 type Constraint = {
   id: string;
@@ -47,6 +47,7 @@ export default function ValidationPage() {
   const [selectedRunId, setSelectedRunId] = useState<string>("");
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -95,6 +96,19 @@ export default function ValidationPage() {
     }
   };
 
+  const handlePublish = async () => {
+    if (!report?.approvable) return;
+    setPublishing(true);
+    try {
+      await approveSchedulingRun(selectedRunId, "Approved via Validation Dashboard");
+      // Redirect to the main timetable page after distribution
+      window.location.href = "/timetables";
+    } catch (e: any) {
+      alert("Failed to publish: " + (e?.response?.data?.detail || e.message));
+      setPublishing(false);
+    }
+  };
+
   const categoryBuckets = useMemo(() => {
     if (!report) return [];
     const map = new Map<string, { category: string; display: string; severity: Severity; total: number; unresolved: number }>();
@@ -135,11 +149,34 @@ export default function ValidationPage() {
 
   return (
     <div style={{ padding: "2rem", maxWidth: "1400px", margin: "0 auto", fontFamily: "system-ui, sans-serif", background: "#f8fafc", minHeight: "100vh" }}>
-      <div style={{ marginBottom: "2rem" }}>
-        <h1 style={{ fontSize: "1.8rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>Validation Dashboard</h1>
-        <p style={{ color: "#64748b", margin: "6px 0 0 0", fontSize: "0.95rem" }}>Review constraint compliance per scheduling run. Resolve hard blocks before approval.</p>
+      
+      {/* HEADER */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2rem", flexWrap: "wrap", gap: "16px" }}>
+        <div>
+          <h1 style={{ fontSize: "1.8rem", fontWeight: 900, color: "#0f172a", margin: 0 }}>Validation & Distribution</h1>
+          <p style={{ color: "#64748b", margin: "6px 0 0 0", fontSize: "0.95rem" }}>Review constraint compliance. Once all hard constraints are resolved, distribute the timetable.</p>
+        </div>
+        {report && (
+          <button 
+            onClick={handlePublish} 
+            disabled={!report.approvable || publishing}
+            style={{ 
+              display: "flex", alignItems: "center", gap: "10px", padding: "14px 24px", borderRadius: "12px", 
+              background: report.approvable ? "linear-gradient(135deg, #10b981, #059669)" : "#e2e8f0", 
+              color: report.approvable ? "#fff" : "#94a3b8",
+              fontWeight: 900, fontSize: "1rem", border: "none", 
+              cursor: report.approvable && !publishing ? "pointer" : "not-allowed",
+              boxShadow: report.approvable ? "0 8px 24px rgba(16,185,129,0.4)" : "none",
+              transition: "all 0.2s ease"
+            }}
+          >
+            <Send size={20} />
+            {publishing ? "Distributing..." : "Validate & Distribute"}
+          </button>
+        )}
       </div>
 
+      {/* RUN SELECTOR */}
       <div style={{ display: "flex", gap: "12px", alignItems: "stretch", marginBottom: "2rem", flexWrap: "wrap" }} ref={dropdownRef}>
         <div style={{ position: "relative", flex: 1, minWidth: "300px", maxWidth: "500px" }}>
           <button onClick={() => setDropdownOpen(v => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", background: "#fff", border: "2px solid #0284c7", borderRadius: "12px", cursor: "pointer", textAlign: "left", fontWeight: 700, fontSize: "0.9rem", color: "#0f172a" }}>
@@ -161,15 +198,6 @@ export default function ValidationPage() {
             </div>
           )}
         </div>
-        {report && (
-          <div style={{ padding: "14px 20px", background: report.approvable ? "#f0fdf4" : "#fef2f2", border: "2px solid " + (report.approvable ? "#86efac" : "#fecaca"), borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
-            {report.approvable ? <CheckCheck size={20} color="#16a34a" /> : <AlertCircle size={20} color="#dc2626" />}
-            <div>
-              <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase" }}>Approval</div>
-              <div style={{ fontWeight: 800, color: report.approvable ? "#166534" : "#991b1b" }}>{report.approvable ? "Ready" : "Blocked"}</div>
-            </div>
-          </div>
-        )}
       </div>
 
       {loading && <div style={{ textAlign: "center", padding: "3rem", color: "#64748b" }}>Loading validation report...</div>}
@@ -180,29 +208,31 @@ export default function ValidationPage() {
 
       {!loading && report && (
         <>
+          {/* SUMMARY TILES */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "2rem" }}>
-            <div style={{ padding: "20px", background: "#fff", border: "2px solid #e2e8f0", borderRadius: "14px" }}>
+            <div className="motion-tile" style={{ padding: "20px", background: "#fff", border: "2px solid #e2e8f0", borderRadius: "14px" }}>
               <div style={{ fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Overall Compliance</div>
               <div style={{ fontSize: "2.2rem", fontWeight: 900, color: overallCompliance === 100 ? "#16a34a" : overallCompliance >= 75 ? "#d97706" : "#dc2626", marginTop: "4px" }}>{overallCompliance}%</div>
               <div style={{ fontSize: "0.8rem", color: "#64748b" }}>{totalResolved} of {totalConstraints} resolved</div>
             </div>
-            <div style={{ padding: "20px", background: "#fef2f2", border: "2px solid #fecaca", borderRadius: "14px" }}>
+            <div className="motion-tile" style={{ padding: "20px", background: "#fef2f2", border: "2px solid #fecaca", borderRadius: "14px" }}>
               <div style={{ fontSize: "0.72rem", color: "#991b1b", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Hard Unresolved</div>
               <div style={{ fontSize: "2.2rem", fontWeight: 900, color: "#dc2626", marginTop: "4px" }}>{report.counts.hard_unresolved}</div>
               <div style={{ fontSize: "0.8rem", color: "#991b1b" }}>{report.counts.hard} total hard</div>
             </div>
-            <div style={{ padding: "20px", background: "#fffbeb", border: "2px solid #fde68a", borderRadius: "14px" }}>
+            <div className="motion-tile" style={{ padding: "20px", background: "#fffbeb", border: "2px solid #fde68a", borderRadius: "14px" }}>
               <div style={{ fontSize: "0.72rem", color: "#92400e", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Soft Warnings</div>
               <div style={{ fontSize: "2.2rem", fontWeight: 900, color: "#d97706", marginTop: "4px" }}>{report.counts.soft}</div>
               <div style={{ fontSize: "0.8rem", color: "#92400e" }}>soft rules</div>
             </div>
-            <div style={{ padding: "20px", background: "#eff6ff", border: "2px solid #bfdbfe", borderRadius: "14px" }}>
+            <div className="motion-tile" style={{ padding: "20px", background: "#eff6ff", border: "2px solid #bfdbfe", borderRadius: "14px" }}>
               <div style={{ fontSize: "0.72rem", color: "#1e40af", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Info</div>
               <div style={{ fontSize: "2.2rem", fontWeight: 900, color: "#2563eb", marginTop: "4px" }}>{report.counts.info}</div>
               <div style={{ fontSize: "0.8rem", color: "#1e40af" }}>informational</div>
             </div>
           </div>
 
+          {/* CATEGORY TILES */}
           {categoryBuckets.length > 0 && (
             <div style={{ marginBottom: "2rem" }}>
               <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0f172a", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -218,7 +248,7 @@ export default function ValidationPage() {
                   const isActive = activeCategory === b.category;
                   const compliance = b.total > 0 ? Math.round(((b.total - b.unresolved) / b.total) * 100) : 100;
                   return (
-                    <button key={b.category} onClick={() => setActiveCategory(isActive ? null : b.category)} style={{ padding: "16px", background: isActive ? colors.bg : "#fff", border: "2px solid " + (isActive ? colors.border : "#e2e8f0"), borderLeft: "6px solid " + colors.fg, borderRadius: "12px", cursor: "pointer", textAlign: "left", transition: "all 0.2s", transform: isActive ? "translateY(-2px)" : "none", boxShadow: isActive ? "0 8px 24px rgba(0,0,0,0.1)" : "0 2px 6px rgba(0,0,0,0.03)" }}>
+                    <button key={b.category} onClick={() => setActiveCategory(isActive ? null : b.category)} className="motion-tile" style={{ padding: "16px", background: isActive ? colors.bg : "#fff", border: "2px solid " + (isActive ? colors.border : "#e2e8f0"), borderLeft: "6px solid " + colors.fg, borderRadius: "12px", cursor: "pointer", textAlign: "left", transform: isActive ? "translateY(-4px) scale(1.02)" : "none", boxShadow: isActive ? "0 12px 30px rgba(0,0,0,0.12)" : "0 2px 6px rgba(0,0,0,0.03)", zIndex: 10, position: "relative" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
                         <Icon size={18} color={colors.fg} />
                         <span style={{ fontSize: "0.7rem", textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.05em", color: colors.fg }}>{b.severity}</span>
@@ -238,6 +268,7 @@ export default function ValidationPage() {
             </div>
           )}
 
+          {/* DETAILS LIST */}
           <div>
             <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0f172a", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
               <ListFilter size={20} color="#0284c7" />
@@ -254,7 +285,7 @@ export default function ValidationPage() {
                   const colors = SEVERITY_COLORS[c.severity];
                   const Icon = SEVERITY_ICONS[c.severity];
                   return (
-                    <div key={c.id} style={{ background: "#fff", border: "1px solid " + (c.is_resolved ? "#86efac" : colors.border), borderLeft: "5px solid " + (c.is_resolved ? "#16a34a" : colors.fg), padding: "16px", borderRadius: "10px", display: "flex", gap: "14px", opacity: c.is_resolved ? 0.7 : 1 }}>
+                    <div key={c.id} className="motion-tile" style={{ background: "#fff", border: "1px solid " + (c.is_resolved ? "#86efac" : colors.border), borderLeft: "5px solid " + (c.is_resolved ? "#16a34a" : colors.fg), padding: "16px", borderRadius: "10px", display: "flex", gap: "14px", opacity: c.is_resolved ? 0.7 : 1 }}>
                       <div style={{ marginTop: "2px" }}>{c.is_resolved ? <CheckCircle2 size={20} color="#16a34a" /> : <Icon size={20} color={colors.fg} />}</div>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
@@ -278,6 +309,17 @@ export default function ValidationPage() {
           </div>
         </>
       )}
+      <style>{`
+        .motion-tile {
+          transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .motion-tile:hover {
+          transform: translateY(-4px) scale(1.01);
+          box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+          z-index: 20;
+          position: relative;
+        }
+      `}</style>
     </div>
   );
 }
