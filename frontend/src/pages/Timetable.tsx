@@ -1133,12 +1133,10 @@ function Timetable() {
   };
 
   // ==========================================================================
-  // EXPORT — HARD RULE: A3 Landscape ONLY. No auto-detection.
-  //   * PNG: exact A3 Landscape dims (4961x3508px @ 300 DPI = 420x297mm).
-  //   * PDF: jsPDF format="a3" landscape.
+  // EXPORT — HARD RULE: A3 Landscape ONLY (420x297mm, 4961x3508px @ 300 DPI).
   // ==========================================================================
-  const A3_LANDSCAPE_PX: [number, number] = [4961, 3508];
-  const A3_LANDSCAPE_MM: [number, number] = [420, 297];
+  const A3_W = 4961;
+  const A3_H = 3508;
   const EXPORT_DPI = 300;
 
   let _crcTable: Uint32Array | null = null;
@@ -1182,23 +1180,22 @@ function Timetable() {
     return new Blob([out], { type: "image/png" });
   }
 
-  function padToA3Landscape(canvas: HTMLCanvasElement): HTMLCanvasElement {
-    const W = A3_LANDSCAPE_PX[0];
-    const H = A3_LANDSCAPE_PX[1];
+  function padToA3(canvas: HTMLCanvasElement): HTMLCanvasElement {
+    if (canvas.width === A3_W && canvas.height === A3_H) return canvas;
     const out = document.createElement("canvas");
-    out.width = W;
-    out.height = H;
+    out.width = A3_W;
+    out.height = A3_H;
     const ctx = out.getContext("2d");
     if (!ctx) return canvas;
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, A3_W, A3_H);
     const contentRatio = canvas.width / canvas.height;
-    const pageRatio = W / H;
-    let dw: number, dh: number, dx: number, dy: number;
+    const pageRatio = A3_W / A3_H;
+    let dw, dh, dx, dy;
     if (contentRatio > pageRatio) {
-      dw = W; dh = W / contentRatio; dx = 0; dy = (H - dh) / 2;
+      dw = A3_W; dh = A3_W / contentRatio; dx = 0; dy = (A3_H - dh) / 2;
     } else {
-      dh = H; dw = H * contentRatio; dx = (W - dw) / 2; dy = 0;
+      dh = A3_H; dw = A3_H * contentRatio; dx = (A3_W - dw) / 2; dy = 0;
     }
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
@@ -1207,15 +1204,30 @@ function Timetable() {
   }
 
   function stableCloneOverrides(clonedDoc: Document) {
-    clonedDoc.querySelectorAll("[data-tt-capture], .tt-grid-wrap, .tt-table-wrap").forEach((el) => {
-      (el as HTMLElement).style.width = "max-content";
-      (el as HTMLElement).style.minWidth = "3500px";
-    });
+    // 1. Strip max-width / overflow / fixed-width from EVERY ancestor
+    //    of the captured element so the table can expand to fill the viewport.
+    const target =
+      clonedDoc.querySelector("[data-tt-capture]") ||
+      clonedDoc.querySelector(".tt-grid-wrap") ||
+      clonedDoc.querySelector(".tt-table-wrap");
+    if (target) {
+      let p: HTMLElement | null = target as HTMLElement;
+      while (p) {
+        p.style.maxWidth = "none";
+        p.style.minWidth = "0";
+        p.style.width = "100%";
+        p.style.overflow = "visible";
+        p.style.display = "block";
+        p.style.flex = "0 0 auto";
+        p = p.parentElement;
+      }
+    }
 
+    // 2. Force table to fill 100% of the (now wide) viewport with fixed layout
     clonedDoc.querySelectorAll("table").forEach((t) => {
       const tbl = t as HTMLElement;
       tbl.style.tableLayout = "fixed";
-      tbl.style.width = "3500px";
+      tbl.style.width = "100%";
       tbl.style.maxWidth = "none";
       tbl.style.borderCollapse = "collapse";
     });
@@ -1227,6 +1239,7 @@ function Timetable() {
       cell.style.maxWidth = "none";
     });
 
+    // 3. Fix upside-down text: strip writing-mode + transform
     const win: any = clonedDoc.defaultView || window;
     let vCount = 0;
     clonedDoc.querySelectorAll<HTMLElement>("*").forEach((el) => {
@@ -1243,28 +1256,39 @@ function Timetable() {
         el.style.whiteSpace = "nowrap";
       }
     });
+    // eslint-disable-next-line no-console
     console.log(`[export] vertical-text cells normalized: ${vCount}`);
+  }
+
+  async function renderWide(el: HTMLElement): Promise<HTMLCanvasElement> {
+    const mod = await import("html2canvas");
+    const html2canvas = (mod as any).default || (mod as any);
+    // Render the iframe at A3 pixel dimensions, crop at the same width.
+    // No el.scrollWidth — that was clipping the wide clone back to the
+    // narrow live viewport (the "squished" bug).
+    const raw = await html2canvas(el, {
+      scale: 1,
+      windowWidth: A3_W,
+      windowHeight: A3_H,
+      width: A3_W,
+      height: A3_H,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      logging: false,
+      onclone: stableCloneOverrides,
+    });
+    // eslint-disable-next-line no-console
+    console.log(`[export] raw canvas: ${raw.width}x${raw.height}px (target ${A3_W}x${A3_H})`);
+    return raw;
   }
 
   async function downloadTimetablePNG() {
     try {
       await waitForRenderFlush();
-      const mod = await import("html2canvas");
-      const html2canvas = (mod as any).default || (mod as any);
       const el = captureTarget();
       if (!el) { alert("Could not find the timetable to capture."); return; }
-      
-      const scale = Math.max(2, A3_LANDSCAPE_PX[0] / Math.max(1, el.scrollWidth));
-      const raw = await html2canvas(el, {
-        scale,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        logging: false,
-        width: el.scrollWidth,
-        height: el.scrollHeight,
-        onclone: stableCloneOverrides,
-      });
-      const a3 = padToA3Landscape(raw);
+      const raw = await renderWide(el);
+      const a3 = padToA3(raw);
       const blob = canvasToA3PngBlob(a3);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -1273,8 +1297,10 @@ function Timetable() {
       link.href = url;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-      console.log(`[export] PNG ${A3_LANDSCAPE_PX[0]}x${A3_LANDSCAPE_PX[1]}px @ ${EXPORT_DPI}DPI = 420.0 x 297.0 mm (A3 LANDSCAPE)`);
+      // eslint-disable-next-line no-console
+      console.log(`[export] PNG ${A3_W}x${A3_H}px @ ${EXPORT_DPI}DPI = 420.0 x 297.0 mm (A3 LANDSCAPE)`);
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.log("[download] PNG failed:", err);
       alert("PNG download failed - see console.");
     }
@@ -1289,18 +1315,8 @@ function Timetable() {
       const jsPDF = jsPdfMod.jsPDF || jsPdfMod.default;
       const el = captureTarget();
       if (!el) { alert("Could not find the timetable to capture."); return; }
-      
-      const scale = Math.max(2, A3_LANDSCAPE_PX[0] / Math.max(1, el.scrollWidth));
-      const raw = await html2canvas(el, {
-        scale,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        logging: false,
-        width: el.scrollWidth,
-        height: el.scrollHeight,
-        onclone: stableCloneOverrides,
-      });
-      const a3 = padToA3Landscape(raw);
+      const raw = await renderWide(el);
+      const a3 = padToA3(raw);
       const imgData = a3.toDataURL("image/png");
       const pdf = new jsPDF({
         orientation: "landscape",
@@ -1312,8 +1328,10 @@ function Timetable() {
       pdf.addImage(imgData, "PNG", 0, 0, pw, ph);
       const safe = String(version || "timetable").replace(/[^a-z0-9_-]+/gi, "_");
       pdf.save(safe + "_A3.pdf");
+      // eslint-disable-next-line no-console
       console.log(`[export] PDF A3 landscape 420.0 x 297.0 mm`);
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.log("[download] PDF failed:", err);
       alert("PDF download failed - see console.");
     }
