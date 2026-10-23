@@ -1,18 +1,97 @@
-﻿"""REST API for Notification + ApprovalRequest."""
+"""REST API for Notification + ApprovalRequest."""
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from apps.core.models import ApprovalRequest, Notification
 
 
 # ----- Serializers -----
 class NotificationSerializer(serializers.ModelSerializer):
+    sender_name = serializers.SerializerMethodField()
+    sender_username = serializers.SerializerMethodField()
+    attachment_url = serializers.SerializerMethodField()
+    replies_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Notification
-        fields = ("id", "kind", "title", "body", "url", "is_read", "created_at", "read_at")
+        fields = (
+            "id", "kind", "title", "body", "url",
+            "is_read", "is_archived", "is_starred",
+            "created_at", "read_at",
+            "sender", "sender_name", "sender_username",
+            "parent", "attachment", "attachment_name", "attachment_url",
+            "replies_count",
+        )
         read_only_fields = fields
+
+    def get_sender_name(self, obj):
+        if not obj.sender:
+            return None
+        return (f"{obj.sender.first_name} {obj.sender.last_name}".strip()) or obj.sender.username
+
+    def get_sender_username(self, obj):
+        return obj.sender.username if obj.sender else None
+
+    def get_attachment_url(self, obj):
+        if not obj.attachment:
+            return None
+        try:
+            return obj.attachment.url
+        except Exception:
+            return None
+
+    def get_replies_count(self, obj):
+        return obj.replies.count()
+
+
+class NotificationCreateSerializer(serializers.ModelSerializer):
+    """Used when a user sends a message to another user."""
+    recipient_id = serializers.IntegerField(write_only=True)
+    parent_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    attachment = serializers.FileField(required=False, allow_null=True)
+
+    class Meta:
+        model = Notification
+        fields = (
+            "recipient_id", "parent_id", "kind", "title", "body", "url",
+            "attachment", "attachment_name",
+        )
+
+    def validate_recipient_id(self, value):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        if not User.objects.filter(id=value, is_active=True).exists():
+            raise serializers.ValidationError("Recipient not found or inactive.")
+        return value
+
+    def validate_parent_id(self, value):
+        if value is None:
+            return None
+        try:
+            Notification.objects.get(id=value)
+        except Notification.DoesNotExist:
+            raise serializers.ValidationError("Parent message not found.")
+        return value
+
+    def create(self, validated_data):
+        request = self.context["request"]
+        recipient_id = validated_data.pop("recipient_id")
+        parent_id = validated_data.pop("parent_id", None)
+        attachment = validated_data.pop("attachment", None)
+        attachment_name = validated_data.get("attachment_name") or ""
+        if attachment:
+            attachment_name = attachment_name or attachment.name
+        return Notification.objects.create(
+            recipient_id=recipient_id,
+            sender=request.user,
+            parent_id=parent_id,
+            attachment=attachment,
+            attachment_name=attachment_name,
+            **{k: v for k, v in validated_data.items() if k != "attachment_name"},
+        )
 
 
 class ApprovalRequestSerializer(serializers.ModelSerializer):
@@ -43,19 +122,40 @@ class ApprovalRequestSerializer(serializers.ModelSerializer):
 
 
 # ----- Notification ViewSet -----
-class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
-    """A user only sees their own notifications."""
-    serializer_class = NotificationSerializer
+class NotificationViewSet(viewsets.ModelViewSet):
+    """Notifications inbox + send + archive + star."""
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return NotificationCreateSerializer
+        return NotificationSerializer
 
     def get_queryset(self):
-        return Notification.objects.filter(recipient=self.request.user)
+        return (
+            Notification.objects
+            .filter(recipient=self.request.user)
+            .select_related("recipient", "sender", "parent")
+            .order_by("-created_at")
+        )
+
+    @action(detail=False, methods=["get"], url_path="recipients")
+    def recipients(self, request):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        users = User.objects.filter(is_active=True).order_by("first_name", "last_name", "username")
+        data = []
+        for u in users:
+            if u.id == request.user.id:
+                continue
+            name = (f"{u.first_name} {u.last_name}".strip()) or u.username
+            data.append({"id": u.id, "name": name, "username": u.username})
+        return Response(data)
 
     @action(detail=False, methods=["post"], url_path="mark-all-read")
     def mark_all_read(self, request):
-        n = Notification.objects.filter(recipient=request.user, is_read=False).update(
-            is_read=True,
-        )
+        n = Notification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
         return Response({"marked_read": n})
 
     @action(detail=True, methods=["post"], url_path="mark-read")
@@ -69,14 +169,37 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         n = Notification.objects.filter(recipient=request.user, is_read=False).count()
         return Response({"unread": n})
 
+    @action(detail=True, methods=["post"], url_path="archive")
+    def archive(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_archived = True
+        obj.save(update_fields=["is_archived"])
+        return Response(self.get_serializer(obj).data)
+
+    @action(detail=True, methods=["post"], url_path="unarchive")
+    def unarchive(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_archived = False
+        obj.save(update_fields=["is_archived"])
+        return Response(self.get_serializer(obj).data)
+
+    @action(detail=True, methods=["post"], url_path="star")
+    def star(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_starred = True
+        obj.save(update_fields=["is_starred"])
+        return Response(self.get_serializer(obj).data)
+
+    @action(detail=True, methods=["post"], url_path="unstar")
+    def unstar(self, request, pk=None):
+        obj = self.get_object()
+        obj.is_starred = False
+        obj.save(update_fields=["is_starred"])
+        return Response(self.get_serializer(obj).data)
+
 
 # ----- Approval Request ViewSet -----
 class ApprovalRequestViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for approvals. A user sees:
-      - requests they need to approve (assigned_to = them)
-      - requests they've made (requested_by = them)
-    """
     serializer_class = ApprovalRequestSerializer
     permission_classes = [IsAuthenticated]
 

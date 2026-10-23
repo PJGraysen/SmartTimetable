@@ -21,16 +21,24 @@ def notify(
     body: str = "",
     kind: str = Notification.Kind.INFO,
     url: str = "",
+    sender=None,
+    parent=None,
+    attachment=None,
+    attachment_name: str = "",
 ) -> Optional[Notification]:
     """Create a single notification. Returns the row (or None for anonymous)."""
     if not recipient or not getattr(recipient, "pk", None):
         return None
     return Notification.objects.create(
         recipient=recipient,
+        sender=sender,
+        parent=parent,
         kind=kind,
         title=title,
         body=body,
         url=url,
+        attachment=attachment,
+        attachment_name=attachment_name,
     )
 
 
