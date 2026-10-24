@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from django.utils import timezone
 from rest_framework import serializers
@@ -139,13 +139,50 @@ class CopySerializer(serializers.ModelSerializer):
 
 
 class MemberSerializer(serializers.ModelSerializer):
+    class_name = serializers.SerializerMethodField()
+    active_loan_count = serializers.SerializerMethodField()
+    total_borrowed = serializers.SerializerMethodField()
+    fines_due = serializers.SerializerMethodField()
+
     class Meta:
         model = Member
         fields = [
             "id", "member_number", "user", "full_name", "email", "phone",
             "member_type", "is_active", "joined_at", "notes",
+            "class_name", "active_loan_count", "total_borrowed", "fines_due",
             "created_at", "updated_at",
         ]
+
+    def get_class_name(self, obj):
+        student = getattr(obj, 'student', None)
+        if student is None:
+            return None
+        for attr in ('class_name', 'grade', 'class_display', 'klass_name'):
+            val = getattr(student, attr, None)
+            if val:
+                return str(val)
+        klass = getattr(student, 'klass', None) or getattr(student, 'current_class', None)
+        if klass is not None:
+            return str(klass)
+        return None
+
+    def get_active_loan_count(self, obj):
+        from apps.library.models import Loan
+        return Loan.objects.filter(member=obj, status="ACTIVE").count()
+
+    def get_total_borrowed(self, obj):
+        from apps.library.models import Loan
+        return Loan.objects.filter(member=obj).exclude(status="ACTIVE").count()
+
+    def get_fines_due(self, obj):
+        from apps.library.models import Loan
+        from django.db.models import Sum, F, Value
+        from django.db.models.functions import Coalesce
+        rows = Loan.objects.filter(member=obj).annotate(
+            net=Coalesce(F("fine_accrued"), Value(0)) - Coalesce(F("fine_paid"), Value(0))
+        ).filter(net__gt=0)
+        total = rows.aggregate(s=Sum("net"))["s"] or 0
+        return float(total)
 
 
 class LoanRuleSerializer(serializers.ModelSerializer):
