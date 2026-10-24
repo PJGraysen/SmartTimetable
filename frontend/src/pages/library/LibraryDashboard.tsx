@@ -12,14 +12,14 @@ type CategoryKey =
   | "religious" | "creative" | "technology" | "applied";
 
 const CATEGORIES: Record<CategoryKey, { label: string; icon: string; colour: string; codes: string[] }> = {
-  math:       { label: "Mathematics",           icon: "🔢", colour: "#1e3a8a", codes: ["MAT", "EMCM"] },
+  math:       { label: "Mathematics",           icon: "🔢", colour: "#1e40af", codes: ["MAT", "EMCM"] },
   sciences:   { label: "Sciences",              icon: "🔬", colour: "#0e7490", codes: ["BIO","BIOPRAC","CHEM","CHEMPRAC","PHY","PHYPRAC","INTSCI"] },
-  languages:  { label: "Languages",             icon: "📚", colour: "#b91c1c", codes: ["ENG","KIS","LIT"] },
-  humanities: { label: "Humanities",            icon: "🌍", colour: "#065f46", codes: ["GEO","HIS","SST"] },
-  religious:  { label: "Religious Studies",     icon: "🙏", colour: "#7c2d12", codes: ["CRE","IRE","PPI"] },
+  languages:  { label: "Languages",             icon: "📚", colour: "#991b1b", codes: ["ENG","KIS","LIT"] },
+  humanities: { label: "Humanities",            icon: "🌍", colour: "#166534", codes: ["GEO","HIS","SST"] },
+  religious:  { label: "Religious Studies",     icon: "🙏", colour: "#a16207", codes: ["CRE","IRE","PPI"] },
   creative:   { label: "Creative Arts",         icon: "🎨", colour: "#7e22ce", codes: ["CAS","MUSD","ART"] },
-  technology: { label: "Business & Technology", icon: "💻", colour: "#0f766e", codes: ["BUS","COMP","CS","ICT"] },
-  applied:    { label: "Applied & Vocational",  icon: "🌾", colour: "#92400e", codes: ["AGR","PE"] },
+  technology: { label: "Business & Technology", icon: "💻", colour: "#3730a3", codes: ["BUS","COMP","CS","ICT"] },
+  applied:    { label: "Applied & Vocational",  icon: "🌾", colour: "#4d7c0f", codes: ["AGR","PE"] },
 };
 
 const CATEGORY_ORDER: CategoryKey[] = [
@@ -118,9 +118,18 @@ export default function LibraryDashboard() {
   const showClasses           = viewMode === "classes";
 
   return (
-    <div className="lib-dash" style={{ padding: "1.5rem", position: "relative", overflow: "hidden" }}>
-      <div className="lib-shelf-bg" aria-hidden="true" />
-
+    <div
+      className="lib-dash"
+      style={{
+        padding: "1.5rem",
+        position: "relative",
+        overflow: "hidden",
+        background:
+          "radial-gradient(1400px 600px at 85% -5%, rgba(122,78,42,0.07), transparent 60%)," +
+          "radial-gradient(900px 500px at -5% 20%, rgba(30,64,175,0.05), transparent 55%)," +
+          "linear-gradient(180deg, #f5ecd9 0%, #ecdfc8 100%)",
+      }}
+    >
       <div style={{ position: "relative", zIndex: 2 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "1rem" }}>
           <div>
@@ -143,8 +152,8 @@ export default function LibraryDashboard() {
             const Icon = c.icon;
             return (
               <div key={c.label} className="lib-stat-card"
-                   style={{ background: "rgba(255,255,255,0.94)", border: "1px solid #e5e7eb",
-                            borderRadius: "10px", padding: "1.25rem", backdropFilter: "blur(2px)" }}>
+                   style={{ background: "rgba(255,255,255,0.96)", border: "1px solid #e5e7eb",
+                            borderRadius: "10px", padding: "1.25rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ color: "#748095", fontSize: "0.8rem", fontWeight: 700,
                                  textTransform: "uppercase", letterSpacing: "0.05em" }}>{c.label}</span>
@@ -162,10 +171,10 @@ export default function LibraryDashboard() {
           gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
           gap: "1.25rem",
         }}>
-          <QuickLink to="/library/catalogue" Icon={BookOpen}      title="Catalogue" text="Browse and search the book collection."    colour="#1e3a8a" />
-          <QuickLink to="/library/members"   Icon={Users}         title="Members"   text="Students, teachers, and staff who borrow."  colour="#0e7490" />
-          <QuickLink to="/library/loans"     Icon={BookMarked}    title="Loans"     text="Active, overdue, and returned loans."        colour="#7c3aed" />
-          <QuickLink to="/library/reports"   Icon={AlertTriangle} title="Reports"   text="Circulation, inventory, top borrowers."     colour="#dc2626" />
+          <QuickLink to="/library/catalogue" Icon={BookOpen}      title="Catalogue" text="Browse and search the book collection."    colour="#1e40af" bg="#eef2ff" border="#c7d2fe" />
+          <QuickLink to="/library/members"   Icon={Users}         title="Members"   text="Students, teachers, and staff who borrow."  colour="#0e7490" bg="#ecfeff" border="#a5f3fc" />
+          <QuickLink to="/library/loans"     Icon={BookMarked}    title="Loans"     text="Active, overdue, and returned loans."        colour="#7e22ce" bg="#f5f3ff" border="#ddd6fe" />
+          <QuickLink to="/library/reports"   Icon={AlertTriangle} title="Reports"   text="Circulation, inventory, top borrowers."     colour="#991b1b" bg="#fef2f2" border="#fecaca" />
         </section>
 
         <section style={{ marginTop: "2.5rem" }}>
@@ -215,43 +224,43 @@ export default function LibraryDashboard() {
                         onClick={() => setSelectedCategory(key)}
                         className="lib-cat-card"
                         style={{
-                          background: "rgba(255,255,255,0.96)",
-                          border: "2px solid #e5e7eb",
+                          background: cat.colour,
+                          border: `2px solid ${cat.colour}`,
                           borderRadius: "14px",
                           padding: "1.5rem 1.6rem",
                           textAlign: "left",
                           cursor: "pointer",
                           position: "relative",
-                          backdropFilter: "blur(2px)",
                           overflow: "hidden",
+                          boxShadow: "0 6px 16px rgba(15,23,42,0.14), inset 0 1px 0 rgba(255,255,255,0.12)",
                         }}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.9rem" }}>
                           <div style={{
                             width: 60, height: 60, borderRadius: 14,
-                            background: cat.colour, color: "#fff",
+                            background: "rgba(255,255,255,0.18)", color: "#fff",
                             display: "flex", alignItems: "center", justifyContent: "center",
                             fontSize: "1.75rem", flexShrink: 0,
-                            boxShadow: "0 4px 10px rgba(15,23,42,0.22)",
+                            border: "1px solid rgba(255,255,255,0.28)",
                           }}>{cat.icon}</div>
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 800, color: "#111827", fontSize: "1.15rem",
+                            <div style={{ fontWeight: 800, color: "#fff", fontSize: "1.15rem",
                                           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                               {cat.label}
                             </div>
-                            <div style={{ color: "#64748b", fontSize: "0.85rem", marginTop: "0.15rem" }}>
+                            <div style={{ color: "rgba(255,255,255,0.78)", fontSize: "0.85rem", marginTop: "0.15rem" }}>
                               {stat.subjects} subject{stat.subjects === 1 ? "" : "s"}
                             </div>
                           </div>
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.85rem" }}>
-                          <span style={{ color: "#475569", fontWeight: 700 }}>
+                          <span style={{ color: "rgba(255,255,255,0.92)", fontWeight: 700 }}>
                             {stat.books} {stat.books === 1 ? "title" : "titles"}
                           </span>
                           <span style={{
                             padding: "0.25rem 0.6rem", borderRadius: "999px",
-                            background: stat.covered > 0 ? "#dcfce7" : "#f1f5f9",
-                            color: stat.covered > 0 ? "#166534" : "#64748b",
+                            background: "rgba(255,255,255,0.2)", color: "#fff",
+                            border: "1px solid rgba(255,255,255,0.3)",
                             fontWeight: 800, fontSize: "0.75rem",
                           }}>
                             {stat.covered}/{stat.subjects} covered
@@ -276,8 +285,9 @@ export default function LibraryDashboard() {
                       padding: "0.4rem 0.9rem", borderRadius: "999px",
                       background: CATEGORIES[selectedCategory].colour, color: "#fff",
                       fontWeight: 800, fontSize: "0.85rem",
+                      boxShadow: "0 3px 10px rgba(15,23,42,0.2)",
                     }}>
-                      {CATEGORIES[selectedCategory].label}
+                      {CATEGORIES[selectedCategory].icon} {CATEGORIES[selectedCategory].label}
                     </span>
                   </div>
                   {filteredSubjects.length === 0 ? (
@@ -318,36 +328,6 @@ export default function LibraryDashboard() {
       </div>
 
       <style>{`
-        .lib-shelf-bg {
-          position: absolute; inset: 0; z-index: 0; pointer-events: none;
-          background:
-            linear-gradient(180deg,
-              transparent 0%, transparent 28%,
-              rgba(120,53,15,0.18) 28%, rgba(120,53,15,0.28) 29%,
-              transparent 30%, transparent 61%,
-              rgba(120,53,15,0.18) 61%, rgba(120,53,15,0.28) 62%,
-              transparent 63%, transparent 94%,
-              rgba(120,53,15,0.18) 94%, rgba(120,53,15,0.28) 95%,
-              transparent 96%),
-            repeating-linear-gradient(90deg,
-              rgba(30,58,138,0.06)  0px,  rgba(30,58,138,0.06)  10px,
-              rgba(14,116,144,0.08) 10px,  rgba(14,116,144,0.08) 22px,
-              rgba(124,58,237,0.07) 22px,  rgba(124,58,237,0.07) 34px,
-              rgba(180,83,9,0.07)   34px,  rgba(180,83,9,0.07)   48px,
-              rgba(21,128,61,0.07)  48px,  rgba(21,128,61,0.07)  62px,
-              rgba(190,24,93,0.06)  62px,  rgba(190,24,93,0.06)  74px),
-            linear-gradient(180deg, #fbfaf7 0%, #f4f1ea 100%);
-          opacity: 0.85;
-        }
-        .lib-shelf-bg::after {
-          content: ""; position: absolute; inset: 0;
-          background: linear-gradient(180deg,
-            rgba(255,255,255,0.9) 0%,
-            rgba(255,255,255,0.55) 30%,
-            rgba(255,255,255,0.35) 60%,
-            rgba(255,255,255,0.2) 100%);
-        }
-
         @keyframes ttFadeUp {
           from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -375,69 +355,59 @@ export default function LibraryDashboard() {
         }
         .lib-subject-card:hover .lib-subject-tile { animation: tileWiggle 400ms ease; }
 
+        /* Category cards — dark solid, brighten on hover */
         .lib-cat-card {
           transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1),
                       box-shadow 240ms ease,
-                      border-color 240ms ease;
-          will-change: transform;
+                      filter 240ms ease;
+          will-change: transform, filter;
         }
         .lib-cat-card:hover {
           transform: translateY(-6px) scale(1.02);
-          box-shadow: 0 16px 34px rgba(15,23,42,0.16),
-                      0 0 0 2px #93c5fd;
-          border-color: #93c5fd !important;
+          box-shadow: 0 20px 40px rgba(15,23,42,0.28);
+          filter: brightness(1.12) saturate(1.08);
         }
-        .lib-cat-card:active { transform: translateY(-1px) scale(0.99); transition-duration: 80ms; }
+        .lib-cat-card:active {
+          transform: translateY(-1px) scale(0.99);
+          transition-duration: 80ms;
+        }
 
+        /* QuickLink cards — soft tinted backgrounds */
         .lib-quicklink {
           position: relative; overflow: hidden;
           transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
                       box-shadow 260ms ease,
-                      border-color 260ms ease;
+                      filter 260ms ease;
           will-change: transform;
-        }
-        .lib-quicklink::before {
-          content: "";
-          position: absolute; inset: 0;
-          background: linear-gradient(135deg, transparent 0%, rgba(30,58,138,0.10) 100%);
-          opacity: 0;
-          transition: opacity 260ms ease;
-          pointer-events: none;
         }
         .lib-quicklink:hover {
           transform: translateY(-8px) scale(1.03);
-          box-shadow: 0 20px 45px rgba(30,58,138,0.28),
-                      0 0 0 2px #93c5fd;
-          border-color: #93c5fd !important;
+          box-shadow: 0 20px 45px rgba(15,23,42,0.18);
+          filter: brightness(1.02);
         }
-        .lib-quicklink:hover::before { opacity: 1; }
         .lib-quicklink:active {
           transform: translateY(-2px) scale(0.98);
           transition-duration: 80ms;
         }
         .ql-icon {
           transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
-                      background 260ms ease,
-                      color 260ms ease,
                       box-shadow 260ms ease;
           display: inline-flex; align-items: center; justify-content: center;
           width: 56px; height: 56px; border-radius: 14px;
-          background: #eff6ff;
+          background: #fff;
+          box-shadow: 0 2px 8px rgba(15,23,42,0.10);
         }
         .lib-quicklink:hover .ql-icon {
-          transform: scale(1.18) rotate(-8deg);
-          background: #1e3a8a;
-          color: #fff !important;
-          box-shadow: 0 10px 22px rgba(30,58,138,0.38);
+          transform: scale(1.15) rotate(-6deg);
+          box-shadow: 0 10px 22px rgba(15,23,42,0.22);
         }
 
         .lib-view-tabs {
           display: inline-flex; gap: 0.35rem;
-          background: rgba(255,255,255,0.85);
+          background: rgba(255,255,255,0.9);
           padding: 0.35rem;
           border-radius: 999px;
           border: 1px solid #e5e7eb;
-          backdrop-filter: blur(2px);
         }
         .lib-view-tab {
           display: inline-flex; align-items: center; gap: 0.4rem;
@@ -449,7 +419,7 @@ export default function LibraryDashboard() {
           font-weight: 700;
           font-size: 0.85rem;
           cursor: pointer;
-          transition: background 200ms ease, color 200ms ease, transform 200ms ease;
+          transition: background 200ms ease, color 200ms ease;
         }
         .lib-view-tab:hover { background: #eff6ff; color: #1e3a8a; }
         .lib-view-tab.active {
@@ -457,7 +427,6 @@ export default function LibraryDashboard() {
           color: #fff;
           box-shadow: 0 4px 12px rgba(30,58,138,0.3);
         }
-        .lib-view-tab.active:hover { background: #1e3a8a; color: #fff; }
 
         .lib-back-btn {
           display: inline-flex; align-items: center; gap: 0.35rem;
@@ -484,6 +453,7 @@ export default function LibraryDashboard() {
             animation: none !important;
             transition: none !important;
             transform: none !important;
+            filter: none !important;
           }
         }
         .spin { animation: spin 1s linear infinite; }
@@ -493,8 +463,8 @@ export default function LibraryDashboard() {
   );
 }
 
-function QuickLink({ to, Icon, title, text, colour }: {
-  to: string; Icon: any; title: string; text: string; colour: string;
+function QuickLink({ to, Icon, title, text, colour, bg, border }: {
+  to: string; Icon: any; title: string; text: string; colour: string; bg: string; border: string;
 }) {
   return (
     <Link
@@ -502,22 +472,23 @@ function QuickLink({ to, Icon, title, text, colour }: {
       className="lib-quicklink"
       style={{
         display: "block",
-        background: "rgba(255,255,255,0.94)",
-        border: "1px solid #e5e7eb",
+        background: bg,
+        border: `2px solid ${border}`,
         borderRadius: "14px",
         padding: "1.5rem 1.6rem",
         textDecoration: "none",
         color: "inherit",
-        backdropFilter: "blur(2px)",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
       <div className="ql-icon" style={{ color: colour }}>
         <Icon size={26} />
       </div>
-      <div style={{ fontWeight: 800, marginTop: "0.9rem", color: "#111827", fontSize: "1.15rem" }}>
+      <div style={{ fontWeight: 800, marginTop: "0.9rem", color: "#0f172a", fontSize: "1.15rem" }}>
         {title}
       </div>
-      <div style={{ color: "#748095", fontSize: "0.9rem", marginTop: "0.35rem", lineHeight: 1.4 }}>
+      <div style={{ color: "#5b6b82", fontSize: "0.9rem", marginTop: "0.35rem", lineHeight: 1.4 }}>
         {text}
       </div>
     </Link>
@@ -538,7 +509,7 @@ function SubjectCard({ subject: s }: { subject: lib.SubjectSummaryRow }) {
         display: "block", background: "rgba(255,255,255,0.94)",
         border: `1px solid ${covered ? "#bbf7d0" : "#e5e7eb"}`,
         borderRadius: "10px", padding: "1rem", textDecoration: "none",
-        color: "inherit", position: "relative", backdropFilter: "blur(2px)",
+        color: "inherit", position: "relative",
       }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", gap: "0.65rem" }}>
