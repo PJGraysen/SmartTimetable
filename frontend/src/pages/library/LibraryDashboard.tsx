@@ -2,11 +2,11 @@
 import { Link } from "react-router-dom";
 import {
   BookOpen, Copy as CopyIcon, Users, AlertTriangle,
-  BookMarked, CheckCircle2, Library, Loader2, X,
+  BookMarked, CheckCircle2, Library, Loader2,
+  Layers, LayoutGrid, GraduationCap, ChevronLeft,
 } from "lucide-react";
 import * as lib from "../../services/library";
 
-/* ===== Category map: groups the 27 curriculum subjects into 8 faculties ===== */
 type CategoryKey =
   | "math" | "sciences" | "languages" | "humanities"
   | "religious" | "creative" | "technology" | "applied";
@@ -24,6 +24,14 @@ const CATEGORIES: Record<CategoryKey, { label: string; icon: string; colour: str
 
 const CATEGORY_ORDER: CategoryKey[] = [
   "math","sciences","languages","humanities","religious","creative","technology","applied",
+];
+
+type ViewMode = "categories" | "subjects" | "classes";
+
+const VIEW_TABS: { key: ViewMode; label: string; Icon: any }[] = [
+  { key: "categories", label: "Learning Categories", Icon: Layers },
+  { key: "subjects",   label: "All Subjects",        Icon: LayoutGrid },
+  { key: "classes",    label: "Classes",             Icon: GraduationCap },
 ];
 
 const fallbackIcon = (code: string): string => {
@@ -49,6 +57,7 @@ export default function LibraryDashboard() {
   const [subjects, setSubjects] = useState<lib.SubjectSummaryRow[]>([]);
   const [subjectsLoading, setSubjectsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("categories");
   const [selectedCategory, setSelectedCategory] = useState<CategoryKey | null>(null);
 
   useEffect(() => {
@@ -60,6 +69,10 @@ export default function LibraryDashboard() {
       .catch(() => setSubjects([]))
       .finally(() => setSubjectsLoading(false));
   }, []);
+
+  useEffect(() => {
+    setSelectedCategory(null);
+  }, [viewMode]);
 
   const cards = stats ? [
     { label: "Books", value: stats.total_books, icon: BookOpen, colour: "#1e3a8a" },
@@ -74,7 +87,6 @@ export default function LibraryDashboard() {
   const coveredSubjects = subjects.filter((s) => s.book_count > 0).length;
   const totalSubjects = subjects.length;
 
-  /* Per-category aggregates */
   const categoryStats = useMemo(() => {
     const map: Record<CategoryKey, { subjects: number; covered: number; books: number; available: number }> =
       {} as any;
@@ -100,15 +112,16 @@ export default function LibraryDashboard() {
     return subjects.filter((s) => codes.includes((s.code || "").toUpperCase()));
   }, [subjects, selectedCategory]);
 
-  const toggleCategory = (key: CategoryKey) =>
-    setSelectedCategory((prev) => (prev === key ? null : key));
+  const showCategoriesOnly    = viewMode === "categories" && !selectedCategory;
+  const showCategoryDrilldown = viewMode === "categories" && !!selectedCategory;
+  const showAllSubjects       = viewMode === "subjects";
+  const showClasses           = viewMode === "classes";
 
   return (
     <div className="lib-dash" style={{ padding: "1.5rem", position: "relative", overflow: "hidden" }}>
       <div className="lib-shelf-bg" aria-hidden="true" />
 
       <div style={{ position: "relative", zIndex: 2 }}>
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "1rem" }}>
           <div>
             <span style={{ fontSize: "0.75rem", letterSpacing: "0.08em", color: "#748095", fontWeight: 700 }}>
@@ -125,7 +138,6 @@ export default function LibraryDashboard() {
 
         {error ? <div className="tt-error">{error}</div> : null}
 
-        {/* Stats */}
         <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem" }}>
           {cards.map((c) => {
             const Icon = c.icon;
@@ -144,187 +156,163 @@ export default function LibraryDashboard() {
           })}
         </section>
 
-        {/* Quick Actions — promoted to top */}
         <section style={{
-          marginTop: "1.5rem",
+          marginTop: "1.75rem",
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "1rem",
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gap: "1.25rem",
         }}>
-          <QuickLink to="/library/catalogue" icon={BookOpen} title="Catalogue"
-                     text="Browse and search the book collection." colour="#1e3a8a" />
-          <QuickLink to="/library/members" icon={Users} title="Members"
-                     text="Students, teachers, and staff who borrow." colour="#0e7490" />
-          <QuickLink to="/library/loans" icon={BookMarked} title="Loans"
-                     text="Active, overdue, and returned loans." colour="#7c3aed" />
-          <QuickLink to="/library/reports" icon={AlertTriangle} title="Reports"
-                     text="Circulation, inventory, top borrowers." colour="#dc2626" />
+          <QuickLink to="/library/catalogue" Icon={BookOpen}      title="Catalogue" text="Browse and search the book collection."    colour="#1e3a8a" />
+          <QuickLink to="/library/members"   Icon={Users}         title="Members"   text="Students, teachers, and staff who borrow."  colour="#0e7490" />
+          <QuickLink to="/library/loans"     Icon={BookMarked}    title="Loans"     text="Active, overdue, and returned loans."        colour="#7c3aed" />
+          <QuickLink to="/library/reports"   Icon={AlertTriangle} title="Reports"   text="Circulation, inventory, top borrowers."     colour="#dc2626" />
         </section>
 
-        {/* Learning Categories */}
-        <section style={{ marginTop: "2rem" }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "0.9rem", flexWrap: "wrap", gap: "0.5rem" }}>
+        <section style={{ marginTop: "2.5rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+                        flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem" }}>
             <div>
-              <h2 style={{ margin: 0, fontSize: "1.15rem", color: "#111827",
+              <h2 style={{ margin: 0, fontSize: "1.35rem", color: "#111827",
                            display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Library size={18} style={{ color: "#1e3a8a" }} />
-                Learning Categories
+                <Library size={20} style={{ color: "#1e3a8a" }} />
+                Learning Library
               </h2>
-              <p style={{ color: "#748095", fontSize: "0.83rem", marginTop: "0.2rem" }}>
-                {coveredSubjects} of {totalSubjects} subjects covered
-                {selectedCategory ? ` · filtered to ${CATEGORIES[selectedCategory].label}` : ""}
+              <p style={{ color: "#748095", fontSize: "0.85rem", marginTop: "0.25rem" }}>
+                {viewMode === "categories" && !selectedCategory && `${CATEGORY_ORDER.length} categories covering ${totalSubjects} subjects · ${coveredSubjects} covered`}
+                {viewMode === "categories" && selectedCategory && `${CATEGORIES[selectedCategory].label} · ${filteredSubjects.length} subject${filteredSubjects.length === 1 ? "" : "s"}`}
+                {viewMode === "subjects" && `All ${totalSubjects} subjects · ${coveredSubjects} covered`}
+                {viewMode === "classes" && "Class-section views"}
               </p>
             </div>
-            {selectedCategory ? (
-              <button onClick={() => setSelectedCategory(null)}
-                      style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem",
-                               padding: "0.35rem 0.75rem", borderRadius: "999px",
-                               border: "1px solid #93c5fd", background: "#eff6ff",
-                               color: "#1e3a8a", fontWeight: 700, fontSize: "0.78rem",
-                               cursor: "pointer" }}>
-                <X size={12} /> Clear filter
-              </button>
-            ) : (
-              <Link to="/library/catalogue" style={{ color: "#1e3a8a", fontSize: "0.83rem", fontWeight: 700 }}>
-                Browse catalogue →
-              </Link>
-            )}
-          </div>
 
-          {/* Category cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem", marginBottom: "1.5rem" }}>
-            {CATEGORY_ORDER.map((key) => {
-              const cat = CATEGORIES[key];
-              const stat = categoryStats[key];
-              const isActive = selectedCategory === key;
-              return (
+            <div className="lib-view-tabs">
+              {VIEW_TABS.map(({ key, label, Icon }) => (
                 <button
                   key={key}
-                  onClick={() => toggleCategory(key)}
-                  className={"lib-cat-card" + (isActive ? " active" : "")}
-                  style={{
-                    background: "rgba(255,255,255,0.96)",
-                    border: `2px solid ${isActive ? "#1e3a8a" : "#e5e7eb"}`,
-                    borderRadius: "12px",
-                    padding: "1rem",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    position: "relative",
-                    backdropFilter: "blur(2px)",
-                    overflow: "hidden",
-                  }}
+                  onClick={() => setViewMode(key)}
+                  className={"lib-view-tab" + (viewMode === key ? " active" : "")}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", marginBottom: "0.55rem" }}>
-                    <div style={{
-                      width: 44, height: 44, borderRadius: 10,
-                      background: cat.colour, color: "#fff",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: "1.35rem", flexShrink: 0,
-                      boxShadow: "0 2px 6px rgba(15,23,42,0.18)",
-                    }}>{cat.icon}</div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 800, color: "#111827", fontSize: "0.95rem",
-                                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {cat.label}
-                      </div>
-                      <div style={{ color: "#64748b", fontSize: "0.75rem" }}>
-                        {stat.subjects} subject{stat.subjects === 1 ? "" : "s"}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.78rem" }}>
-                    <span style={{ color: "#475569", fontWeight: 700 }}>
-                      {stat.books} {stat.books === 1 ? "title" : "titles"}
-                    </span>
-                    <span style={{
-                      padding: "0.15rem 0.5rem", borderRadius: "999px",
-                      background: stat.covered > 0 ? "#dcfce7" : "#f1f5f9",
-                      color: stat.covered > 0 ? "#166534" : "#64748b",
-                      fontWeight: 800, fontSize: "0.68rem",
-                    }}>
-                      {stat.covered}/{stat.subjects}
-                    </span>
-                  </div>
+                  <Icon size={16} /> {label}
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
 
-          {/* Subject grid (filtered) */}
           {subjectsLoading ? (
-            <div style={{ padding: "1.5rem", color: "#64748b", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <div style={{ padding: "2rem", color: "#64748b", display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <Loader2 size={16} className="spin" /> Loading subjects…
             </div>
-          ) : filteredSubjects.length === 0 ? (
-            <div style={{ padding: "1.5rem", background: "rgba(255,255,255,0.9)", borderRadius: "8px",
-                          color: "#64748b", textAlign: "center" }}>
-              {selectedCategory
-                ? `No subjects yet in ${CATEGORIES[selectedCategory].label}.`
-                : "No active subjects in the curriculum."}
-            </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "0.75rem" }}>
-              {filteredSubjects.map((s) => {
-                const covered = s.book_count > 0;
-                const anyS = s as any;
-                const icon = anyS.icon || fallbackIcon(s.code);
-                const colour = anyS.colour || fallbackColour(s.code);
-                const thumb = anyS.thumbnail_url || "";
-                return (
-                  <Link
-                    key={s.id}
-                    to={`/library/subject/${encodeURIComponent(s.code)}`}
-                    className="lib-subject-card"
-                    style={{
-                      display: "block", background: "rgba(255,255,255,0.94)",
-                      border: `1px solid ${covered ? "#bbf7d0" : "#e5e7eb"}`,
-                      borderRadius: "10px", padding: "1rem", textDecoration: "none",
-                      color: "inherit", position: "relative", backdropFilter: "blur(2px)",
-                      transition: "transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.65rem" }}>
-                      <div className="lib-subject-tile"
-                           style={{
-                             width: 44, height: 44, borderRadius: 10,
-                             display: "flex", alignItems: "center", justifyContent: "center",
-                             background: thumb ? "#f1f5f9" : colour, color: "#fff",
-                             fontSize: "1.35rem", flexShrink: 0, overflow: "hidden",
-                             boxShadow: "0 2px 6px rgba(15,23,42,0.15)",
-                           }}>
-                        {thumb ? (
-                          <img src={thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        ) : (
-                          <span>{icon}</span>
-                        )}
-                      </div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <>
+              {showCategoriesOnly && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1.25rem" }}>
+                  {CATEGORY_ORDER.map((key) => {
+                    const cat = CATEGORIES[key];
+                    const stat = categoryStats[key];
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setSelectedCategory(key)}
+                        className="lib-cat-card"
+                        style={{
+                          background: "rgba(255,255,255,0.96)",
+                          border: "2px solid #e5e7eb",
+                          borderRadius: "14px",
+                          padding: "1.5rem 1.6rem",
+                          textAlign: "left",
+                          cursor: "pointer",
+                          position: "relative",
+                          backdropFilter: "blur(2px)",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.9rem" }}>
+                          <div style={{
+                            width: 60, height: 60, borderRadius: 14,
+                            background: cat.colour, color: "#fff",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: "1.75rem", flexShrink: 0,
+                            boxShadow: "0 4px 10px rgba(15,23,42,0.22)",
+                          }}>{cat.icon}</div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 800, color: "#111827", fontSize: "1.15rem",
+                                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {cat.label}
+                            </div>
+                            <div style={{ color: "#64748b", fontSize: "0.85rem", marginTop: "0.15rem" }}>
+                              {stat.subjects} subject{stat.subjects === 1 ? "" : "s"}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.85rem" }}>
+                          <span style={{ color: "#475569", fontWeight: 700 }}>
+                            {stat.books} {stat.books === 1 ? "title" : "titles"}
+                          </span>
                           <span style={{
-                            fontSize: "0.7rem", fontWeight: 800, letterSpacing: "0.06em",
-                            color: covered ? "#166534" : "#64748b",
-                            background: covered ? "#dcfce7" : "#f1f5f9",
-                            padding: "0.15rem 0.45rem", borderRadius: "4px",
-                          }}>{s.code}</span>
-                          <span style={{
-                            width: 8, height: 8, borderRadius: "50%",
-                            background: covered ? "#22c55e" : "#cbd5e1", marginTop: 4,
-                          }} />
+                            padding: "0.25rem 0.6rem", borderRadius: "999px",
+                            background: stat.covered > 0 ? "#dcfce7" : "#f1f5f9",
+                            color: stat.covered > 0 ? "#166534" : "#64748b",
+                            fontWeight: 800, fontSize: "0.75rem",
+                          }}>
+                            {stat.covered}/{stat.subjects} covered
+                          </span>
                         </div>
-                        <div style={{ fontWeight: 700, color: "#111827", marginTop: "0.4rem",
-                                      fontSize: "0.9rem", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {s.name}
-                        </div>
-                        <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.25rem" }}>
-                          {s.book_count} {s.book_count === 1 ? "title" : "titles"}
-                          {s.available_copies > 0 ? ` · ${s.available_copies} avail` : ""}
-                        </div>
-                      </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {showCategoryDrilldown && selectedCategory && (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+                    <button
+                      onClick={() => setSelectedCategory(null)}
+                      className="lib-back-btn"
+                    >
+                      <ChevronLeft size={16} /> All categories
+                    </button>
+                    <span style={{
+                      padding: "0.4rem 0.9rem", borderRadius: "999px",
+                      background: CATEGORIES[selectedCategory].colour, color: "#fff",
+                      fontWeight: 800, fontSize: "0.85rem",
+                    }}>
+                      {CATEGORIES[selectedCategory].label}
+                    </span>
+                  </div>
+                  {filteredSubjects.length === 0 ? (
+                    <div style={{ padding: "1.5rem", background: "rgba(255,255,255,0.9)", borderRadius: "8px",
+                                  color: "#64748b", textAlign: "center" }}>
+                      No subjects yet in {CATEGORIES[selectedCategory].label}.
                     </div>
-                  </Link>
-                );
-              })}
-            </div>
+                  ) : (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.9rem" }}>
+                      {filteredSubjects.map((s) => <SubjectCard key={s.id} subject={s} />)}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {showAllSubjects && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.9rem" }}>
+                  {filteredSubjects.map((s) => <SubjectCard key={s.id} subject={s} />)}
+                </div>
+              )}
+
+              {showClasses && (
+                <div style={{
+                  padding: "3rem 2rem", background: "rgba(255,255,255,0.94)",
+                  border: "2px dashed #cbd5e1", borderRadius: "14px", textAlign: "center",
+                }}>
+                  <GraduationCap size={42} style={{ color: "#94a3b8", marginBottom: "0.75rem" }} />
+                  <h3 style={{ margin: 0, color: "#111827", fontSize: "1.1rem" }}>Class-section view coming soon</h3>
+                  <p style={{ color: "#64748b", fontSize: "0.9rem", marginTop: "0.35rem", maxWidth: 480, margin: "0.35rem auto 0" }}>
+                    This view will group the library collection by class (Form 4E, 10W, G11E, etc.) so you can see
+                    which books are assigned to each section.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </section>
       </div>
@@ -387,22 +375,20 @@ export default function LibraryDashboard() {
         }
         .lib-subject-card:hover .lib-subject-tile { animation: tileWiggle 400ms ease; }
 
-        /* Category card motion */
         .lib-cat-card {
-          transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
-                      box-shadow 220ms ease,
-                      border-color 220ms ease;
+          transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                      box-shadow 240ms ease,
+                      border-color 240ms ease;
           will-change: transform;
         }
         .lib-cat-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 12px 26px rgba(15,23,42,0.16);
+          transform: translateY(-6px) scale(1.02);
+          box-shadow: 0 16px 34px rgba(15,23,42,0.16),
+                      0 0 0 2px #93c5fd;
+          border-color: #93c5fd !important;
         }
-        .lib-cat-card.active {
-          box-shadow: 0 0 0 3px rgba(30,58,138,0.18), 0 10px 24px rgba(30,58,138,0.22);
-        }
+        .lib-cat-card:active { transform: translateY(-1px) scale(0.99); transition-duration: 80ms; }
 
-        /* Quick action cards — heavy motion */
         .lib-quicklink {
           position: relative; overflow: hidden;
           transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -435,19 +421,66 @@ export default function LibraryDashboard() {
                       color 260ms ease,
                       box-shadow 260ms ease;
           display: inline-flex; align-items: center; justify-content: center;
-          width: 48px; height: 48px; border-radius: 12px;
+          width: 56px; height: 56px; border-radius: 14px;
           background: #eff6ff;
         }
         .lib-quicklink:hover .ql-icon {
           transform: scale(1.18) rotate(-8deg);
           background: #1e3a8a;
           color: #fff !important;
-          box-shadow: 0 8px 18px rgba(30,58,138,0.35);
+          box-shadow: 0 10px 22px rgba(30,58,138,0.38);
+        }
+
+        .lib-view-tabs {
+          display: inline-flex; gap: 0.35rem;
+          background: rgba(255,255,255,0.85);
+          padding: 0.35rem;
+          border-radius: 999px;
+          border: 1px solid #e5e7eb;
+          backdrop-filter: blur(2px);
+        }
+        .lib-view-tab {
+          display: inline-flex; align-items: center; gap: 0.4rem;
+          padding: 0.55rem 1rem;
+          border-radius: 999px;
+          border: none;
+          background: transparent;
+          color: #475569;
+          font-weight: 700;
+          font-size: 0.85rem;
+          cursor: pointer;
+          transition: background 200ms ease, color 200ms ease, transform 200ms ease;
+        }
+        .lib-view-tab:hover { background: #eff6ff; color: #1e3a8a; }
+        .lib-view-tab.active {
+          background: #1e3a8a;
+          color: #fff;
+          box-shadow: 0 4px 12px rgba(30,58,138,0.3);
+        }
+        .lib-view-tab.active:hover { background: #1e3a8a; color: #fff; }
+
+        .lib-back-btn {
+          display: inline-flex; align-items: center; gap: 0.35rem;
+          padding: 0.5rem 0.9rem;
+          border-radius: 8px;
+          border: 1px solid #cbd5e1;
+          background: rgba(255,255,255,0.9);
+          color: #334155;
+          font-weight: 700;
+          font-size: 0.85rem;
+          cursor: pointer;
+          transition: transform 200ms ease, border-color 200ms ease, background 200ms ease;
+        }
+        .lib-back-btn:hover {
+          transform: translateX(-3px);
+          border-color: #93c5fd;
+          background: #eff6ff;
+          color: #1e3a8a;
         }
 
         @media (prefers-reduced-motion: reduce) {
           .lib-subject-card, .lib-stat-card, .lib-subject-tile,
-          .lib-quicklink, .lib-cat-card, .ql-icon {
+          .lib-quicklink, .lib-cat-card, .ql-icon, .lib-back-btn, .lib-view-tab {
             animation: none !important;
             transition: none !important;
             transform: none !important;
@@ -460,8 +493,8 @@ export default function LibraryDashboard() {
   );
 }
 
-function QuickLink({ to, icon: Icon, title, text, colour }: {
-  to: string; icon: any; title: string; text: string; colour: string;
+function QuickLink({ to, Icon, title, text, colour }: {
+  to: string; Icon: any; title: string; text: string; colour: string;
 }) {
   return (
     <Link
@@ -471,21 +504,80 @@ function QuickLink({ to, icon: Icon, title, text, colour }: {
         display: "block",
         background: "rgba(255,255,255,0.94)",
         border: "1px solid #e5e7eb",
-        borderRadius: "12px",
-        padding: "1.1rem 1.25rem",
+        borderRadius: "14px",
+        padding: "1.5rem 1.6rem",
         textDecoration: "none",
         color: "inherit",
         backdropFilter: "blur(2px)",
       }}
     >
       <div className="ql-icon" style={{ color: colour }}>
-        <Icon size={22} />
+        <Icon size={26} />
       </div>
-      <div style={{ fontWeight: 800, marginTop: "0.7rem", color: "#111827", fontSize: "1rem" }}>
+      <div style={{ fontWeight: 800, marginTop: "0.9rem", color: "#111827", fontSize: "1.15rem" }}>
         {title}
       </div>
-      <div style={{ color: "#748095", fontSize: "0.85rem", marginTop: "0.25rem" }}>
+      <div style={{ color: "#748095", fontSize: "0.9rem", marginTop: "0.35rem", lineHeight: 1.4 }}>
         {text}
+      </div>
+    </Link>
+  );
+}
+
+function SubjectCard({ subject: s }: { subject: lib.SubjectSummaryRow }) {
+  const covered = s.book_count > 0;
+  const anyS = s as any;
+  const icon = anyS.icon || fallbackIcon(s.code);
+  const colour = anyS.colour || fallbackColour(s.code);
+  const thumb = anyS.thumbnail_url || "";
+  return (
+    <Link
+      to={`/library/subject/${encodeURIComponent(s.code)}`}
+      className="lib-subject-card"
+      style={{
+        display: "block", background: "rgba(255,255,255,0.94)",
+        border: `1px solid ${covered ? "#bbf7d0" : "#e5e7eb"}`,
+        borderRadius: "10px", padding: "1rem", textDecoration: "none",
+        color: "inherit", position: "relative", backdropFilter: "blur(2px)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.65rem" }}>
+        <div className="lib-subject-tile"
+             style={{
+               width: 44, height: 44, borderRadius: 10,
+               display: "flex", alignItems: "center", justifyContent: "center",
+               background: thumb ? "#f1f5f9" : colour, color: "#fff",
+               fontSize: "1.35rem", flexShrink: 0, overflow: "hidden",
+               boxShadow: "0 2px 6px rgba(15,23,42,0.15)",
+             }}>
+          {thumb ? (
+            <img src={thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <span>{icon}</span>
+          )}
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span style={{
+              fontSize: "0.7rem", fontWeight: 800, letterSpacing: "0.06em",
+              color: covered ? "#166534" : "#64748b",
+              background: covered ? "#dcfce7" : "#f1f5f9",
+              padding: "0.15rem 0.45rem", borderRadius: "4px",
+            }}>{s.code}</span>
+            <span style={{
+              width: 8, height: 8, borderRadius: "50%",
+              background: covered ? "#22c55e" : "#cbd5e1", marginTop: 4,
+            }} />
+          </div>
+          <div style={{ fontWeight: 700, color: "#111827", marginTop: "0.4rem",
+                        fontSize: "0.9rem", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {s.name}
+          </div>
+          <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.25rem" }}>
+            {s.book_count} {s.book_count === 1 ? "title" : "titles"}
+            {s.available_copies > 0 ? ` · ${s.available_copies} avail` : ""}
+          </div>
+        </div>
       </div>
     </Link>
   );
