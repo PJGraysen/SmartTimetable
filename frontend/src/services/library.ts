@@ -307,6 +307,16 @@ export async function listCopiesByBook(bookId: string) {
     book?: { id: string; title: string };
   }>;
 }
+export async function listMemberLoans(memberId: string) {
+  const { data } = await http.get("/library/loans/", { params: { member: memberId } });
+  const rows = Array.isArray(data) ? data : (data?.results || []);
+  return rows as Array<{
+    id: string; status: string; issued_at: string; returned_at?: string | null;
+    due_at?: string; copy_barcode?: string; book_title?: string;
+    fine_accrued?: string | number; fine_paid?: string | number;
+  }>;
+}
+
 export async function listActiveLoans(params?: { member?: string }) {
   const { data } = await http.get("/library/loans/", { params: { status: "ACTIVE", ...params } });
   const rows = Array.isArray(data) ? data : (data?.results || []);
