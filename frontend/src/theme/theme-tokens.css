@@ -335,3 +335,25 @@
 [data-theme="dark"] .tt-table th {
   color: #cbd5e1 !important;
 }
+
+/* ═══════════════════════════════════════════
+   CLASSIC THEME — Leather & Parchment
+   ═══════════════════════════════════════════ */
+[data-theme="classic"] {
+  color-scheme: light;
+  --bg: #efe3cf;
+  --bg-elevated: #fbf6ec;
+  --bg-subtle: #e8dcc4;
+  --card-bg: #fbf6ec;
+  --border: #d4c4a8;
+  --text: #2a1a10;
+  --text-muted: #5a4230;
+  --text-subtle: #76604a;
+  --sidebar-bg: #2b1a0f;
+  --sidebar-text: #f0e3cd;
+  --sidebar-muted: #b8a07c;
+  --shadow: 0 6px 18px rgba(60, 40, 20, 0.15);
+  --accent: #7a4e2a;
+  --accent-hover: #5d3a20;
+  --accent-soft: #f5e6d3;
+}

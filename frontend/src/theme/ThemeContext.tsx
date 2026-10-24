@@ -60,7 +60,7 @@ type ThemeCtx = {
   prefs: Prefs;
   setPref: <K extends keyof Prefs>(key: K, value: Prefs[K]) => void;
   resetPrefs: () => void;
-  resolvedTheme: "light" | "dark";
+  resolvedTheme: "light" | "dark" | "classic";
 };
 
 const Ctx = createContext<ThemeCtx | null>(null);
@@ -82,8 +82,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  const resolvedTheme: "light" | "dark" =
-    prefs.theme === "system" ? sysTheme : prefs.theme;
+  const resolvedTheme: "light" | "dark" | "classic" =
+    prefs.theme === "system" ? sysTheme : (prefs.theme as "light" | "dark" | "classic");
 
   // Apply to <html>
   useEffect(() => {
@@ -92,10 +92,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.setAttribute("data-density", prefs.density);
     root.setAttribute("data-accent", prefs.accent);
 
-    const a = ACCENTS[prefs.accent] || ACCENTS.blue;
-    root.style.setProperty("--accent", a.primary);
-    root.style.setProperty("--accent-hover", a.hover);
-    root.style.setProperty("--accent-soft", a.soft);
+    if (resolvedTheme === "classic") {
+      root.style.removeProperty("--accent");
+      root.style.removeProperty("--accent-hover");
+      root.style.removeProperty("--accent-soft");
+    } else {
+      const a = ACCENTS[prefs.accent] || ACCENTS.blue;
+      root.style.setProperty("--accent", a.primary);
+      root.style.setProperty("--accent-hover", a.hover);
+      root.style.setProperty("--accent-soft", a.soft);
+    }
   }, [resolvedTheme, prefs.density, prefs.accent]);
 
   // Persist
