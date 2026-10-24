@@ -1,4 +1,4 @@
-﻿import http from "./http";
+import http from "./http";
 
 export type Author = { id: string; name: string; sort_name: string };
 export type Publisher = {
@@ -296,6 +296,28 @@ export async function selfCheckout(payload: { barcode: string; member_number: st
   return data as { ok: boolean; loan_id: string; book_title: string; member_name: string; due_at: string };
 }
 
+export async function listCopiesByBook(bookId: string) {
+  const { data } = await http.get("/library/copies/", { params: { book: bookId } });
+  const rows = Array.isArray(data) ? data : (data?.results || []);
+  return rows as Array<{
+    id: string;
+    barcode: string;
+    is_available?: boolean;
+    status?: string;
+    book?: { id: string; title: string };
+  }>;
+}
+export async function listActiveLoans(params?: { member?: string }) {
+  const { data } = await http.get("/library/loans/", { params: { status: "ACTIVE", ...params } });
+  const rows = Array.isArray(data) ? data : (data?.results || []);
+  return rows as Array<{
+    id: string;
+    due_at?: string;
+    status: string;
+    copy?: { id: string; barcode?: string; book?: { id: string; title: string } };
+    member?: { id: string; member_number?: string; full_name?: string };
+  }>;
+}
 export async function bulkReturn(barcodes: string[]) {
   const { data } = await http.post("/library/circulation/bulk-return/", { barcodes });
   return data as {

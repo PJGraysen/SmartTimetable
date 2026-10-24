@@ -35,7 +35,7 @@ export default function CirculationPage() {
       setBulkResults(r.results);
       setBulkBarcodes("");
     } catch (e: any) {
-      setBulkResults([{ barcode: "—", ok: false, error: e?.response?.data?.error || "Bulk return failed." }]);
+      setBulkResults([{ barcode: "â€”", ok: false, error: e?.response?.data?.error || "Bulk return failed." }]);
     } finally {
       setBulkBusy(false);
     }
@@ -74,7 +74,7 @@ export default function CirculationPage() {
                   className="primary-button"
                   style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
             {busy ? <Loader2 size={15} className="spin" /> : <CheckCircle2 size={15} />}
-            {busy ? "Issuing…" : "Issue loan"}
+            {busy ? "Issuingâ€¦" : "Issue loan"}
           </button>
           {result ? (
             <div style={{
@@ -108,7 +108,7 @@ export default function CirculationPage() {
                   className="primary-button"
                   style={{ marginTop: "0.75rem", display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
             {bulkBusy ? <Loader2 size={15} className="spin" /> : <CheckCircle2 size={15} />}
-            {bulkBusy ? "Processing…" : "Return all"}
+            {bulkBusy ? "Processingâ€¦" : "Return all"}
           </button>
 
           {bulkResults.length > 0 ? (
