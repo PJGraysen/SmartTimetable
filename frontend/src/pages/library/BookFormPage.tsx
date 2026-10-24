@@ -119,7 +119,7 @@ export default function BookFormPage() {
 
   return (
     <div className="book-form-page"
-         style={{ padding: "1.5rem", maxWidth: 920, margin: "0 auto", minHeight: "100vh", background: LIB_BG }}>
+         style={{ padding: "1.5rem", maxWidth: 1200, margin: "0 auto", minHeight: "100vh", background: LIB_BG }}>
       <Link to="/library/catalogue" style={backBtn}>
         <ArrowLeft size={16} /> Back to catalogue
       </Link>
@@ -156,7 +156,7 @@ export default function BookFormPage() {
             }}>
               <Hash size={16} />
             </div>
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: "0.8rem", fontWeight: 800, color: "#1e3a8a", letterSpacing: "0.05em" }}>
                 ISBN QUICK-FILL
               </div>
@@ -195,86 +195,92 @@ export default function BookFormPage() {
           ) : null}
         </div>
 
-        <Section title="Book Identity" colour="#1e3a8a" Icon={BookOpen}>
-          <Field label="Title *">
-            <input required value={title} onChange={(e) => setTitle(e.target.value)} style={inp} />
-          </Field>
-          <Field label="Subtitle">
-            <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} style={inp} />
-          </Field>
-          <Field label="Authors (comma-separated)" Icon={User}>
-            <input value={authorsText} onChange={(e) => setAuthorsText(e.target.value)}
-                   style={inp} placeholder="Joshua Bloch, Brian Goetz" />
-          </Field>
-          <Field label="ISBN" Icon={Hash}>
-            <input value={isbn} onChange={(e) => setIsbn(e.target.value)} style={inp} />
-          </Field>
-          <div style={row3}>
-            <Field label="Edition">
-              <input value={edition} onChange={(e) => setEdition(e.target.value)} style={inp} />
-            </Field>
-            <Field label="Language">
-              <input value={language} onChange={(e) => setLanguage(e.target.value)} style={inp} />
-            </Field>
-            <Field label="Published year">
-              <input type="number" value={publishedYear}
-                     onChange={(e) => setPublishedYear(e.target.value)} style={inp} />
-            </Field>
-          </div>
-        </Section>
-
-        <Section title="Publication" colour="#0e7490" Icon={Building2}>
-          <Field label="Publisher">
-            <input value={publisherName} onChange={(e) => setPublisherName(e.target.value)} style={inp} />
-          </Field>
-          <div style={row3}>
-            <Field label="Pages">
-              <input type="number" value={pageCount}
-                     onChange={(e) => setPageCount(e.target.value)} style={inp} />
-            </Field>
-            <Field label="Cover URL">
-              <input value={coverUrl} onChange={(e) => setCoverUrl(e.target.value)}
-                     style={inp} placeholder="https://…" />
-            </Field>
-            <div />
-          </div>
-          {coverUrl ? (
-            <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", marginTop: "0.5rem" }}>
-              <div style={coverPreview}>
-                <img src={coverUrl} alt="cover"
-                     style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        {/* Two-column floating layout */}
+        <div className="book-form-grid">
+          <div className="book-form-col">
+            <Section title="Book Identity" colour="#1e3a8a" Icon={BookOpen}>
+              <Field label="Title *">
+                <input required value={title} onChange={(e) => setTitle(e.target.value)} style={inp} />
+              </Field>
+              <Field label="Subtitle">
+                <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} style={inp} />
+              </Field>
+              <Field label="Authors (comma-separated)" Icon={User}>
+                <input value={authorsText} onChange={(e) => setAuthorsText(e.target.value)}
+                       style={inp} placeholder="Joshua Bloch, Brian Goetz" />
+              </Field>
+              <Field label="ISBN" Icon={Hash}>
+                <input value={isbn} onChange={(e) => setIsbn(e.target.value)} style={inp} />
+              </Field>
+              <div style={row3}>
+                <Field label="Edition">
+                  <input value={edition} onChange={(e) => setEdition(e.target.value)} style={inp} />
+                </Field>
+                <Field label="Language">
+                  <input value={language} onChange={(e) => setLanguage(e.target.value)} style={inp} />
+                </Field>
+                <Field label="Year">
+                  <input type="number" value={publishedYear}
+                         onChange={(e) => setPublishedYear(e.target.value)} style={inp} />
+                </Field>
               </div>
-              <div style={{ fontSize: "0.8rem", color: "#64748b", alignSelf: "center", lineHeight: 1.5 }}>
-                <b style={{ color: "#0e7490" }}>Cover preview</b><br />
-                This is how the book will appear in catalogue cards.
+            </Section>
+
+            <Section title="Classification" colour="#7e22ce" Icon={BookMarked}>
+              <div style={row2}>
+                <Field label="DDC (Dewey Decimal)">
+                  <input value={ddc} onChange={(e) => setDdc(e.target.value)}
+                         style={inp} placeholder="005.133" />
+                </Field>
+                <Field label="LCC (Library of Congress)">
+                  <input value={lcc} onChange={(e) => setLcc(e.target.value)}
+                         style={inp} placeholder="QA76.73.J38" />
+                </Field>
               </div>
-            </div>
-          ) : null}
-        </Section>
-
-        <Section title="Classification" colour="#7e22ce" Icon={BookMarked}>
-          <div style={row2}>
-            <Field label="DDC (Dewey Decimal)">
-              <input value={ddc} onChange={(e) => setDdc(e.target.value)}
-                     style={inp} placeholder="005.133" />
-            </Field>
-            <Field label="LCC (Library of Congress)">
-              <input value={lcc} onChange={(e) => setLcc(e.target.value)}
-                     style={inp} placeholder="QA76.73.J38" />
-            </Field>
+            </Section>
           </div>
-        </Section>
 
-        <Section title="Content" colour="#a16207" Icon={FileText}>
-          <Field label="Description">
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                      rows={4} style={{ ...inp, resize: "vertical" }} />
-          </Field>
-          <Field label="Table of Contents">
-            <textarea value={toc} onChange={(e) => setToc(e.target.value)}
-                      rows={3} style={{ ...inp, resize: "vertical" }} />
-          </Field>
-        </Section>
+          <div className="book-form-col">
+            <Section title="Publication" colour="#0e7490" Icon={Building2}>
+              <Field label="Publisher">
+                <input value={publisherName} onChange={(e) => setPublisherName(e.target.value)} style={inp} />
+              </Field>
+              <div style={row2}>
+                <Field label="Pages">
+                  <input type="number" value={pageCount}
+                         onChange={(e) => setPageCount(e.target.value)} style={inp} />
+                </Field>
+                <Field label="Cover URL">
+                  <input value={coverUrl} onChange={(e) => setCoverUrl(e.target.value)}
+                         style={inp} placeholder="https://…" />
+                </Field>
+              </div>
+              {coverUrl ? (
+                <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", marginTop: "0.25rem" }}>
+                  <div style={coverPreview}>
+                    <img src={coverUrl} alt="cover"
+                         style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#64748b", alignSelf: "center", lineHeight: 1.5 }}>
+                    <b style={{ color: "#0e7490" }}>Cover preview</b><br />
+                    How the book appears in catalogue cards.
+                  </div>
+                </div>
+              ) : null}
+            </Section>
+
+            <Section title="Content" colour="#a16207" Icon={FileText}>
+              <Field label="Description">
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+                          rows={4} style={{ ...inp, resize: "vertical" }} />
+              </Field>
+              <Field label="Table of Contents">
+                <textarea value={toc} onChange={(e) => setToc(e.target.value)}
+                          rows={4} style={{ ...inp, resize: "vertical" }} />
+              </Field>
+            </Section>
+          </div>
+        </div>
 
         {source ? (
           <div style={{
@@ -308,6 +314,22 @@ export default function BookFormPage() {
       <style>{`
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+        .book-form-grid {
+          display: grid;
+          grid-template-columns: 1.15fr 1fr;
+          gap: 1.25rem;
+          align-items: start;
+          margin-bottom: 1.25rem;
+        }
+        .book-form-col {
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+        }
+        @media (max-width: 900px) {
+          .book-form-grid { grid-template-columns: 1fr; }
+        }
 
         .isbn-btn {
           display: inline-flex; align-items: center; gap: 0.4rem;
@@ -392,16 +414,14 @@ const isbnInp: React.CSSProperties = {
   padding: "0.65rem 0.85rem", borderRadius: 8,
   border: "2px solid #cbd5e1", fontSize: "0.95rem",
   background: "#fff", fontFamily: "monospace",
-  transition: "border-color 180ms ease, box-shadow 180ms ease",
 };
 const inp: React.CSSProperties = {
   width: "100%", padding: "0.6rem 0.8rem", borderRadius: 8,
   border: "1px solid #cbd5e1", fontSize: "0.92rem",
   background: "#fdfbf7", fontFamily: "inherit",
-  transition: "border-color 180ms ease, box-shadow 180ms ease, background 180ms ease",
 };
-const row2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" };
-const row3: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem" };
+const row2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" };
+const row3: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" };
 const coverPreview: React.CSSProperties = {
   width: 72, height: 100, borderRadius: 8, overflow: "hidden",
   background: "rgba(15,23,42,0.06)", border: "1px solid #cbd5e1",
@@ -415,18 +435,18 @@ function Section({ title, colour, Icon, children }: {
   return (
     <div style={{
       background: "rgba(255,255,255,0.94)", borderRadius: 14,
-      padding: "1.25rem 1.5rem", marginBottom: "1.25rem",
+      padding: "1.15rem 1.35rem",
       boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
       borderLeft: `6px solid ${colour}`,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", marginBottom: "0.9rem" }}>
         <div style={{
-          width: 32, height: 32, borderRadius: 8, background: colour, color: "#fff",
+          width: 30, height: 30, borderRadius: 8, background: colour, color: "#fff",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <Icon size={16} />
+          <Icon size={15} />
         </div>
-        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#111827" }}>{title}</h2>
+        <h2 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "#111827" }}>{title}</h2>
       </div>
       {children}
     </div>
@@ -437,13 +457,13 @@ function Field({ label, Icon, children }: {
   label: string; Icon?: any; children: React.ReactNode;
 }) {
   return (
-    <div style={{ marginBottom: "1rem" }}>
+    <div style={{ marginBottom: "0.75rem" }}>
       <label style={{
         display: "flex", alignItems: "center", gap: "0.35rem",
-        fontSize: "0.72rem", fontWeight: 800, color: "#475569",
-        letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: "0.3rem",
+        fontSize: "0.7rem", fontWeight: 800, color: "#475569",
+        letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: "0.25rem",
       }}>
-        {Icon ? <Icon size={12} /> : null}
+        {Icon ? <Icon size={11} /> : null}
         {label}
       </label>
       {children}
