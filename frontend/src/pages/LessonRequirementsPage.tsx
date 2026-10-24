@@ -293,7 +293,7 @@ export default function LessonRequirementsPage() {
     <div className="lr-page">
       <div className="lr-header">
         <h1>Lesson Requirements</h1>
-        <a href="/scheduling" className="lr-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#22b4f0', color: '#fff', borderColor: '#22b4f0' }}>
+        <a href="/scheduling" className="lr-btn lr-btn-primary" style={{ textDecoration: 'none' }}>
           <RefreshCw size={14} /> Go to Scheduling
         </a>
         <div className="lr-controls">
