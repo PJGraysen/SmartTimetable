@@ -154,35 +154,46 @@ class MemberSerializer(serializers.ModelSerializer):
         ]
 
     def get_class_name(self, obj):
-        student = getattr(obj, 'student', None)
-        if student is None:
+        try:
+            student = getattr(obj, 'student', None)
+            if student is None:
+                return None
+            for attr in ('class_name', 'grade', 'class_display', 'klass_name'):
+                val = getattr(student, attr, None)
+                if val:
+                    return str(val)
             return None
-        for attr in ('class_name', 'grade', 'class_display', 'klass_name'):
-            val = getattr(student, attr, None)
-            if val:
-                return str(val)
-        klass = getattr(student, 'klass', None) or getattr(student, 'current_class', None)
-        if klass is not None:
-            return str(klass)
-        return None
+        except Exception:
+            return None
 
     def get_active_loan_count(self, obj):
-        from apps.library.models import Loan
-        return Loan.objects.filter(member=obj, status="ACTIVE").count()
+        try:
+            from apps.library.models import Loan
+            return Loan.objects.filter(member=obj, status="ACTIVE").count()
+        except Exception:
+            return 0
 
     def get_total_borrowed(self, obj):
-        from apps.library.models import Loan
-        return Loan.objects.filter(member=obj).exclude(status="ACTIVE").count()
+        try:
+            from apps.library.models import Loan
+            return Loan.objects.filter(member=obj).exclude(status="ACTIVE").count()
+        except Exception:
+            return 0
 
     def get_fines_due(self, obj):
-        from apps.library.models import Loan
-        from django.db.models import Sum, F, Value
-        from django.db.models.functions import Coalesce
-        rows = Loan.objects.filter(member=obj).annotate(
-            net=Coalesce(F("fine_accrued"), Value(0)) - Coalesce(F("fine_paid"), Value(0))
-        ).filter(net__gt=0)
-        total = rows.aggregate(s=Sum("net"))["s"] or 0
-        return float(total)
+        try:
+            from decimal import Decimal
+            from apps.library.models import Loan
+            from django.db.models import Sum, F, Value, DecimalField
+            from django.db.models.functions import Coalesce
+            z = Value(Decimal('0'), output_field=DecimalField(max_digits=12, decimal_places=2))
+            qs = Loan.objects.filter(member=obj).annotate(
+                net=Coalesce(F("fine_accrued"), z) - Coalesce(F("fine_paid"), z)
+            ).filter(net__gt=0)
+            total = qs.aggregate(s=Sum("net"))["s"]
+            return float(total or 0)
+        except Exception:
+            return 0.0
 
 
 class LoanRuleSerializer(serializers.ModelSerializer):
