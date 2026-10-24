@@ -148,7 +148,6 @@ export default function BookFormPage() {
 
       <form onSubmit={submit}>
 
-        {/* ISBN Quick-fill */}
         <div style={isbnBar}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.7rem" }}>
             <div style={{
@@ -196,7 +195,6 @@ export default function BookFormPage() {
           ) : null}
         </div>
 
-        {/* Section: Book identity */}
         <Section title="Book Identity" colour="#1e3a8a" Icon={BookOpen}>
           <Field label="Title *">
             <input required value={title} onChange={(e) => setTitle(e.target.value)} style={inp} />
@@ -225,7 +223,6 @@ export default function BookFormPage() {
           </div>
         </Section>
 
-        {/* Section: Publication */}
         <Section title="Publication" colour="#0e7490" Icon={Building2}>
           <Field label="Publisher">
             <input value={publisherName} onChange={(e) => setPublisherName(e.target.value)} style={inp} />
@@ -255,7 +252,6 @@ export default function BookFormPage() {
           ) : null}
         </Section>
 
-        {/* Section: Classification */}
         <Section title="Classification" colour="#7e22ce" Icon={BookMarked}>
           <div style={row2}>
             <Field label="DDC (Dewey Decimal)">
@@ -269,7 +265,6 @@ export default function BookFormPage() {
           </div>
         </Section>
 
-        {/* Section: Content */}
         <Section title="Content" colour="#a16207" Icon={FileText}>
           <Field label="Description">
             <textarea value={description} onChange={(e) => setDescription(e.target.value)}
