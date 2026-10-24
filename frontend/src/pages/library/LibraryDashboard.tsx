@@ -26,6 +26,29 @@ const CATEGORY_ORDER: CategoryKey[] = [
   "math","sciences","languages","humanities","religious","creative","technology","applied",
 ];
 
+/* Per-subject solid colour — each one distinct, dark enough for white text */
+const SUBJECT_COLOURS: Record<string, string> = {
+  // Mathematics
+  MAT: "#1e3a8a", EMCM: "#1e40af",
+  // Sciences
+  BIO: "#15803d", BIOPRAC: "#166534",
+  CHEM: "#0e7490", CHEMPRAC: "#155e75",
+  PHY: "#0369a1", PHYPRAC: "#075985",
+  INTSCI: "#0c4a6e",
+  // Languages
+  ENG: "#1d4ed8", KIS: "#b91c1c", LIT: "#991b1b",
+  // Humanities
+  GEO: "#065f46", HIS: "#7c2d12", SST: "#0f766e",
+  // Religious
+  CRE: "#92400e", IRE: "#a16207", PPI: "#854d0e",
+  // Creative
+  CAS: "#9333ea", MUSD: "#7e22ce", ART: "#a21caf",
+  // Business & Technology
+  BUS: "#4338ca", COMP: "#3730a3", CS: "#1e40af", ICT: "#0891b2",
+  // Applied
+  AGR: "#4d7c0f", PE: "#047857",
+};
+
 type ViewMode = "categories" | "subjects" | "classes";
 
 const VIEW_TABS: { key: ViewMode; label: string; Icon: any }[] = [
@@ -296,27 +319,41 @@ export default function LibraryDashboard() {
                       No subjects yet in {CATEGORIES[selectedCategory].label}.
                     </div>
                   ) : (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.9rem" }}>
-                      {filteredSubjects.map((s) => <SubjectCard key={s.id} subject={s} />)}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
+                      {filteredSubjects.map((s, i) => <SubjectCard key={s.id} subject={s} index={i} />)}
                     </div>
                   )}
                 </>
               )}
 
               {showAllSubjects && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.9rem" }}>
-                  {filteredSubjects.map((s) => <SubjectCard key={s.id} subject={s} />)}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
+                  {filteredSubjects.map((s, i) => <SubjectCard key={s.id} subject={s} index={i} />)}
                 </div>
               )}
 
               {showClasses && (
                 <div style={{
-                  padding: "3rem 2rem", background: "rgba(255,255,255,0.94)",
-                  border: "2px dashed #cbd5e1", borderRadius: "14px", textAlign: "center",
+                  padding: "3rem 2rem",
+                  background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)",
+                  border: "2px dashed #c4b5fd",
+                  borderRadius: "16px",
+                  textAlign: "center",
+                  boxShadow: "0 6px 16px rgba(15,23,42,0.06)",
                 }}>
-                  <GraduationCap size={42} style={{ color: "#94a3b8", marginBottom: "0.75rem" }} />
-                  <h3 style={{ margin: 0, color: "#111827", fontSize: "1.1rem" }}>Class-section view coming soon</h3>
-                  <p style={{ color: "#64748b", fontSize: "0.9rem", marginTop: "0.35rem", maxWidth: 480, margin: "0.35rem auto 0" }}>
+                  <div style={{
+                    width: 72, height: 72, borderRadius: "50%",
+                    background: "#7e22ce", color: "#fff",
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    marginBottom: "1rem",
+                    boxShadow: "0 8px 20px rgba(126,34,206,0.35)",
+                  }}>
+                    <GraduationCap size={36} />
+                  </div>
+                  <h3 style={{ margin: 0, color: "#0f172a", fontSize: "1.25rem", fontWeight: 800 }}>
+                    Class-section view coming soon
+                  </h3>
+                  <p style={{ color: "#5b21b6", fontSize: "0.95rem", marginTop: "0.5rem", maxWidth: 480, margin: "0.5rem auto 0", lineHeight: 1.5 }}>
                     This view will group the library collection by class (Form 4E, 10W, G11E, etc.) so you can see
                     which books are assigned to each section.
                   </p>
@@ -332,30 +369,34 @@ export default function LibraryDashboard() {
           from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes tilePulse {
-          0%, 100% { box-shadow: 0 2px 6px rgba(15,23,42,0.15); }
-          50%      { box-shadow: 0 4px 12px rgba(15,23,42,0.28); }
-        }
-        @keyframes tileWiggle {
-          0%, 100% { transform: rotate(0deg) scale(1); }
-          40%      { transform: rotate(-6deg) scale(1.08); }
-          60%      { transform: rotate(5deg)  scale(1.08); }
-        }
 
         .lib-stat-card { animation: ttFadeUp 260ms ease both; }
-        .lib-subject-card { animation: ttFadeUp 340ms ease both; }
-        .lib-subject-card .lib-subject-tile {
-          animation: tilePulse 3.6s ease-in-out infinite;
-          transition: transform 200ms ease;
+
+        /* Subject cards — dark solid, heavy motion */
+        .lib-subject-card {
+          transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                      box-shadow 240ms ease,
+                      filter 240ms ease;
+          will-change: transform, filter;
+          animation: ttFadeUp 340ms ease both;
         }
         .lib-subject-card:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 10px 22px rgba(15,23,42,0.14);
-          border-color: #93c5fd !important;
+          transform: translateY(-6px) scale(1.02);
+          box-shadow: 0 20px 40px rgba(15,23,42,0.28);
+          filter: brightness(1.12) saturate(1.08);
         }
-        .lib-subject-card:hover .lib-subject-tile { animation: tileWiggle 400ms ease; }
+        .lib-subject-card:active {
+          transform: translateY(-1px) scale(0.99);
+          transition-duration: 80ms;
+        }
+        .lib-subject-icon {
+          transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .lib-subject-card:hover .lib-subject-icon {
+          transform: scale(1.15) rotate(-6deg);
+        }
 
-        /* Category cards — dark solid, brighten on hover */
+        /* Category cards — dark solid, brighter hover */
         .lib-cat-card {
           transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1),
                       box-shadow 240ms ease,
@@ -372,7 +413,7 @@ export default function LibraryDashboard() {
           transition-duration: 80ms;
         }
 
-        /* QuickLink cards — soft tinted backgrounds */
+        /* QuickLink cards — soft tints */
         .lib-quicklink {
           position: relative; overflow: hidden;
           transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -448,7 +489,7 @@ export default function LibraryDashboard() {
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .lib-subject-card, .lib-stat-card, .lib-subject-tile,
+          .lib-subject-card, .lib-stat-card, .lib-subject-icon,
           .lib-quicklink, .lib-cat-card, .ql-icon, .lib-back-btn, .lib-view-tab {
             animation: none !important;
             transition: none !important;
@@ -495,60 +536,73 @@ function QuickLink({ to, Icon, title, text, colour, bg, border }: {
   );
 }
 
-function SubjectCard({ subject: s }: { subject: lib.SubjectSummaryRow }) {
+function SubjectCard({ subject: s, index }: { subject: lib.SubjectSummaryRow; index: number }) {
   const covered = s.book_count > 0;
   const anyS = s as any;
   const icon = anyS.icon || fallbackIcon(s.code);
-  const colour = anyS.colour || fallbackColour(s.code);
+  const colour = SUBJECT_COLOURS[(s.code || "").toUpperCase()] || anyS.colour || fallbackColour(s.code);
   const thumb = anyS.thumbnail_url || "";
   return (
     <Link
       to={`/library/subject/${encodeURIComponent(s.code)}`}
       className="lib-subject-card"
       style={{
-        display: "block", background: "rgba(255,255,255,0.94)",
-        border: `1px solid ${covered ? "#bbf7d0" : "#e5e7eb"}`,
-        borderRadius: "10px", padding: "1rem", textDecoration: "none",
-        color: "inherit", position: "relative",
+        display: "block",
+        background: colour,
+        border: `2px solid ${colour}`,
+        borderRadius: "14px",
+        padding: "1.4rem 1.5rem",
+        textDecoration: "none",
+        color: "#fff",
+        position: "relative",
+        overflow: "hidden",
+        boxShadow: "0 6px 16px rgba(15,23,42,0.14), inset 0 1px 0 rgba(255,255,255,0.12)",
+        animationDelay: `${Math.min(index * 40, 400)}ms`,
       }}
     >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.65rem" }}>
-        <div className="lib-subject-tile"
-             style={{
-               width: 44, height: 44, borderRadius: 10,
-               display: "flex", alignItems: "center", justifyContent: "center",
-               background: thumb ? "#f1f5f9" : colour, color: "#fff",
-               fontSize: "1.35rem", flexShrink: 0, overflow: "hidden",
-               boxShadow: "0 2px 6px rgba(15,23,42,0.15)",
-             }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "0.85rem" }}>
+        <div className="lib-subject-icon" style={{
+          width: 56, height: 56, borderRadius: 14,
+          background: "rgba(255,255,255,0.2)",
+          border: "1px solid rgba(255,255,255,0.3)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: "1.65rem", overflow: "hidden",
+        }}>
           {thumb ? (
             <img src={thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
             <span>{icon}</span>
           )}
         </div>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <span style={{
-              fontSize: "0.7rem", fontWeight: 800, letterSpacing: "0.06em",
-              color: covered ? "#166534" : "#64748b",
-              background: covered ? "#dcfce7" : "#f1f5f9",
-              padding: "0.15rem 0.45rem", borderRadius: "4px",
-            }}>{s.code}</span>
-            <span style={{
-              width: 8, height: 8, borderRadius: "50%",
-              background: covered ? "#22c55e" : "#cbd5e1", marginTop: 4,
-            }} />
-          </div>
-          <div style={{ fontWeight: 700, color: "#111827", marginTop: "0.4rem",
-                        fontSize: "0.9rem", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {s.name}
-          </div>
-          <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.25rem" }}>
-            {s.book_count} {s.book_count === 1 ? "title" : "titles"}
-            {s.available_copies > 0 ? ` · ${s.available_copies} avail` : ""}
-          </div>
-        </div>
+        <span style={{
+          width: 10, height: 10, borderRadius: "50%",
+          background: covered ? "#4ade80" : "rgba(255,255,255,0.4)",
+          boxShadow: covered ? "0 0 8px rgba(74,222,128,0.7)" : "none",
+          marginTop: 6,
+          flexShrink: 0,
+        }} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.45rem" }}>
+        <span style={{
+          fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.08em",
+          color: "#fff",
+          background: "rgba(255,255,255,0.2)",
+          border: "1px solid rgba(255,255,255,0.3)",
+          padding: "0.15rem 0.5rem", borderRadius: "4px",
+        }}>{s.code}</span>
+        {covered && <CheckCircle2 size={14} style={{ color: "#4ade80", flexShrink: 0 }} />}
+      </div>
+      <div style={{
+        fontWeight: 800, color: "#fff", fontSize: "1.05rem",
+        lineHeight: 1.25, marginBottom: "0.4rem",
+        minHeight: "2.6rem",
+        overflow: "hidden",
+      }}>
+        {s.name}
+      </div>
+      <div style={{ color: "rgba(255,255,255,0.82)", fontSize: "0.82rem", fontWeight: 600 }}>
+        {s.book_count} {s.book_count === 1 ? "title" : "titles"}
+        {s.available_copies > 0 ? ` · ${s.available_copies} available` : ""}
       </div>
     </Link>
   );
