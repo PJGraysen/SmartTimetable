@@ -1,4 +1,4 @@
-﻿import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { Printer, RefreshCw } from "lucide-react";
@@ -1139,8 +1139,10 @@ function Timetable() {
   // How it works: captureTable() builds an OFF-SCREEN COPY of the live table,
   // styles that copy for print, and captures the copy. The live table is never
   // modified, so nothing on screen changes or flickers.
-  //   1. Lesson columns are widened until the table's aspect ratio matches
-  //      A3 landscape (420:297), for any number of classes/rows.
+  //   1. The page is sized to the A3 landscape ratio (420:297) for ANY view.
+  //      Tall pages (master, many rows) get wider lesson columns. Short pages
+  //      (grade/class/teacher/subject filters, few rows) get larger text and
+  //      taller rows, so they fill the sheet instead of floating in the middle.
   //   2. Subject/teacher/room text is un-truncated so elective blocks such as
   //      "PHY / LIT / MUS" and "T013 / T011 / T015" print in full.
   //   3. Vertical writing-mode / rotation (which html2canvas cannot render)
@@ -1184,8 +1186,19 @@ function Timetable() {
     const src = document.querySelector<HTMLElement>(".tt-table");
     if (!src) { alert("Could not find .tt-table"); return null; }
 
-    // Export-only styling, scoped to the off-screen copy.
-    const EXPORT_CSS = `
+    const A3_RATIO = A3_W / A3_H;
+    const LESSON_MIN = 150;
+    const FIXED_W: Record<string, number> = {
+      day: 60, cls: 56, tea: 70, lunch: 70, prayers: 80, activities: 90,
+    };
+    const imp = (el: HTMLElement, prop: string, val: string) =>
+      el.style.setProperty(prop, val, "important");
+
+    // Export-only styling, scoped to the off-screen copy. Every font size is
+    // multiplied by f, so short (filtered) timetables can be printed larger.
+    const cssFor = (f: number): string => {
+      const p = (n: number) => (Math.round(n * f * 10) / 10) + "px";
+      return `
       .tt-export-host .tt-table th, .tt-export-host .tt-table td {
         padding: 2px 3px !important; overflow: hidden !important;
         transition: none !important; will-change: auto !important;
@@ -1196,138 +1209,167 @@ function Timetable() {
         writing-mode: horizontal-tb !important; transform: none !important;
         white-space: nowrap !important;
       }
-      .tt-export-host th.tt-day { font-size: 16px !important; }
+      .tt-export-host th.tt-day { font-size: ${p(16)} !important; }
       .tt-export-host td.tt-tea, .tt-export-host td.tt-lunch,
-      .tt-export-host td.tt-prayers, .tt-export-host td.tt-activities { font-size: 9px !important; }
-      .tt-export-host .tt-period-label { font-size: 11px !important; }
-      .tt-export-host .tt-period-time  { font-size: 8px !important; }
+      .tt-export-host td.tt-prayers, .tt-export-host td.tt-activities { font-size: ${p(9)} !important; }
+      .tt-export-host .tt-period-label { font-size: ${p(11)} !important; }
+      .tt-export-host .tt-period-time  { font-size: ${p(8)} !important; }
       .tt-export-host .tt-subject, .tt-export-host .tt-teacher, .tt-export-host .tt-room {
         overflow: visible !important; text-overflow: clip !important; line-height: 1.15 !important;
       }
-      .tt-export-host .tt-subject { font-size: 12px !important; }
-      .tt-export-host .tt-teacher { font-size: 10.5px !important; }
-      .tt-export-host .tt-room    { font-size: 9.5px !important; }
+      .tt-export-host .tt-subject { font-size: ${p(12)} !important; }
+      .tt-export-host .tt-teacher { font-size: ${p(10.5)} !important; }
+      .tt-export-host .tt-room    { font-size: ${p(9.5)} !important; }
       /* Teacher roster: same look as the on-screen roster, fixed to 5 columns. */
       .tt-export-host .tt-teacher-roster {
-        margin-top: 18px !important; padding: 18px !important;
+        margin-top: ${p(18)} !important; padding: ${p(18)} !important;
         box-sizing: border-box !important; width: 100% !important;
       }
-      .tt-export-host .tt-tr-head { font-size: 18px !important; margin-bottom: 12px !important; }
+      .tt-export-host .tt-tr-head { font-size: ${p(18)} !important; margin-bottom: ${p(12)} !important; }
       .tt-export-host .tt-tr-grid {
-        display: grid !important; grid-template-columns: repeat(5, 1fr) !important; gap: 10px !important;
+        display: grid !important; grid-template-columns: repeat(5, 1fr) !important; gap: ${p(10)} !important;
       }
       .tt-export-host .tt-tr-item {
-        font-size: 14px !important; white-space: nowrap !important; overflow: hidden !important;
+        font-size: ${p(14)} !important; white-space: nowrap !important; overflow: hidden !important;
       }
     `;
-
-    const host = document.createElement("div");
-    host.className = "tt-export-host";
-    host.style.cssText =
-      "position:absolute;left:-100000px;top:0;background:#fff;width:max-content;";
-    const styleEl = document.createElement("style");
-    styleEl.textContent = EXPORT_CSS;
-    host.appendChild(styleEl);
-
-    // Printed page = title block + table. The title block repeats the on-screen
-    // masthead details: view title, school name and the current year/term.
-    const page = document.createElement("div");
-    page.style.cssText = "background:#fff;width:max-content;";
-    const head = document.createElement("div");
-    head.style.cssText = "text-align:center;background:#fff;padding:18px 0 14px 0;";
-    const headLine = (txt: string, css: string) => {
-      const d = document.createElement("div");
-      d.textContent = txt;
-      d.style.cssText = css;
-      head.appendChild(d);
     };
-    headLine(viewTitle.toUpperCase(),
-      "font-size:44px;font-weight:900;color:#0f172a;line-height:1.1;margin-bottom:8px;");
-    headLine(schoolName.toUpperCase(),
-      "font-size:24px;font-weight:800;color:#475569;letter-spacing:1px;line-height:1.2;margin-bottom:8px;");
-    headLine(termDisplay || "Current Term",
-      "font-size:20px;font-weight:700;color:#475569;line-height:1.2;");
-    page.appendChild(head);
-    const table = src.cloneNode(true) as HTMLElement;
-    page.appendChild(table);
 
-    // Teacher roster below the table: the same list the page shows
-    // (teacherRoster is built from the timetable entries + the teachers in the
-    // database). Built with createElement/textContent so names are never parsed
-    // as HTML.
-    if (teacherRoster.length > 0) {
-      const roster = document.createElement("section");
-      roster.className = "tt-teacher-roster";
-      const rosterHead = document.createElement("div");
-      rosterHead.className = "tt-tr-head";
-      rosterHead.textContent = "TEACHER ROSTER (" + teacherRoster.length + ")";
-      const rosterGrid = document.createElement("div");
-      rosterGrid.className = "tt-tr-grid";
-      for (const t of teacherRoster) {
-        const item = document.createElement("div");
-        item.className = "tt-tr-item";
-        const code = document.createElement("b");
-        code.textContent = t.code;
-        item.appendChild(code);
-        if (t.name) item.appendChild(document.createTextNode(" \u00b7 " + t.name));
-        rosterGrid.appendChild(item);
-      }
-      roster.appendChild(rosterHead);
-      roster.appendChild(rosterGrid);
-      page.appendChild(roster);
-    }
-    page.style.paddingBottom = "16px";
-    host.appendChild(page);
-    document.body.appendChild(host);
+    type ExportDom = { host: HTMLElement; page: HTMLElement; table: HTMLElement; ths: HTMLElement[] };
 
-    try {
-      const imp = (el: HTMLElement, prop: string, val: string) =>
-        el.style.setProperty(prop, val, "important");
+    // Builds the off-screen copy: title block + table + teacher roster.
+    const build = (f: number): ExportDom => {
+      const host = document.createElement("div");
+      host.className = "tt-export-host";
+      host.style.cssText =
+        "position:absolute;left:-100000px;top:0;background:#fff;width:max-content;";
+      const styleEl = document.createElement("style");
+      styleEl.textContent = cssFor(f);
+      host.appendChild(styleEl);
 
-      const FIXED_W: Record<string, number> = {
-        day: 60, cls: 56, tea: 70, lunch: 70, prayers: 80, activities: 90,
+      const page = document.createElement("div");
+      page.style.cssText = "background:#fff;width:max-content;";
+
+      // Title block: view title, school name and the current year/term.
+      const head = document.createElement("div");
+      head.style.cssText =
+        "text-align:center;background:#fff;padding:" + (18 * f) + "px 0 " + (14 * f) + "px 0;";
+      const headLine = (txt: string, css: string) => {
+        const d = document.createElement("div");
+        d.textContent = txt;
+        d.style.cssText = css;
+        head.appendChild(d);
       };
-      const LESSON_MIN = 150;
+      headLine(viewTitle.toUpperCase(),
+        "font-size:" + (44 * f) + "px;font-weight:900;color:#0f172a;line-height:1.1;margin-bottom:" + (8 * f) + "px;");
+      headLine(schoolName.toUpperCase(),
+        "font-size:" + (24 * f) + "px;font-weight:800;color:#475569;letter-spacing:1px;line-height:1.2;margin-bottom:" + (8 * f) + "px;");
+      headLine(termDisplay || "Current Term",
+        "font-size:" + (20 * f) + "px;font-weight:700;color:#475569;line-height:1.2;");
+      page.appendChild(head);
+
+      const table = src.cloneNode(true) as HTMLElement;
+      page.appendChild(table);
+
+      // Teacher roster below the table: the same list the page shows
+      // (teacherRoster is built from the timetable entries + the teachers in
+      // the database). Built with createElement/textContent so names are never
+      // parsed as HTML.
+      if (teacherRoster.length > 0) {
+        const roster = document.createElement("section");
+        roster.className = "tt-teacher-roster";
+        const rosterHead = document.createElement("div");
+        rosterHead.className = "tt-tr-head";
+        rosterHead.textContent = "TEACHER ROSTER (" + teacherRoster.length + ")";
+        const rosterGrid = document.createElement("div");
+        rosterGrid.className = "tt-tr-grid";
+        for (const t of teacherRoster) {
+          const item = document.createElement("div");
+          item.className = "tt-tr-item";
+          const code = document.createElement("b");
+          code.textContent = t.code;
+          item.appendChild(code);
+          if (t.name) item.appendChild(document.createTextNode(" \u00b7 " + t.name));
+          rosterGrid.appendChild(item);
+        }
+        roster.appendChild(rosterHead);
+        roster.appendChild(rosterGrid);
+        page.appendChild(roster);
+      }
+      page.style.paddingBottom = (16 * f) + "px";
+      host.appendChild(page);
+      document.body.appendChild(host);
+
       const ths = Array.from(table.querySelectorAll<HTMLElement>("thead th"));
-      const kindOf = (th: HTMLElement): string =>
-        th.classList.contains("tt-day-head") ? "day"
-        : th.classList.contains("tt-class-head") ? "cls"
-        : th.classList.contains("tt-tea") ? "tea"
-        : th.classList.contains("tt-lunch") ? "lunch"
-        : th.classList.contains("tt-prayers") ? "prayers"
-        : th.classList.contains("tt-activities") ? "activities"
-        : "lesson";
+      return { host, page, table, ths };
+    };
 
-      const applyWidths = (lessonW: number): number => {
-        let total = 0;
-        for (const th of ths) {
-          const k = kindOf(th);
-          const w = k === "lesson" ? lessonW : FIXED_W[k];
-          imp(th, "width", w + "px");
-          imp(th, "min-width", w + "px");
-          imp(th, "max-width", w + "px");
-          total += w;
+    const kindOf = (th: HTMLElement): string =>
+      th.classList.contains("tt-day-head") ? "day"
+      : th.classList.contains("tt-class-head") ? "cls"
+      : th.classList.contains("tt-tea") ? "tea"
+      : th.classList.contains("tt-lunch") ? "lunch"
+      : th.classList.contains("tt-prayers") ? "prayers"
+      : th.classList.contains("tt-activities") ? "activities"
+      : "lesson";
+
+    // Fixes every column width and returns the total table width.
+    const applyWidths = (ex: ExportDom, f: number, lessonW: number): number => {
+      let total = 0;
+      for (const th of ex.ths) {
+        const k = kindOf(th);
+        const w = k === "lesson" ? lessonW : FIXED_W[k] * f;
+        imp(th, "width", w + "px");
+        imp(th, "min-width", w + "px");
+        imp(th, "max-width", w + "px");
+        total += w;
+      }
+      imp(ex.table, "table-layout", "fixed");
+      imp(ex.table, "width", total + "px");
+      imp(ex.table, "min-width", total + "px");
+      return total;
+    };
+
+    let ex = build(1);
+    try {
+      let f = 1;
+      let W = applyWidths(ex, 1, LESSON_MIN);
+      let H = ex.page.offsetHeight;
+
+      if (W / H > A3_RATIO) {
+        // Short, wide page (filtered view: few rows). Print everything larger
+        // first, so the text grows to use the sheet instead of floating in it.
+        const nf = Math.min(1.4, Math.sqrt(W / (H * A3_RATIO)));
+        if (nf > 1.02) {
+          ex.host.remove();
+          f = nf;
+          ex = build(f);
+          W = applyWidths(ex, f, LESSON_MIN * f);
+          H = ex.page.offsetHeight;
         }
-        imp(table, "table-layout", "fixed");
-        imp(table, "width", total + "px");
-        imp(table, "min-width", total + "px");
-        return total;
-      };
-
-      // 1) Lay out at the minimum lesson width and measure the natural height
-      //    of the whole page (title block + table + teacher roster).
-      let W = applyWidths(LESSON_MIN);
-      const H = page.offsetHeight;
-
-      // 2) Widen the lesson columns until the table is A3-landscape shaped.
-      const targetW = H * (A3_W / A3_H);
-      if (targetW > W) {
-        const lessonCount = ths.filter((t) => kindOf(t) === "lesson").length;
-        if (lessonCount > 0) {
-          W = applyWidths(LESSON_MIN + (targetW - W) / lessonCount);
+      } else {
+        // Tall page (master view: many rows). Widen the lesson columns until
+        // the page is A3-landscape shaped.
+        const targetW = H * A3_RATIO;
+        const lessonCount = ex.ths.filter((t) => kindOf(t) === "lesson").length;
+        if (targetW > W && lessonCount > 0) {
+          W = applyWidths(ex, f, LESSON_MIN + (targetW - W) / lessonCount);
         }
       }
-      const Hfinal = page.offsetHeight;
+
+      // If the page is still shorter than A3 landscape needs, make the
+      // timetable rows taller by the missing amount (shared equally).
+      const Hnow = ex.page.offsetHeight;
+      const targetH = W / A3_RATIO;
+      if (targetH > Hnow) {
+        const rows = Array.from(ex.table.querySelectorAll<HTMLElement>("tbody tr"));
+        if (rows.length > 0) {
+          const extra = (targetH - Hnow) / rows.length;
+          const base = rows.map((r) => r.offsetHeight);
+          rows.forEach((r, i) => imp(r, "height", (base[i] + extra) + "px"));
+        }
+      }
+      const Hfinal = ex.page.offsetHeight;
 
       const mod = await import("html2canvas");
       const html2canvas = (mod as any).default || (mod as any);
@@ -1335,14 +1377,14 @@ function Timetable() {
       // Scale so the output is about A3 pixels (padToA3 then draws it ~1:1).
       const scale = Math.min(4, A3_W / W, A3_H / Hfinal);
 
-      return await html2canvas(page, {
+      return await html2canvas(ex.page, {
         scale,
         backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
       });
     } finally {
-      host.remove();
+      ex.host.remove();
     }
   }
 
@@ -1381,6 +1423,67 @@ function Timetable() {
     } catch (err) {
       console.log("[download] PDF failed:", err);
       alert("PDF download failed - see console.");
+    }
+  }
+
+  // ==========================================================================
+  // PRINT - one A3 landscape page, identical to the PNG/PDF export.
+  // window.print() would print the whole app page (sidebar, banners, header) on
+  // A4 portrait and split the table over several sheets. Instead this renders
+  // the same A3 image the export produces into a hidden iframe whose @page is
+  // A3 landscape with no margins, then prints that iframe.
+  // ==========================================================================
+  async function printTimetable() {
+    let frame: HTMLIFrameElement | null = null;
+    let url = "";
+    const cleanup = () => {
+      if (url) { URL.revokeObjectURL(url); url = ""; }
+      if (frame) { frame.remove(); frame = null; }
+    };
+    try {
+      const raw = await captureTable();
+      if (!raw) return;
+      const a3 = padToA3(raw);
+      const blob: Blob | null = await new Promise((resolve) => a3.toBlob(resolve, "image/png"));
+      if (!blob) throw new Error("Could not create the print image");
+      url = URL.createObjectURL(blob);
+
+      frame = document.createElement("iframe");
+      frame.setAttribute("aria-hidden", "true");
+      frame.style.cssText =
+        "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+      document.body.appendChild(frame);
+
+      const doc = frame.contentDocument;
+      const win = frame.contentWindow;
+      if (!doc || !win) throw new Error("Print frame unavailable");
+      doc.open();
+      doc.write(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Timetable</title><style>" +
+        "@page{size:A3 landscape;margin:0}" +
+        "html,body{margin:0;padding:0;background:#fff}" +
+        "img{display:block;width:420mm;height:297mm;page-break-inside:avoid}" +
+        "</style></head><body><img id=\"tt-print-img\" alt=\"Timetable\"></body></html>"
+      );
+      doc.close();
+
+      const img = doc.getElementById("tt-print-img") as HTMLImageElement;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Print image failed to load"));
+        img.src = url;
+      });
+
+      win.addEventListener("afterprint", cleanup);
+      win.focus();
+      win.print();
+      // Fallback so the frame never lingers if afterprint does not fire.
+      setTimeout(cleanup, 120000);
+      console.log("[print] A3 landscape page sent to the print dialog");
+    } catch (err) {
+      console.log("[print] failed:", err);
+      cleanup();
+      alert("Print failed - see console.");
     }
   }
 
@@ -2264,7 +2367,7 @@ function Timetable() {
             <button
               type="button"
               className="tt-button"
-              onClick={() => window.print()}
+              onClick={() => void printTimetable()}
             >
               <Printer size={16} />
               Print
