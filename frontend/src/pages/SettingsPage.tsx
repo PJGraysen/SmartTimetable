@@ -2,7 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import {
   Bell, Check, Info, LayoutGrid, LogOut, Monitor, Moon,
-  Palette, RotateCcw, Save, Sliders, Sun, User, Volume2,
+  Palette, RotateCcw, Save, Sliders, Sun, User, Volume2, BookOpen,
 } from "lucide-react";
 import { useTheme, type AccentKey, type Density, type ThemeMode } from "../theme/ThemeContext";
 import { useAuth } from "../auth/AuthContext";
@@ -102,8 +102,8 @@ export default function SettingsPage() {
                 Choose how SmartTimetable Pro looks. "System" follows your device setting.
               </p>
               <div className="stg-theme-grid">
-                {(["light", "dark", "system"] as ThemeMode[]).map((mode) => {
-                  const Icon = mode === "light" ? Sun : mode === "dark" ? Moon : Monitor;
+                {(["light", "dark", "system", "classic"] as ThemeMode[]).map((mode) => {
+                  const Icon = mode === "light" ? Sun : mode === "dark" ? Moon : mode === "classic" ? BookOpen : Monitor;
                   const label = mode[0].toUpperCase() + mode.slice(1);
                   const active = prefs.theme === mode;
                   return (

@@ -929,3 +929,20 @@ a {
 
 /* Card surfaces get subtle hover lift app-wide */
 .ssp-card { transition: transform 220ms ease, box-shadow 220ms ease; }
+
+/* ═══════════════════════════════════════════
+   CLASSIC THEME (Leather & Parchment)
+   ═══════════════════════════════════════════ */
+[data-theme="classic"] {
+  --bg-body: #F5E6D3;        /* Parchment */
+  --bg-surface: #FDFBF7;     /* Lighter parchment for cards */
+  --text-main: #2C1B18;      /* Dark ink */
+  --text-muted: #5D4037;     /* Faded ink */
+  --border-color: #D7CCC8;   
+  --sidebar-bg: #3E2723;     /* Dark leather */
+  --sidebar-text: #F5E6D3;
+  --accent: #8B5A2B;         /* Brass/Gold */
+  --accent-hover: #5D4037;
+  --accent-soft: #EFEBE9;
+  --card-bg: #FDFBF7;
+}

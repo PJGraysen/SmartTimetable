@@ -34,7 +34,17 @@ type CellSum = {
   lrs: LessonRequirement[];
 };
 
-export default function LessonRequirementsPage() {
+import { ToastProvider } from "../components/Toast";
+
+export default function LessonRequirementsPageWrapper() {
+  return (
+    <ToastProvider>
+      <LessonRequirementsPageInner />
+    </ToastProvider>
+  );
+}
+
+function LessonRequirementsPageInner() {
   const toast = useToast();
   const [terms, setTerms] = useState<Term[]>([]);
   const [termId, setTermId] = useState<string>("");

@@ -8,7 +8,7 @@
   type ReactNode,
 } from "react";
 
-export type ThemeMode = "light" | "dark" | "system";
+export type ThemeMode = "light" | "dark" | "system" | "classic";
 export type Density = "comfortable" | "compact";
 export type AccentKey = "blue" | "green" | "purple" | "amber" | "rose" | "teal";
 
