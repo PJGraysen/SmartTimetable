@@ -311,11 +311,11 @@ export async function listActiveLoans(params?: { member?: string }) {
   const { data } = await http.get("/library/loans/", { params: { status: "ACTIVE", ...params } });
   const rows = Array.isArray(data) ? data : (data?.results || []);
   return rows as Array<{
-    id: string;
-    due_at?: string;
-    status: string;
-    copy?: { id: string; barcode?: string; book?: { id: string; title: string } };
-    member?: { id: string; member_number?: string; full_name?: string };
+    id: string; due_at?: string; status: string;
+    copy_barcode?: string; book_title?: string;
+    fine_accrued?: string | number; fine_paid?: string | number;
+    copy?: string | { id: string; barcode?: string; book?: { id: string; title: string } };
+    member?: string | { id: string; member_number?: string; full_name?: string };
   }>;
 }
 export async function bulkReturn(barcodes: string[]) {

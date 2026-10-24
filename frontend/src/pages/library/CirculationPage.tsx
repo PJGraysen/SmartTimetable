@@ -122,8 +122,16 @@ export default function CirculationPage() {
   }
 
   function doReturnChecked() {
-    const barcodes = returnLoans.filter((l) => checkedLoans.has(l.id) && l.copy?.barcode).map((l) => l.copy!.barcode!);
-    if (barcodes.length) void runReturn(barcodes);
+    const selected = returnLoans.filter((l) => checkedLoans.has(l.id));
+    const barcodes = selected.map((l) => {
+      const anyL = l as any;
+      if (anyL.copy_barcode) return anyL.copy_barcode as string;
+      if (anyL.copy && typeof anyL.copy === "object" && anyL.copy.barcode) return anyL.copy.barcode as string;
+      return null;
+    }).filter((x): x is string => !!x);
+    if (selected.length === 0) { alert("Select at least one loan first."); return; }
+    if (barcodes.length === 0) { alert("Selected loans have no barcode — open DevTools console."); return; }
+    void runReturn(barcodes);
   }
 
   function doReturnScan() {
@@ -318,9 +326,9 @@ export default function CirculationPage() {
                                });
                              }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={listRowTitle}>{l.copy?.book?.title || "Unknown title"}</div>
+                        <div style={listRowTitle}>{(l as any).book_title || (l as any).copy?.book?.title || "Unknown title"}</div>
                         <div style={listRowSub}>
-                          {l.copy?.barcode || "—"}{l.due_at ? ` · due ${new Date(l.due_at).toLocaleDateString()}` : ""}
+                          {(l as any).copy_barcode || (l as any).copy?.barcode || "—"}{l.due_at ? ` · due ${new Date(l.due_at).toLocaleDateString()}` : ""}
                         </div>
                       </div>
                     </label>
