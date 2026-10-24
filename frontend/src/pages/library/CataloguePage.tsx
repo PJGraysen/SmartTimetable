@@ -89,7 +89,10 @@ export default function CataloguePage() {
   }, [subjects, initialSubject]);
 
   const subjectColour = initialSubject ? (SUBJECT_COLOURS[initialSubject.toUpperCase()] || "#1e3a8a") : "#1e3a8a";
-  const showEmptyState = !loading && !error && rows.length === 0;
+  const hasFilters = !!(q || subject || author || yearFrom || yearTo || availability);
+  const noBooksInCatalogue = !loading && !error && rows.length === 0 && !hasFilters && !initialSubject && !initialClass;
+  const showEmptyState = !loading && !error && rows.length === 0 && !noBooksInCatalogue;
+  const canAddBook = role !== "STUDENT";
   const hasContext = !!initialSubject;
 
   return (
@@ -98,14 +101,14 @@ export default function CataloguePage() {
 
       <div style={hasContext ? { ...contextHeader, borderLeftColor: subjectColour } : plainHeader}>
         <div>
-          <span style={kicker}>{hasContext ? "LIBRARY · TEXTBOOKS" : "LIBRARY CATALOGUE"}</span>
+          <span style={kicker}>{hasContext ? "LIBRARY Â· TEXTBOOKS" : "LIBRARY CATALOGUE"}</span>
           <h1 style={{ color: "#111827", fontSize: "1.6rem", fontWeight: 800, margin: "0.35rem 0 0" }}>
-            {contextSubject ? `Textbooks · ${contextSubject.code}` : "Catalogue"}
+            {contextSubject ? `Textbooks Â· ${contextSubject.code}` : "Catalogue"}
           </h1>
           {initialClass ? <span style={{ ...classChip, background: subjectColour }}>Class: {initialClass}</span> : null}
           <p style={{ color: "#748095", marginTop: "0.5rem", marginBottom: 0 }}>
             {contextSubject?.name
-              ? `${contextSubject.name} · ${rows.length} title${rows.length === 1 ? "" : "s"}`
+              ? `${contextSubject.name} Â· ${rows.length} title${rows.length === 1 ? "" : "s"}`
               : "Search and browse the collection."}
           </p>
         </div>
@@ -121,7 +124,7 @@ export default function CataloguePage() {
         <div style={{ flex: "1 1 320px", position: "relative" }}>
           <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
           <input value={q} onChange={(e) => setQ(e.target.value)}
-                 placeholder="Search title, author, ISBN, publisher…"
+                 placeholder="Search title, author, ISBN, publisherâ€¦"
                  style={{ width: "100%", padding: "0.65rem 0.75rem 0.65rem 2.2rem", borderRadius: 8,
                           border: "1px solid #d1d5db", fontSize: "0.95rem", background: "#fff", fontFamily: "inherit" }} />
         </div>
@@ -142,7 +145,7 @@ export default function CataloguePage() {
             <div><label style={lbl}>Subject</label>
               <select value={subject} onChange={(e) => setSubject(e.target.value)} style={inp}>
                 <option value="">All subjects</option>
-                {subjects.map((s) => <option key={s.id} value={s.code}>{s.code} — {s.name}</option>)}
+                {subjects.map((s) => <option key={s.id} value={s.code}>{s.code} â€” {s.name}</option>)}
               </select>
             </div>
             <div><label style={lbl}>Author</label>
@@ -175,8 +178,37 @@ export default function CataloguePage() {
       {error ? <div className="tt-error">{error}</div> : null}
 
       {loading ? (
-        <div style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}>Loading…</div>
+        <div style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}>Loadingâ€¦</div>
+      ) : noBooksInCatalogue ? (
+        <div style={emptyStateCard}>
+          <div style={{ ...emptyIcon, background: "#1e3a8a" }}><BookOpen size={38} /></div>
+          <h3 style={emptyTitle}>The library catalogue is empty</h3>
+          <p style={emptySub}>
+            No books have been added to the library yet. Every subject will show
+            <b> 0 titles</b> until the first book is catalogued.
+          </p>
+          <div style={{ display: "flex", gap: "0.6rem", justifyContent: "center",
+                        marginTop: "1.5rem", flexWrap: "wrap" }}>
+            {canAddBook ? (
+              <>
+                <Link to="/library/catalogue/new" className="primary-button"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                  <Plus size={15} /> Add the first book
+                </Link>
+                <Link to="/library/import" className="secondary-button"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                  <BookOpen size={15} /> Import from ISBN
+                </Link>
+              </>
+            ) : (
+              <div style={{ fontSize: "0.9rem", color: "#64748b", maxWidth: 420 }}>
+                Ask a librarian or administrator to catalogue books for your school.
+              </div>
+            )}
+          </div>
+        </div>
       ) : showEmptyState ? (
+
         <div style={emptyStateCard}>
           <div style={{ ...emptyIcon, background: subjectColour }}><BookOpen size={34} /></div>
           <h3 style={emptyTitle}>
@@ -237,7 +269,7 @@ export default function CataloguePage() {
                         </div>
                       ) : null}
                       <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.7)", marginTop: "0.35rem" }}>
-                        {b.published_year || "—"}{b.publisher ? ` · ${b.publisher}` : ""}
+                        {b.published_year || "â€”"}{b.publisher ? ` Â· ${b.publisher}` : ""}
                       </div>
                     </div>
                   </div>
